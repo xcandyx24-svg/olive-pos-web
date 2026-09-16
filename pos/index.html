@@ -47,7 +47,11 @@
   .login{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:50}
   .login form{width:360px;background:#fff;padding:32px;border-radius:16px;border:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
   .hidden{display:none!important}.muted{color:var(--muted)}.right{text-align:right}
-  .settings{display:grid;grid-template-columns:180px 1fr;gap:12px}.settings .menu{display:flex;flex-direction:column;gap:6px}.settings .menu button{text-align:left}
+  .settings{display:grid;grid-template-columns:170px 1fr 1.2fr;gap:12px;min-height:70vh}.settings .menu{display:flex;flex-direction:column;gap:6px}.settings .menu button{text-align:left}
+  .lst{display:flex;flex-direction:column;gap:6px}.lst .row{display:flex;align-items:center;gap:8px;padding:12px;border-radius:10px;background:#fff;border:1px solid var(--line);font-size:16px;user-select:none;-webkit-user-select:none}
+  .lst .row.on{background:#e8eefb;border-color:var(--blue)}.lst .row .nm{flex:1}.lst .row .hd{color:#aaa;font-size:20px;padding:0 6px;touch-action:none}.lst .row.drag{opacity:.4}
+  .form{display:flex;flex-direction:column;gap:10px}.form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}.form input,.form select{font-size:16px}
+  .form .sw{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--ink)}.form .sw input{width:22px;height:22px}
 </style>
 </head>
 <body>
@@ -103,7 +107,8 @@
 
 <section class="view" id="v-settings"><div class="card settings">
   <div class="menu" id="setMenu"></div>
-  <div id="setBody"></div>
+  <div><div class="bar" style="margin:0 0 10px"><button class="ok sm" id="setAdd">追加</button><input id="setFilter" placeholder="検索" style="flex:1"><button class="sm" id="setEdit">編集</button></div><div class="lst" id="setList"></div></div>
+  <div><h2>詳細</h2><div class="form" id="setForm"><div class="muted">左の一覧から選ぶか「追加」</div></div></div>
 </div></section>
 </main>
 
@@ -300,33 +305,56 @@ $('payBack').onclick=()=>openBill(cur.id);
 $('payClose').onclick=async()=>{ if(cur.totals.unpaid>0){toast(`未収 ${yen(cur.totals.unpaid)} があります。請求書か置きで登録してください`);return;}
   await sb.from('bills').update({status:'closed',closed_at:new Date().toISOString(),set_end:billEnd(cur).toISOString()}).eq('id',cur.id); toast('会計を締めました'); loadHall(); show('v-hall'); };
 
-// ---------- settings ----------
+// ---------- settings（d-system風：一覧＋詳細、編集モードで長押し並び替え・削除） ----------
 const SET = [
-  { key:'tables', name:'テーブル', table:'tables', cols:[['name','名前','text'],['sort_order','並び順','number'],['is_visible','表示','bool']], newRow:()=>({store_id:store.id,name:'',sort_order:(tables.length+1)*10,is_visible:true}) },
-  { key:'categories', name:'カテゴリー', table:'categories', cols:[['name','名前','text'],['short_name','略称','text'],['sort_order','並び順','number'],['is_visible','表示','bool'],['is_industry_target','同業者対象','bool']], newRow:()=>({store_id:store.id,name:'',sort_order:(categories.length+1)*10,is_visible:true,is_industry_target:false}) },
-  { key:'products', name:'商品', table:'products', cols:[['name','名前','text'],['category_id','カテゴリー','cat'],['price','販売価格','number'],['cast_subtotal_price','小計価格','number'],['back_amount','バック','number'],['back_points','ポイント','number'],['is_service_target','サ料対象','bool'],['is_keepable','キープ可','bool'],['is_visible','表示','bool'],['sort_order','並び','number']], newRow:()=>({store_id:store.id,name:'',price:0,cast_subtotal_price:0,back_amount:0,back_points:0,is_service_target:true,is_keepable:false,is_visible:true,sort_order:(products.length+1)*10}) },
-  { key:'customers', name:'お客様', table:'customers', cols:[['name','名前','text'],['memo','メモ','text']], newRow:()=>({store_id:store.id,name:'',memo:''}) },
-  { key:'pos', name:'会計設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number']] },
+  { key:'tables', name:'テーブル', table:'tables', label:r=>r.name, cols:[['name','テーブル名','text'],['is_visible','表示','bool']], newRow:()=>({store_id:store.id,name:'新しいテーブル',is_visible:true}) },
+  { key:'categories', name:'カテゴリー', table:'categories', label:r=>r.name, cols:[['name','カテゴリー名','text'],['short_name','略称','text'],['is_visible','表示','bool'],['is_industry_target','同業者モードの対象','bool']], newRow:()=>({store_id:store.id,name:'新しいカテゴリー',is_visible:true,is_industry_target:false}) },
+  { key:'products', name:'メニュー', table:'products', label:r=>`${r.name}`, sub:r=>yen(r.price), cols:[['name','メニュー名','text'],['short_name','略称','text'],['category_id','カテゴリー','cat'],['price','販売価格（税抜）','number'],['cast_subtotal_price','小計価格（係小計に入る額）','number'],['back_amount','バック金額','number'],['back_points','バックポイント','number'],['is_service_target','サービス料の対象','bool'],['is_keepable','キープ可','bool'],['in_stock','在庫あり','bool'],['is_visible','表示','bool']], newRow:()=>({store_id:store.id,name:'新メニュー',category_id:categories[0]?.id,price:0,cast_subtotal_price:0,back_amount:0,back_points:0,is_service_target:true,is_keepable:false,in_stock:true,is_visible:true}) },
+  { key:'customers', name:'お客様情報', table:'customers', label:r=>r.name, cols:[['name','お客様名','text'],['memo','メモ','text']], newRow:()=>({store_id:store.id,name:'新しいお客様',memo:''}), nosort:true },
+  { key:'pos', name:'料金設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number']] },
 ];
-let setCur='tables';
+let setCur='tables', setSel=null, setEditMode=false, setCatFilter=null;
 $('navSettings').onclick=()=>{ renderSettings(setCur); show('v-settings'); };
-async function renderSettings(key){ setCur=key; await loadMasters(); const def=SET.find(s=>s.key===key);
+function setRows(def){ if(def.single) return [settings]; let r=({tables,categories,products,customers})[def.key]; if(def.key==='products'&&setCatFilter) r=r.filter(p=>p.category_id===setCatFilter); return r; }
+async function renderSettings(key, keepSel){ if(key!==setCur){ setSel=null; setEditMode=false; setCatFilter=null; } setCur=key; await loadMasters(); const def=SET.find(s=>s.key===key);
   $('setMenu').innerHTML=SET.map(s=>`<button class="${s.key===key?'on':''}" data-k="${s.key}">${s.name}</button>`).join('');
   $('setMenu').querySelectorAll('button').forEach(b=>b.onclick=()=>renderSettings(b.dataset.k));
-  const rows = def.single ? [settings] : ({tables,categories,products,customers})[key];
-  const cell=(r,[k,label,type])=>{ if(type==='bool') return `<input type="checkbox" data-k="${k}" ${r[k]?'checked':''}>`;
-    if(type==='cat') return `<select data-k="${k}">${categories.map(c=>`<option value="${c.id}" ${r[k]===c.id?'selected':''}>${c.name}</option>`).join('')}</select>`;
-    return `<input class="${type==='number'?'n':''}" type="${type}" data-k="${k}" value="${r[k]??''}">`; };
-  let html = def.single
-    ? `<table class="t">${def.cols.map(c=>`<tr data-id="${settings.store_id}"><td>${c[1]}</td><td>${cell(settings,c)}</td></tr>`).join('')}</table><div class="bar"><button class="primary" id="setSaveSingle">保存</button></div>`
-    : `<div class="bar" style="margin:0 0 10px"><input id="setFilter" placeholder="検索" style="flex:1"><button class="ok" id="setAdd">＋ 追加</button></div><table class="t"><tr>${def.cols.map(c=>`<th>${c[1]}</th>`).join('')}<th></th></tr>${rows.map(r=>`<tr data-id="${r.id}">${def.cols.map(c=>`<td>${cell(r,c)}</td>`).join('')}<td><button class="ok sm" data-save="${r.id}">保存</button></td></tr>`).join('')}</table>`;
-  $('setBody').innerHTML=html;
-  const readRow=tr=>{ const o={}; def.cols.forEach(([k,,type])=>{ const el=tr.querySelector(`[data-k="${k}"]`); o[k]= type==='bool'?el.checked : type==='number'?Number(el.value||0) : el.value; }); return o; };
-  if (def.single) { $('setSaveSingle').onclick=async()=>{ const o=readRow($('setBody').querySelector('table')); const { error } = await sb.from('pos_settings').update(o).eq('store_id',settings.store_id); toast(error?error.message:'保存しました'); }; return; }
-  $('setBody').querySelectorAll('[data-save]').forEach(b=>b.onclick=async()=>{ const tr=b.closest('tr'); const o=readRow(tr); const { error } = await sb.from(def.table).update(o).eq('id',tr.dataset.id); toast(error?error.message:'保存しました'); });
-  $('setAdd').onclick=async()=>{ const { error } = await sb.from(def.table).insert(def.newRow()); if(error){toast(error.message);return;} renderSettings(key); };
-  $('setFilter').oninput=e=>{ const q=e.target.value.trim(); $('setBody').querySelectorAll('tr[data-id]').forEach(tr=>{ tr.style.display = !q || tr.textContent.includes(q) || [...tr.querySelectorAll('input')].some(i=>String(i.value).includes(q)) ? '' : 'none'; }); };
+  $('setAdd').style.display=def.single?'none':''; $('setEdit').style.display=(def.single||def.nosort)?'none':''; $('setEdit').textContent=setEditMode?'完了':'編集'; $('setEdit').classList.toggle('on',setEditMode);
+  $('setFilter').style.display=def.single?'none':'';
+  if (def.single) { $('setList').innerHTML=''; setSel=settings; renderForm(def); return; }
+  const rows=setRows(def);
+  let head='';
+  if (key==='products') head=`<select id="setCat" style="margin-bottom:6px"><option value="">--- すべて ---</option>${categories.map(c=>`<option value="${c.id}" ${setCatFilter===c.id?'selected':''}>${c.name}</option>`).join('')}</select>`;
+  $('setList').innerHTML=head+rows.map(r=>`<div class="row ${setSel?.id===r.id?'on':''}" data-id="${r.id}">${setEditMode?`<button class="danger sm" data-del="${r.id}">削除</button>`:''}<span class="nm">${def.label(r)}${def.sub?` <small class="muted">${def.sub(r)}</small>`:''}${r.is_visible===false?' <small class="muted">（非表示）</small>':''}</span>${setEditMode&&!def.nosort?'<span class="hd">≡</span>':''}</div>`).join('');
+  if (key==='products') $('setCat').onchange=e=>{ setCatFilter=e.target.value||null; renderSettings(key,true); };
+  $('setList').querySelectorAll('.row').forEach(row=>{ row.onclick=e=>{ if(e.target.dataset.del||e.target.classList.contains('hd'))return; setSel=rows.find(r=>r.id===row.dataset.id); renderSettings(key,true); }; });
+  $('setList').querySelectorAll('[data-del]').forEach(b=>b.onclick=async e=>{ e.stopPropagation(); const r=rows.find(x=>x.id===b.dataset.del); if(!confirm(`「${def.label(r)}」を削除しますか？`))return;
+    const { error } = await sb.from(def.table).delete().eq('id',b.dataset.del); if(error){ toast('使用中のため削除できません。非表示にしてください'); return; } setSel=null; renderSettings(key,true); });
+  if (setEditMode && !def.nosort) enableDrag(def);
+  renderForm(def);
 }
+function renderForm(def){ const r=setSel; const f=$('setForm');
+  if(!r){ f.innerHTML='<div class="muted">左の一覧から選ぶか「追加」</div>'; return; }
+  f.innerHTML=def.cols.map(([k,label,type])=>{
+    if(type==='bool') return `<label class="sw"><input type="checkbox" data-k="${k}" ${r[k]?'checked':''}>${label}</label>`;
+    if(type==='cat') return `<label>${label}<select data-k="${k}">${categories.map(c=>`<option value="${c.id}" ${r[k]===c.id?'selected':''}>${c.name}</option>`).join('')}</select></label>`;
+    return `<label>${label}<input type="${type}" data-k="${k}" value="${r[k]??''}"></label>`; }).join('')+`<div class="bar"><button class="primary" id="setSave">保存</button></div>`;
+  $('setSave').onclick=async()=>{ const o={}; def.cols.forEach(([k,,type])=>{ const el=f.querySelector(`[data-k="${k}"]`); o[k]=type==='bool'?el.checked:type==='number'?Number(el.value||0):el.value; });
+    const q = def.single ? sb.from('pos_settings').update(o).eq('store_id',settings.store_id) : sb.from(def.table).update(o).eq('id',r.id);
+    const { error } = await q; toast(error?error.message:'保存しました'); if(!error) renderSettings(def.key,true); };
+}
+$('setAdd').onclick=async()=>{ const def=SET.find(s=>s.key===setCur); const rows=setRows(def); const row=def.newRow(); if(!def.nosort) row.sort_order=(Math.max(0,...rows.map(r=>r.sort_order||0))+1); if(def.key==='products'&&setCatFilter) row.category_id=setCatFilter;
+  const { data, error } = await sb.from(def.table).insert(row).select().single(); if(error){toast(error.message);return;} setSel=data; renderSettings(setCur,true); };
+$('setEdit').onclick=()=>{ setEditMode=!setEditMode; renderSettings(setCur,true); };
+$('setFilter').oninput=e=>{ const q=e.target.value.trim(); $('setList').querySelectorAll('.row').forEach(r=>{ r.style.display=!q||r.textContent.includes(q)?'':'none'; }); };
+// 長押しドラッグ並び替え
+function enableDrag(def){ const list=$('setList'); let dragging=null, timer=null;
+  list.querySelectorAll('.row').forEach(row=>{ const h=row.querySelector('.hd'); if(!h)return;
+    h.onpointerdown=e=>{ e.preventDefault(); timer=setTimeout(()=>{ dragging=row; row.classList.add('drag'); },150); h.setPointerCapture(e.pointerId); };
+    h.onpointermove=e=>{ if(!dragging)return; const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.row'); if(!el||el===dragging||el.parentElement!==list)return; const rect=el.getBoundingClientRect(); if(e.clientY<rect.top+rect.height/2) list.insertBefore(dragging,el); else list.insertBefore(dragging,el.nextSibling); };
+    h.onpointerup=async e=>{ clearTimeout(timer); if(!dragging)return; dragging.classList.remove('drag'); dragging=null;
+      const ids=[...list.querySelectorAll('.row')].map(r=>r.dataset.id); await Promise.all(ids.map((id,i)=>sb.from(def.table).update({sort_order:(i+1)*10}).eq('id',id))); toast('並び順を保存しました'); renderSettings(def.key,true); };
+    h.onpointercancel=()=>{ clearTimeout(timer); if(dragging){dragging.classList.remove('drag');dragging=null;} }; }); }
 
 start();
 </script>
