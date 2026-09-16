@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title>
+<title>OLIVE 会計</title><!-- v5 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -263,21 +263,25 @@ $('topHall').onclick=()=>{ loadHall(); show('v-hall'); };
 $('topLogout').onclick=async()=>{ await sb.auth.signOut(); location.reload(); };
 
 // ---------- 在籍キャスト ----------
-let cMode='today', cSorting=false, cShowInactive=false, cSel=null;
+let cMode='today', cSorting=false, cDeleteMode=false, cSel=null;
 $('navCasts').onclick=()=>{ renderCasts(); show('v-casts'); };
 $('cTabToday').onclick=()=>{ cMode='today'; renderCasts(); };
 $('cTabAll').onclick=()=>{ cMode='all'; renderCasts(); };
 $('cSort').onclick=()=>{ cSorting=!cSorting; renderCasts(); };
-$('cShowInactive').onclick=()=>{ cShowInactive=!cShowInactive; renderCasts(); };
+$('cShowInactive').onclick=()=>{ cDeleteMode=!cDeleteMode; renderCasts(); };
 $('cSearch').oninput=()=>renderCasts();
 $('cNew').onclick=async()=>{ const { data, error } = await sb.from('staff').insert({store_id:store.id,display_name:'新しいキャスト',kind:'cast',sort_order:(Math.max(0,...staff.map(s=>s.sort_order||0))+1)}).select().single(); if(error){toast(error.message);return;} await loadStaffAll(); cSel=data; cMode='all'; renderCasts(); };
 let staffAll=[];
 async function loadStaffAll(){ const { data } = await sb.from('staff').select('*').order('sort_order'); staffAll=data||[]; staff=staffAll.filter(s=>s.is_active).map(s=>({id:s.id,display_name:s.display_name,kind:s.kind,sort_order:s.sort_order})); }
 async function renderCasts(){ await loadStaffAll(); const present=await updateCastBadge(); const q=$('cSearch').value.trim();
-  let rows=staffAll.filter(s=>cShowInactive?true:s.is_active); if(cMode==='today') rows=rows.filter(s=>present.has(s.id)); if(q) rows=rows.filter(s=>(s.display_name+(s.real_name||'')).includes(q));
-  $('cTodayN').textContent=present.size; $('cTabToday').classList.toggle('on',cMode==='today'); $('cTabAll').classList.toggle('on',cMode==='all'); $('cSort').textContent=cSorting?'完了':'並べ替え'; $('cShowInactive').classList.toggle('on',cShowInactive);
-  $('cList').innerHTML=rows.map(s=>`<div class="rrow ${s.is_active?'':'inactive'}" data-id="${s.id}">${cSorting?'<span class="hd">≡</span>':''}<span class="nm">${s.kind==='hall'?'★【雇用】':''}${s.display_name}${s.real_name?' <small class="muted">'+s.real_name+'</small>':''}${present.has(s.id)?' <span class="badge k">出勤</span>':''}</span><button class="primary sm" data-edit="${s.id}">編集</button></div>`).join('')||'<div class="muted">該当なし</div>';
+  let adv={}; if(cMode==='today'){ const { data } = await sb.from('daily_advances').select('staff_id,amount').eq('business_date',businessDate()); (data||[]).forEach(a=>adv[a.staff_id]=a.amount); }
+  let rows=staffAll.filter(s=>cDeleteMode?true:s.is_active); if(cMode==='today') rows=rows.filter(s=>present.has(s.id)); if(q) rows=rows.filter(s=>(s.display_name+(s.real_name||'')).includes(q));
+  $('cTodayN').textContent=present.size; $('cTabToday').classList.toggle('on',cMode==='today'); $('cTabAll').classList.toggle('on',cMode==='all'); $('cSort').textContent=cSorting?'完了':'並べ替え'; $('cShowInactive').classList.toggle('on',cDeleteMode); $('cShowInactive').textContent=cDeleteMode?'削除終了':'削除表示';
+  $('cList').innerHTML=rows.map(s=>`<div class="rrow ${s.is_active?'':'inactive'}" data-id="${s.id}">${cSorting?'<span class="hd">≡</span>':''}<span class="nm">${s.kind==='hall'?'★【雇用】':''}${s.display_name}${s.real_name?' <small class="muted">'+s.real_name+'</small>':''}${present.has(s.id)?' <span class="badge k">出勤</span>':''}${s.is_active?'':' <span class="badge" style="background:#999">削除済</span>'}</span>${cMode==='today'?`<span class="muted" style="font-size:14px">日払い</span><input type="number" class="adv" data-adv="${s.id}" value="${adv[s.id]??''}" placeholder="0" style="width:110px;font-size:18px;text-align:right">`:''}${cDeleteMode?(s.is_active?`<button class="sm" style="background:#c0392b;color:#fff" data-del="${s.id}">削除</button>`:`<button class="sm" data-restore="${s.id}">戻す</button>`):`<button class="primary sm" data-edit="${s.id}">編集</button>`}</div>`).join('')||'<div class="muted">該当なし</div>';
   $('cList').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{ cSel=staffAll.find(s=>s.id===b.dataset.edit); renderCastForm(); });
+  $('cList').querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{ const s=staffAll.find(x=>x.id===b.dataset.del); if(!confirm(`${s.display_name} を削除しますか？（在籍から外します。過去のデータは残ります）`))return; const { error } = await sb.from('staff').update({is_active:false}).eq('id',s.id); toast(error?error.message:'削除しました'); renderCasts(); });
+  $('cList').querySelectorAll('[data-restore]').forEach(b=>b.onclick=async()=>{ const { error } = await sb.from('staff').update({is_active:true}).eq('id',b.dataset.restore); toast(error?error.message:'戻しました'); renderCasts(); });
+  $('cList').querySelectorAll('[data-adv]').forEach(inp=>inp.onchange=async()=>{ const v=parseInt(inp.value||'0',10)||0; const { error } = await sb.from('daily_advances').upsert({store_id:store.id,staff_id:inp.dataset.adv,business_date:businessDate(),amount:v},{onConflict:'staff_id,business_date'}); toast(error?('日払い保存エラー：'+error.message):`日払い ${v.toLocaleString()}円 を保存しました`); });
   if (cSorting) { const list=$('cList'); let dragging=null,timer=null;
     list.querySelectorAll('.rrow').forEach(row=>{ const h=row.querySelector('.hd'); if(!h)return;
       h.onpointerdown=e=>{ e.preventDefault(); timer=setTimeout(()=>{dragging=row;row.classList.add('drag');},150); h.setPointerCapture(e.pointerId); };
