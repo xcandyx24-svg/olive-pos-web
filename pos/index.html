@@ -52,6 +52,28 @@
   .lst .row.on{background:#e8eefb;border-color:var(--blue)}.lst .row .nm{flex:1}.lst .row .hd{color:#aaa;font-size:20px;padding:0 6px;touch-action:none}.lst .row.drag{opacity:.4}
   .form{display:flex;flex-direction:column;gap:10px}.form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}.form input,.form select{font-size:16px}
   .form .sw{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--ink)}.form .sw input{width:22px;height:22px}
+
+  header{background:#3a3a3a;color:#fff;padding:8px 16px;gap:10px}
+  header .store{background:#7a6a4a;color:#fff;padding:10px 40px;border-radius:10px;font-size:20px}
+  header .dt{background:#7a6a4a;color:#fff;padding:6px 12px;border-radius:10px;text-align:center;line-height:1.2;font-variant-numeric:tabular-nums}
+  header .dt small{display:block;font-size:12px}
+  header .nav{margin-left:auto;display:flex;gap:8px}
+  header .nav button{position:relative;background:#c9b37a;color:#fff;font-weight:700;padding:10px 14px;border-radius:50%;min-width:74px;height:74px;font-size:14px;line-height:1.1}
+  header .nav button.on{background:#a08a4f}
+  header .nav .bd{position:absolute;top:-4px;right:-4px;background:#d9534f;color:#fff;border-radius:999px;font-size:12px;padding:2px 7px;font-weight:700}
+  header .menuBtn{background:#c9b37a;color:#fff;border-radius:50%;width:74px;height:74px;font-weight:700}
+  .tables{grid-template-columns:repeat(5,1fr);gap:16px}
+  .tbl{background:linear-gradient(#a9c3f0,#5f86d9);color:#1a1a1a;border:2px solid #4a6fb8;min-height:170px}
+  .tbl .empty{color:#1a2a4a;font-size:28px;font-weight:600}
+  .tbl.busy{background:linear-gradient(#f5e6b0,#c9a94f);border-color:#a08a4f}
+  .tbl.busy .pill{background:rgba(255,255,255,.55);border-radius:999px;text-align:center;padding:2px 8px;font-size:14px;margin:4px 0}
+  .tbl.busy .casts{background:rgba(120,90,30,.35);border-radius:8px;padding:4px 8px;margin-top:auto;color:#222}
+  .tbl.busy.over{border-color:var(--warn);box-shadow:0 0 0 2px var(--warn)}
+  .tbl.busy.oki{background:linear-gradient(#e8e8e8,#bdbdbd);border-color:#999}
+  .rlist{display:flex;flex-direction:column;gap:8px}
+  .rrow{display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border:1px solid var(--line);border-radius:12px;font-size:20px;user-select:none;-webkit-user-select:none}
+  .rrow .nm{flex:1}.rrow .hd{color:#aaa;font-size:24px;padding:0 6px;touch-action:none}.rrow.drag{opacity:.4}.rrow.inactive{opacity:.5}
+  .pillbtn{border-radius:999px;padding:12px 22px;font-weight:700}.pillbtn.brown{background:#7a5a2a;color:#fff}.pillbtn.gray{background:#ccc;color:#666}
 </style>
 </head>
 <body>
@@ -62,9 +84,16 @@
 </form></div>
 
 <header>
+  <button class="menuBtn" id="navTop">メニュー</button>
   <div class="store" id="storeName">—</div>
-  <button id="navHall">ホール状況</button><button id="navSettings">設定</button>
-  <div class="clock" id="clock">--:--</div>
+  <div class="dt"><small id="hdDate">—</small><span id="clock">--:--</span></div>
+  <nav class="nav">
+    <button id="navHall">ホール<br>状況<span class="bd" id="bdHall">0</span></button>
+    <button id="navOrder">注文</button>
+    <button id="navCasts">在籍<br>キャスト<span class="bd" id="bdCasts">0</span></button>
+    <button id="navSettings">設定</button>
+    <button id="navTop2">トップ</button>
+  </nav>
 </header>
 
 <main>
@@ -103,6 +132,27 @@
       <div class="list" id="payList" style="margin-top:10px"></div></div>
   </div>
   <div class="bar"><button class="ghost" id="payBack">伝票へ戻る</button><button class="primary" id="payClose">会計を締める</button></div>
+</div></section>
+
+<section class="view" id="v-casts"><div class="card">
+  <div class="bar" style="margin:0 0 12px">
+    <button class="pillbtn brown" id="cTabToday">出勤リスト <span id="cTodayN"></span></button>
+    <button class="pillbtn brown" id="cSort">並べ替え</button>
+    <button class="pillbtn brown" id="cNew">新規登録</button>
+    <button class="pillbtn gray" id="cShowInactive">削除表示</button>
+    <input id="cSearch" placeholder="キャスト検索" style="flex:1;font-size:18px">
+    <button class="sm" id="cTabAll">名前順</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px">
+    <div class="rlist" id="cList"></div>
+    <div><h2>詳細</h2><div class="form" id="cForm"><div class="muted">一覧の「編集」を押してください</div></div></div>
+  </div>
+</div></section>
+
+<section class="view" id="v-top"><div class="card">
+  <h2>トップ</h2>
+  <div class="bar"><button class="primary" id="topHall">ホール状況へ</button><button class="ghost" id="topLogout">ログアウト</button></div>
+  <div class="muted" style="margin-top:12px">売上済伝票一覧・データ確認は管理画面（段階3）で作ります</div>
 </div></section>
 
 <section class="view" id="v-settings"><div class="card settings">
@@ -152,7 +202,7 @@ let store, settings, modes=[], tables=[], categories=[], products=[], staff=[], 
 function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),1800); }
 function show(v){ document.querySelectorAll('.view').forEach(x=>x.classList.remove('on')); $(v).classList.add('on'); }
 function businessDate(d=new Date()){ const x=new Date(d.getTime()-8*3600*1000); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
-setInterval(()=>{ const d=new Date(); $('clock').textContent=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; },1000);
+setInterval(()=>{ const d=new Date(); $('clock').textContent=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; $('hdDate').textContent=`${d.getMonth()+1}月${d.getDate()}日`; },1000);
 
 $('loginForm').addEventListener('submit', async e => { e.preventDefault();
   const { error } = await sb.auth.signInWithPassword({ email:$('email').value.trim(), password:$('pw').value });
@@ -174,7 +224,7 @@ async function loadMasters(){
 async function loadHall(){
   const { data, error } = await sb.from('bills').select('*, bill_casts(staff_id,role,is_kakari), bill_extensions(minutes,unit_price,qty,is_auto)').eq('status','open');
   if (error) { toast(error.message); return; }
-  openBills = data||[]; await autoExtend();
+  openBills = data||[]; await autoExtend(); await loadOki();
   const totals={}; await Promise.all(openBills.map(async b=>{ const r=await sb.rpc('calc_bill',{p_bill:b.id}); totals[b.id]=r.data; }));
   renderHall(totals);
 }
@@ -185,18 +235,63 @@ async function autoExtend(){ const now=new Date(); let added=false;
     while (end<now) { const { error } = await sb.from('bill_extensions').insert({ bill_id:b.id, minutes:settings.ext_minutes, unit_price:settings.ext_unit_price, qty:b.guest_count, is_auto:true });
       if (error) break; b.bill_extensions=[...(b.bill_extensions||[]),{minutes:settings.ext_minutes,unit_price:settings.ext_unit_price,qty:b.guest_count,is_auto:true}]; end=billEnd(b); added=true; } }
   if (added) toast('セット時間を過ぎた卓に延長を追加しました'); }
+let okiBills=[];
+async function loadOki(){ const { data } = await sb.from('bills').select('id,memo,guest_count,set_start,business_date,bill_casts(staff_id,is_kakari),payments(method,amount,received_at)').eq('status','closed').or('method.eq.oki,method.eq.invoice',{foreignTable:'payments'});
+  okiBills=(data||[]).filter(b=>(b.payments||[]).some(p=>(p.method==='oki'||p.method==='invoice')&&!p.received_at)); }
 function renderHall(totals){ const now=new Date();
   const al=openBills.filter(b=>(billEnd(b)-now)<10*60000);
   $('alerts').innerHTML = al.length ? `<div class="alert">⏰ 残り10分未満：${al.map(b=>tables.find(t=>t.id===b.table_id)?.name||'?').join('、')}</div>` : '';
+  $('bdHall').textContent=openBills.length;
   $('tables').innerHTML='';
   for (const t of tables.filter(t=>t.is_visible)) { const b=openBills.find(x=>x.table_id===t.id); const el=document.createElement('div');
     if (!b) { el.className='tbl'; el.innerHTML=`<div class="name">${t.name}</div><div class="empty">空 席</div>`; el.onclick=()=>createBill(t); }
     else { const end=billEnd(b), remain=Math.round((end-now)/60000); el.className='tbl busy'+(remain<10?' over':'');
-      const casts=(b.bill_casts||[]).map(c=>`${staff.find(s=>s.id===c.staff_id)?.display_name||''}${c.is_kakari?'(係)':''}${ROLE[c.role]?'('+ROLE[c.role]+')':''}`).join('・');
-      el.innerHTML=`<div class="name">${t.name}</div><div class="row"><span>👤 ${b.guest_count}</span><span>残り ${remain}分</span></div><div class="row muted"><span>${hm(b.set_start)}〜${hm(end)}</span></div><div class="total">${yen(totals[b.id]?.amount_due)}</div><div class="casts">${casts}</div>`;
+      const k=(b.bill_casts||[]).find(c=>c.is_kakari); const kn=k?staff.find(s=>s.id===k.staff_id)?.display_name:'';
+      el.innerHTML=`<div class="name">${t.name}</div><div class="row"><span>👤 ${b.guest_count}</span><span>残り ${remain<0?'-':''}${Math.abs(remain).toLocaleString()}分</span></div><div class="pill">${hm(b.set_start)}〜${hm(end)}</div><div class="total">${yen(totals[b.id]?.amount_due)}</div><div class="casts">${kn?'☑ '+kn:''}</div>`;
       el.onclick=()=>openBill(b.id); }
-    $('tables').appendChild(el); } }
+    $('tables').appendChild(el); }
+  for (const b of okiBills) { const el=document.createElement('div'); const unpaid=(b.payments||[]).filter(p=>!p.received_at).reduce((a,p)=>a+p.amount,0);
+    const k=(b.bill_casts||[]).find(c=>c.is_kakari); const kn=k?staff.find(s=>s.id===k.staff_id)?.display_name:'';
+    el.className='tbl busy oki'; el.innerHTML=`<div class="name">置] ${b.memo||''}</div><div class="row"><span>👤 ${b.guest_count}</span><span>${b.business_date}</span></div><div class="total">${yen(unpaid)}</div><div class="casts">${kn?'☑ '+kn:''}</div>`;
+    el.onclick=()=>openBill(b.id); $('tables').appendChild(el); }
+  updateCastBadge(); }
+async function updateCastBadge(){ const { data } = await sb.from('attendance_events').select('staff_id').eq('business_date',businessDate()).in('event_type',['clock_in','douhan']); const s=new Set((data||[]).map(e=>e.staff_id)); $('bdCasts').textContent=s.size; return s; }
 $('navHall').onclick=()=>{ loadHall(); show('v-hall'); };
+$('navOrder').onclick=()=>{ if(cur&&cur.status==='open'){ renderOrder(categories.find(c=>c.is_visible)?.id); show('v-order'); } else { toast('卓を選んでください'); loadHall(); show('v-hall'); } };
+$('navTop').onclick=$('navTop2').onclick=()=>show('v-top');
+$('topHall').onclick=()=>{ loadHall(); show('v-hall'); };
+$('topLogout').onclick=async()=>{ await sb.auth.signOut(); location.reload(); };
+
+// ---------- 在籍キャスト ----------
+let cMode='today', cSorting=false, cShowInactive=false, cSel=null;
+$('navCasts').onclick=()=>{ renderCasts(); show('v-casts'); };
+$('cTabToday').onclick=()=>{ cMode='today'; renderCasts(); };
+$('cTabAll').onclick=()=>{ cMode='all'; renderCasts(); };
+$('cSort').onclick=()=>{ cSorting=!cSorting; renderCasts(); };
+$('cShowInactive').onclick=()=>{ cShowInactive=!cShowInactive; renderCasts(); };
+$('cSearch').oninput=()=>renderCasts();
+$('cNew').onclick=async()=>{ const { data, error } = await sb.from('staff').insert({store_id:store.id,display_name:'新しいキャスト',kind:'cast',sort_order:(Math.max(0,...staff.map(s=>s.sort_order||0))+1)}).select().single(); if(error){toast(error.message);return;} await loadStaffAll(); cSel=data; cMode='all'; renderCasts(); };
+let staffAll=[];
+async function loadStaffAll(){ const { data } = await sb.from('staff').select('*').order('sort_order'); staffAll=data||[]; staff=staffAll.filter(s=>s.is_active).map(s=>({id:s.id,display_name:s.display_name,kind:s.kind,sort_order:s.sort_order})); }
+async function renderCasts(){ await loadStaffAll(); const present=await updateCastBadge(); const q=$('cSearch').value.trim();
+  let rows=staffAll.filter(s=>cShowInactive?true:s.is_active); if(cMode==='today') rows=rows.filter(s=>present.has(s.id)); if(q) rows=rows.filter(s=>(s.display_name+(s.real_name||'')).includes(q));
+  $('cTodayN').textContent=present.size; $('cTabToday').classList.toggle('on',cMode==='today'); $('cTabAll').classList.toggle('on',cMode==='all'); $('cSort').textContent=cSorting?'完了':'並べ替え'; $('cShowInactive').classList.toggle('on',cShowInactive);
+  $('cList').innerHTML=rows.map(s=>`<div class="rrow ${s.is_active?'':'inactive'}" data-id="${s.id}">${cSorting?'<span class="hd">≡</span>':''}<span class="nm">${s.kind==='hall'?'★【雇用】':''}${s.display_name}${s.real_name?' <small class="muted">'+s.real_name+'</small>':''}${present.has(s.id)?' <span class="badge k">出勤</span>':''}</span><button class="primary sm" data-edit="${s.id}">編集</button></div>`).join('')||'<div class="muted">該当なし</div>';
+  $('cList').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{ cSel=staffAll.find(s=>s.id===b.dataset.edit); renderCastForm(); });
+  if (cSorting) { const list=$('cList'); let dragging=null,timer=null;
+    list.querySelectorAll('.rrow').forEach(row=>{ const h=row.querySelector('.hd'); if(!h)return;
+      h.onpointerdown=e=>{ e.preventDefault(); timer=setTimeout(()=>{dragging=row;row.classList.add('drag');},150); h.setPointerCapture(e.pointerId); };
+      h.onpointermove=e=>{ if(!dragging)return; const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.rrow'); if(!el||el===dragging)return; const r=el.getBoundingClientRect(); if(e.clientY<r.top+r.height/2) list.insertBefore(dragging,el); else list.insertBefore(dragging,el.nextSibling); };
+      h.onpointerup=async()=>{ clearTimeout(timer); if(!dragging)return; dragging.classList.remove('drag'); dragging=null; const ids=[...list.querySelectorAll('.rrow')].map(r=>r.dataset.id); await Promise.all(ids.map((id,i)=>sb.from('staff').update({sort_order:(i+1)*10}).eq('id',id))); toast('並び順を保存しました'); renderCasts(); };
+      h.onpointercancel=()=>{ clearTimeout(timer); if(dragging){dragging.classList.remove('drag');dragging=null;} }; }); }
+  renderCastForm(); }
+function renderCastForm(){ const f=$('cForm'); const s=cSel; if(!s){ f.innerHTML='<div class="muted">一覧の「編集」を押してください</div>'; return; }
+  f.innerHTML=`<label>源氏名<input data-k="display_name" value="${s.display_name||''}"></label><label>本名<input data-k="real_name" value="${s.real_name||''}"></label>
+    <label>区分<select data-k="kind"><option value="cast" ${s.kind==='cast'?'selected':''}>キャスト</option><option value="hall" ${s.kind==='hall'?'selected':''}>黒服（雇用）</option></select></label>
+    <label class="sw"><input type="checkbox" data-k="is_active" ${s.is_active?'checked':''}>在籍中（外すと一覧・タイムカードから消える）</label>
+    <div class="bar"><button class="primary" id="cSave">保存</button></div>`;
+  $('cSave').onclick=async()=>{ const o={display_name:f.querySelector('[data-k=display_name]').value.trim(),real_name:f.querySelector('[data-k=real_name]').value.trim(),kind:f.querySelector('[data-k=kind]').value,is_active:f.querySelector('[data-k=is_active]').checked};
+    const { error } = await sb.from('staff').update(o).eq('id',s.id); toast(error?error.message:'保存しました'); if(!error){ cSel=null; renderCasts(); } }; }
 async function createBill(t){ const normal=modes.find(m=>m.code==='normal');
   const { data:b, error } = await sb.from('bills').insert({ store_id:store.id, business_date:businessDate(), table_id:t.id, guest_count:1, pricing_mode_id:normal?.id, set_minutes:settings.set_minutes, set_unit_price:settings.set_unit_price }).select().single();
   if (error) { toast(error.message); return; } openBill(b.id); }
