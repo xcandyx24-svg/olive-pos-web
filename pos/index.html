@@ -6,186 +6,129 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>OLIVE 会計</title>
 <style>
-  :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--ghost:#8a8a8a}
+  :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
   body{display:flex;flex-direction:column;overflow:hidden}
-  header{display:flex;align-items:center;gap:16px;padding:10px 20px;background:#fff;border-bottom:1px solid var(--line)}
+  header{display:flex;align-items:center;gap:12px;padding:10px 20px;background:#fff;border-bottom:1px solid var(--line)}
   header .store{font-weight:700;font-size:18px}
   header .clock{margin-left:auto;font-variant-numeric:tabular-nums;font-size:18px}
-  header nav button{margin-left:8px}
   main{flex:1;overflow:auto;padding:16px 20px}
   .view{display:none}.view.on{display:block}
   button{font:inherit;cursor:pointer;border:none;border-radius:10px;padding:10px 16px;background:#eee;color:var(--ink)}
-  button.primary{background:var(--blue);color:#fff}
-  button.ok{background:var(--acc);color:#fff}
-  button.danger{background:var(--warn);color:#fff}
-  button.gold{background:var(--gold);color:#fff}
-  button.ghost{background:transparent;border:1px solid var(--line)}
-  button:disabled{opacity:.4}
+  button.primary{background:var(--blue);color:#fff}button.ok{background:var(--acc);color:#fff}
+  button.danger{background:var(--warn);color:#fff}button.gold{background:var(--gold);color:#fff}
+  button.ghost{background:transparent;border:1px solid var(--line)}button.sm{padding:6px 10px;font-size:13px}
+  button.on{background:var(--ink);color:#fff}
   input,select{font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff}
-  .grid{display:grid;gap:12px}
-  .tables{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
-  .tbl{background:#dfe7f5;border-radius:14px;min-height:150px;padding:12px;position:relative;text-align:center;display:flex;flex-direction:column;justify-content:center;cursor:pointer;border:2px solid transparent}
+  .tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+  .tbl{background:#dfe7f5;border-radius:14px;min-height:150px;padding:12px;text-align:center;display:flex;flex-direction:column;justify-content:center;cursor:pointer;border:2px solid transparent}
   .tbl .name{font-weight:700;font-size:16px}.tbl .empty{font-size:26px;color:#3a4a6b;margin-top:10px}
-  .tbl.busy{background:#f3dfa0;text-align:left;justify-content:flex-start;gap:4px}
-  .tbl.busy.over{border-color:var(--warn)}
-  .tbl .row{display:flex;justify-content:space-between;font-size:14px}
-  .tbl .total{font-size:22px;font-weight:700;text-align:right}
-  .tbl .casts{font-size:13px;color:#444}
+  .tbl.busy{background:#f3dfa0;text-align:left;justify-content:flex-start;gap:4px}.tbl.busy.over{border-color:var(--warn)}
+  .tbl .row{display:flex;justify-content:space-between;font-size:14px}.tbl .total{font-size:22px;font-weight:700;text-align:right}.tbl .casts{font-size:13px;color:#444}
   .alert{background:#fde8e8;color:#9b1c1c;padding:10px 14px;border-radius:10px;margin-bottom:12px;font-weight:700}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
   .cols{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:12px}
-  h2{margin:0 0 10px;font-size:16px;color:var(--muted)}
+  h2{margin:0 0 10px;font-size:15px;color:var(--muted)}
   .list{display:flex;flex-direction:column;gap:6px}
   .item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:#fafafa;border:1px solid var(--line)}
-  .item .n{flex:1}.item .amt{font-variant-numeric:tabular-nums;min-width:90px;text-align:right}
-  .item small{color:var(--muted)}
-  .totals{display:grid;grid-template-columns:auto auto;gap:4px 20px;font-variant-numeric:tabular-nums;justify-content:end}
-  .totals .big{font-size:28px;font-weight:800}
-  .bar{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
-  .chips{display:flex;flex-wrap:wrap;gap:8px}
-  .chip{padding:10px 14px;border-radius:999px;background:#eee;font-size:15px}
-  .chip.on{background:var(--ink);color:#fff}
-  .staffgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-  .staffgrid .s{padding:8px;border:1px solid var(--line);border-radius:10px;background:#fff}
-  .staffgrid .s .roles{display:flex;gap:4px;margin-top:6px}
-  .staffgrid .s .roles button{padding:6px 8px;font-size:12px;flex:1}
-  .staffgrid .s .roles button.on{background:var(--gold);color:#fff}
+  .item .n{flex:1}.item .amt{font-variant-numeric:tabular-nums;min-width:90px;text-align:right}.item small{color:var(--muted)}
+  .badge{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--gold);color:#fff}.badge.k{background:var(--ink)}
+  .totals{display:grid;grid-template-columns:auto auto;gap:4px 20px;font-variant-numeric:tabular-nums;justify-content:end}.totals .big{font-size:28px;font-weight:800}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}.chip{padding:10px 14px;border-radius:999px;background:#eee;font-size:15px}.chip.on{background:var(--ink);color:#fff}
   .prodgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
-  .prod{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;text-align:left;min-height:64px}
-  .prod .p{display:block;color:var(--muted);font-size:13px;margin-top:4px}
-  .num{display:flex;align-items:center;gap:12px;font-size:28px;font-weight:700}
-  .num button{width:56px;height:56px;border-radius:50%;font-size:28px}
-  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:30}
-  .modal.on{display:flex}
+  .prod{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;text-align:left;min-height:64px}.prod .p{display:block;color:var(--muted);font-size:13px;margin-top:4px}
+  .num{display:inline-flex;align-items:center;gap:8px;font-size:22px;font-weight:700}.num button{width:40px;height:40px;border-radius:50%;font-size:22px;padding:0}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:30}.modal.on{display:flex}
   .modal .box{background:#fff;border-radius:16px;padding:18px;width:min(760px,92vw);max-height:88vh;overflow:auto}
-  table.split{width:100%;border-collapse:collapse}table.split td{padding:6px;border-bottom:1px solid var(--line)}
-  table.split input{width:100px;text-align:right}
-  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 20px;border-radius:12px;display:none;z-index:40}
-  .toast.on{display:block}
+  table.t{width:100%;border-collapse:collapse}table.t td,table.t th{padding:6px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}table.t input{width:100%}table.t input.n{width:110px;text-align:right}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 20px;border-radius:12px;display:none;z-index:40}.toast.on{display:block}
   .login{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:50}
   .login form{width:360px;background:#fff;padding:32px;border-radius:16px;border:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
-  .hidden{display:none!important}
-  .muted{color:var(--muted)}
-  .right{text-align:right}
+  .hidden{display:none!important}.muted{color:var(--muted)}.right{text-align:right}
+  .settings{display:grid;grid-template-columns:180px 1fr;gap:12px}.settings .menu{display:flex;flex-direction:column;gap:6px}.settings .menu button{text-align:left}
 </style>
 </head>
 <body>
-<div class="login" id="login">
-  <form id="loginForm">
-    <h1 style="margin:0;font-size:20px">店舗端末ログイン</h1>
-    <input id="email" type="email" placeholder="端末メールアドレス" required>
-    <input id="pw" type="password" placeholder="パスワード" required>
-    <button class="primary" type="submit">ログイン</button>
-    <div id="loginErr" style="color:var(--warn);font-size:14px;min-height:18px"></div>
-  </form>
-</div>
+<div class="login" id="login"><form id="loginForm">
+  <h1 style="margin:0;font-size:20px">店舗端末ログイン</h1>
+  <input id="email" type="email" placeholder="端末メールアドレス" required><input id="pw" type="password" placeholder="パスワード" required>
+  <button class="primary" type="submit">ログイン</button><div id="loginErr" style="color:var(--warn);font-size:14px;min-height:18px"></div>
+</form></div>
 
 <header>
   <div class="store" id="storeName">—</div>
-  <nav><button id="navHall">ホール状況</button></nav>
+  <button id="navHall">ホール状況</button><button id="navSettings">設定</button>
   <div class="clock" id="clock">--:--</div>
 </header>
 
 <main>
-  <!-- ホール状況 -->
-  <section class="view on" id="v-hall">
-    <div id="alerts"></div>
-    <div class="grid tables" id="tables"></div>
-  </section>
+<section class="view on" id="v-hall"><div id="alerts"></div><div class="tables" id="tables"></div></section>
 
-  <!-- 卓作成 -->
-  <section class="view" id="v-new">
-    <div class="card">
-      <h2>卓作成：<span id="newTableName"></span></h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div>
-          <h2>お客様</h2>
-          <div style="display:flex;gap:8px"><input id="custSearch" placeholder="お客様名で検索" style="flex:1"><button id="custAdd">新規</button></div>
-          <div class="chips" id="custList" style="margin-top:8px"></div>
-          <div class="muted" style="margin-top:6px">選択中：<span id="custSel">なし</span></div>
-        </div>
-        <div>
-          <h2>人数</h2>
-          <div class="num"><button id="gMinus">−</button><span id="guestCount">1</span><button id="gPlus">＋</button></div>
-        </div>
-      </div>
-      <h2 style="margin-top:16px">キャスト（係／同伴①／同伴②）</h2>
-      <div class="staffgrid" id="castGrid"></div>
-      <div class="bar"><button class="ghost" id="newCancel">戻る</button><button class="primary" id="newCreate">卓を作る</button></div>
-    </div>
-  </section>
+<section class="view" id="v-bill"><div class="card">
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <b id="bTable" style="font-size:20px"></b><span id="bTime" class="muted"></span>
+    <span>客数 <span class="num"><button id="gMinus">−</button><span id="bGuests">1</span><button id="gPlus">＋</button></span></span>
+    <span class="chips" id="modeChips" style="margin-left:auto"></span>
+  </div>
+  <div class="cols" style="margin-top:12px">
+    <div><h2>お客様</h2><div class="list" id="bCust"></div><button class="ghost sm" id="custAddBtn" style="margin-top:6px">＋ お客様</button>
+      <h2 style="margin-top:14px">キャスト</h2><div class="list" id="bCasts"></div><button class="ghost sm" id="castAddBtn" style="margin-top:6px">＋ キャスト</button></div>
+    <div><h2>セット・延長</h2><div class="list" id="bSet"></div><button class="ghost sm" id="extAdd" style="margin-top:6px">＋ 延長を手動追加</button></div>
+    <div><h2>注文</h2><div class="list" id="bItems"></div></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:end;margin-top:12px;flex-wrap:wrap;gap:12px">
+    <div class="totals" id="bTotals"></div>
+    <div class="bar"><button class="ghost" id="bBack">ホールへ</button><button class="danger" id="bVoid">伝票取消</button><button class="primary" id="bOrder">注文</button><button class="gold" id="bPay">会計</button></div>
+  </div>
+</div></section>
 
-  <!-- 伝票詳細 -->
-  <section class="view" id="v-bill">
-    <div class="card">
-      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-        <b id="bTable" style="font-size:20px"></b>
-        <span id="bTime" class="muted"></span>
-        <span>客数 <b id="bGuests"></b></span>
-        <span id="bCust" class="muted"></span>
-        <span style="margin-left:auto" class="chips" id="modeChips"></span>
-      </div>
-      <div class="cols" style="margin-top:12px">
-        <div><h2>係／同伴</h2><div class="list" id="bCasts"></div></div>
-        <div><h2>セット・延長</h2><div class="list" id="bSet"></div><button class="ghost" id="extAdd" style="margin-top:8px">延長を手動追加</button></div>
-        <div><h2>注文</h2><div class="list" id="bItems"></div></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:end;margin-top:12px;flex-wrap:wrap;gap:12px">
-        <div class="totals" id="bTotals"></div>
-        <div class="bar">
-          <button class="ghost" id="bBack">ホールへ</button>
-          <button class="danger" id="bVoid">伝票取消</button>
-          <button class="primary" id="bOrder">注文</button>
-          <button class="gold" id="bPay">会計</button>
-        </div>
-      </div>
-    </div>
-  </section>
+<section class="view" id="v-order"><div class="card">
+  <div class="chips" id="catChips"></div><div class="prodgrid" id="prodGrid" style="margin-top:12px"></div>
+  <div class="bar"><button class="ghost" id="orderBack">伝票へ戻る</button></div>
+</div></section>
 
-  <!-- 注文 -->
-  <section class="view" id="v-order">
-    <div class="card">
-      <div class="chips" id="catChips"></div>
-      <div class="prodgrid" id="prodGrid" style="margin-top:12px"></div>
-      <div class="bar"><button class="ghost" id="orderBack">伝票へ戻る</button></div>
-    </div>
-  </section>
+<section class="view" id="v-pay"><div class="card">
+  <h2>会計：<span id="pTable"></span></h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="totals" id="pTotals"></div>
+    <div><div class="chips" id="payMethods"></div>
+      <input id="payAmount" type="number" placeholder="金額" style="width:100%;font-size:24px;text-align:right;margin-top:10px">
+      <div class="bar"><button id="payAdjDiscount">値引</button><button id="payAdjSurcharge">値増</button><button class="ok" id="payAdd" style="margin-left:auto">入金</button></div>
+      <div class="list" id="payList" style="margin-top:10px"></div></div>
+  </div>
+  <div class="bar"><button class="ghost" id="payBack">伝票へ戻る</button><button class="primary" id="payClose">会計を締める</button></div>
+</div></section>
 
-  <!-- 会計 -->
-  <section class="view" id="v-pay">
-    <div class="card">
-      <h2>会計：<span id="pTable"></span></h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div class="totals" id="pTotals"></div>
-        <div>
-          <div class="chips" id="payMethods"></div>
-          <input id="payAmount" type="number" placeholder="金額" style="width:100%;font-size:24px;text-align:right;margin-top:10px">
-          <div class="bar">
-            <button id="payAdjDiscount">値引</button><button id="payAdjSurcharge">値増</button>
-            <button class="ok" id="payAdd" style="margin-left:auto">入金</button>
-          </div>
-          <div class="list" id="payList" style="margin-top:10px"></div>
-        </div>
-      </div>
-      <div class="bar"><button class="ghost" id="payBack">伝票へ戻る</button><button class="primary" id="payClose">会計を締める</button></div>
-    </div>
-  </section>
+<section class="view" id="v-settings"><div class="card settings">
+  <div class="menu" id="setMenu"></div>
+  <div id="setBody"></div>
+</div></section>
 </main>
 
-<!-- 振り分け -->
+<div class="modal" id="custModal"><div class="box" style="width:520px">
+  <h2 style="color:var(--ink)">お客様を追加</h2>
+  <div style="display:flex;gap:8px"><input id="custSearch" placeholder="名前で検索" style="flex:1"><button id="custNew">新規登録</button></div>
+  <div class="chips" id="custList" style="margin-top:10px"></div>
+  <div class="bar"><button class="ghost" id="custCancel" style="margin-left:auto">閉じる</button></div>
+</div></div>
+
+<div class="modal" id="castModal"><div class="box" style="width:600px">
+  <h2 style="color:var(--ink)">キャストを追加（本日出勤している人）</h2>
+  <div class="chips" id="castList"></div>
+  <div class="muted" style="margin-top:8px">同伴①②は打刻時刻から自動判定。係は追加後に「係にする」で指定</div>
+  <div class="bar"><button class="ghost" id="castCancel" style="margin-left:auto">閉じる</button></div>
+</div></div>
+
 <div class="modal" id="splitModal"><div class="box">
-  <h2 style="color:var(--ink)">振り分け：<span id="splitName"></span></h2>
-  <div class="muted" id="splitBase"></div>
-  <table class="split" id="splitTable"></table>
+  <h2 style="color:var(--ink)">振り分け：<span id="splitName"></span></h2><div class="muted" id="splitBase"></div>
+  <table class="t" id="splitTable"></table>
   <div class="bar"><button id="splitEven">均等</button><button class="ghost" id="splitCancel" style="margin-left:auto">戻る</button><button class="primary" id="splitOk">確定</button></div>
 </div></div>
 
-<!-- 総額指定 -->
 <div class="modal" id="fixedModal"><div class="box" style="width:380px">
-  <h2 style="color:var(--ink)">総額指定</h2>
-  <input id="fixedAmount" type="number" placeholder="お客様への請求総額" style="width:100%;font-size:24px;text-align:right">
+  <h2 style="color:var(--ink)">総額指定</h2><input id="fixedAmount" type="number" placeholder="お客様への請求総額" style="width:100%;font-size:24px;text-align:right">
   <div class="bar"><button class="ghost" id="fixedCancel">戻る</button><button class="primary" id="fixedOk" style="margin-left:auto">適用</button></div>
 </div></div>
 
@@ -193,308 +136,197 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const SUPABASE_URL = 'https://gjqaxenwvvazhjtziusf.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_pPfJUvJd6iJeHBNiD7XkWA_2RKF7JYw';
+const SUPABASE_URL='https://gjqaxenwvvazhjtziusf.supabase.co', SUPABASE_KEY='sb_publishable_pPfJUvJd6iJeHBNiD7XkWA_2RKF7JYw';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
 const yen = n => (n ?? 0).toLocaleString('ja-JP') + '円';
-const hm = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
-const ROLE = { kakari:'係', douhan1:'同伴①', douhan2:'同伴②', none:'' };
+const hm = t => { const d=new Date(t); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+const ROLE = { douhan1:'同伴①', douhan2:'同伴②', none:'' };
 const METHOD = { cash:'現金', card:'カード', invoice:'請求書', oki:'置き' };
-
-let store, settings, modes = [], tables = [], categories = [], products = [], staff = [], customers = [];
-let openBills = [];                 // ホール用
-let cur = null;                     // 表示中の伝票（詳細）
-let newCtx = null;                  // 卓作成中の状態
-let payMethod = 'cash';
-
+let store, settings, modes=[], tables=[], categories=[], products=[], staff=[], customers=[], openBills=[], cur=null, payMethod='cash';
 function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),1800); }
 function show(v){ document.querySelectorAll('.view').forEach(x=>x.classList.remove('on')); $(v).classList.add('on'); }
 function businessDate(d=new Date()){ const x=new Date(d.getTime()-8*3600*1000); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
 setInterval(()=>{ const d=new Date(); $('clock').textContent=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; },1000);
 
-// ---------- login ----------
-$('loginForm').addEventListener('submit', async e => {
-  e.preventDefault();
+$('loginForm').addEventListener('submit', async e => { e.preventDefault();
   const { error } = await sb.auth.signInWithPassword({ email:$('email').value.trim(), password:$('pw').value });
-  if (error) { $('loginErr').textContent = 'ログインできません：' + error.message; return; }
-  start();
-});
-async function start(){
-  const { data:{ session } } = await sb.auth.getSession();
-  if (!session) return;
-  $('login').classList.add('hidden');
-  await loadMasters();
-  await loadHall();
-  setInterval(loadHall, 60000);
-  show('v-hall');
-}
+  if (error) { $('loginErr').textContent='ログインできません：'+error.message; return; } start(); });
+async function start(){ const { data:{ session } } = await sb.auth.getSession(); if (!session) return;
+  $('login').classList.add('hidden'); await loadMasters(); await loadHall(); setInterval(loadHall,60000); show('v-hall'); }
 
-// ---------- masters ----------
 async function loadMasters(){
-  const [s, st, pm, tb, ca, pr, sf, cu] = await Promise.all([
-    sb.from('stores').select('id,name').limit(1),
-    sb.from('pos_settings').select('*').limit(1),
-    sb.from('pricing_modes').select('*').eq('is_active',true).order('sort_order'),
-    sb.from('tables').select('*').eq('is_visible',true).order('sort_order'),
-    sb.from('categories').select('*').eq('is_visible',true).order('sort_order'),
-    sb.from('products').select('*').eq('is_visible',true).order('sort_order'),
-    sb.from('staff').select('id,display_name,kind').eq('is_active',true).order('sort_order'),
-    sb.from('customers').select('id,name').order('name'),
-  ]);
-  store = s.data?.[0]; settings = st.data?.[0]; modes = pm.data||[]; tables = tb.data||[];
-  categories = ca.data||[]; products = pr.data||[]; staff = sf.data||[]; customers = cu.data||[];
+  const [s,st,pm,tb,ca,pr,sf,cu] = await Promise.all([
+    sb.from('stores').select('id,name').limit(1), sb.from('pos_settings').select('*').limit(1),
+    sb.from('pricing_modes').select('*').eq('is_active',true).order('sort_order'), sb.from('tables').select('*').order('sort_order'),
+    sb.from('categories').select('*').order('sort_order'), sb.from('products').select('*').order('sort_order'),
+    sb.from('staff').select('id,display_name,kind').eq('is_active',true).order('sort_order'), sb.from('customers').select('id,name,memo').order('name')]);
+  store=s.data?.[0]; settings=st.data?.[0]; modes=pm.data||[]; tables=tb.data||[]; categories=ca.data||[]; products=pr.data||[]; staff=sf.data||[]; customers=cu.data||[];
   $('storeName').textContent = store?.name || '店舗未設定';
 }
 
 // ---------- hall ----------
 async function loadHall(){
-  const { data, error } = await sb.from('bills')
-    .select('*, bill_casts(staff_id,role), bill_extensions(minutes,unit_price,qty,is_auto), bill_customers(customer_id)')
-    .eq('status','open');
+  const { data, error } = await sb.from('bills').select('*, bill_casts(staff_id,role,is_kakari), bill_extensions(minutes,unit_price,qty,is_auto)').eq('status','open');
   if (error) { toast(error.message); return; }
-  openBills = data || [];
-  await autoExtend();
-  const totals = {};
-  await Promise.all(openBills.map(async b => { const r = await sb.rpc('calc_bill',{p_bill:b.id}); totals[b.id]=r.data; }));
+  openBills = data||[]; await autoExtend();
+  const totals={}; await Promise.all(openBills.map(async b=>{ const r=await sb.rpc('calc_bill',{p_bill:b.id}); totals[b.id]=r.data; }));
   renderHall(totals);
 }
-function billEnd(b){ const ext = (b.bill_extensions||[]).reduce((a,e)=>a+e.minutes,0); return new Date(new Date(b.set_start).getTime() + (b.set_minutes+ext)*60000); }
-async function autoExtend(){
-  const now = new Date(); let added = false;
-  for (const b of openBills) {
-    const mode = modes.find(m=>m.id===b.pricing_mode_id);
-    if (mode && !mode.include_set) continue;
-    let end = billEnd(b);
-    while (end < now) {
-      const { error } = await sb.from('bill_extensions').insert({ bill_id:b.id, minutes:settings.ext_minutes, unit_price:settings.ext_unit_price, qty:b.guest_count, is_auto:true });
-      if (error) break;
-      b.bill_extensions = [...(b.bill_extensions||[]), { minutes:settings.ext_minutes, unit_price:settings.ext_unit_price, qty:b.guest_count, is_auto:true }];
-      end = billEnd(b); added = true;
-    }
-  }
-  if (added) toast('セット時間を過ぎた卓に延長を追加しました');
-}
-function renderHall(totals){
-  const now = new Date();
-  const al = openBills.filter(b => (billEnd(b)-now) < 10*60000);
+function billEnd(b){ const ext=(b.bill_extensions||[]).reduce((a,e)=>a+e.minutes,0); return new Date(new Date(b.set_start).getTime()+(b.set_minutes+ext)*60000); }
+async function autoExtend(){ const now=new Date(); let added=false;
+  for (const b of openBills) { const mode=modes.find(m=>m.id===b.pricing_mode_id); if (mode && !mode.include_set) continue;
+    let end=billEnd(b);
+    while (end<now) { const { error } = await sb.from('bill_extensions').insert({ bill_id:b.id, minutes:settings.ext_minutes, unit_price:settings.ext_unit_price, qty:b.guest_count, is_auto:true });
+      if (error) break; b.bill_extensions=[...(b.bill_extensions||[]),{minutes:settings.ext_minutes,unit_price:settings.ext_unit_price,qty:b.guest_count,is_auto:true}]; end=billEnd(b); added=true; } }
+  if (added) toast('セット時間を過ぎた卓に延長を追加しました'); }
+function renderHall(totals){ const now=new Date();
+  const al=openBills.filter(b=>(billEnd(b)-now)<10*60000);
   $('alerts').innerHTML = al.length ? `<div class="alert">⏰ 残り10分未満：${al.map(b=>tables.find(t=>t.id===b.table_id)?.name||'?').join('、')}</div>` : '';
-  $('tables').innerHTML = '';
-  for (const t of tables) {
-    const b = openBills.find(x => x.table_id === t.id);
-    const el = document.createElement('div');
-    if (!b) { el.className='tbl'; el.innerHTML = `<div class="name">${t.name}</div><div class="empty">空 席</div>`; el.onclick = () => openNew(t); }
-    else {
-      const end = billEnd(b), remain = Math.round((end-now)/60000);
-      el.className = 'tbl busy' + (remain < 10 ? ' over' : '');
-      const casts = (b.bill_casts||[]).filter(c=>c.role!=='none').map(c=>`${staff.find(s=>s.id===c.staff_id)?.display_name||''}${c.role==='kakari'?'':'('+ROLE[c.role]+')'}`).join('・');
-      el.innerHTML = `<div class="name">${t.name}</div>
-        <div class="row"><span>👤 ${b.guest_count}</span><span>残り ${remain}分</span></div>
-        <div class="row muted"><span>${hm(b.set_start)}〜${hm(end)}</span></div>
-        <div class="total">${yen(totals[b.id]?.amount_due)}</div><div class="casts">${casts}</div>`;
-      el.onclick = () => openBill(b.id);
-    }
-    $('tables').appendChild(el);
-  }
-}
-$('navHall').onclick = () => { loadHall(); show('v-hall'); };
+  $('tables').innerHTML='';
+  for (const t of tables.filter(t=>t.is_visible)) { const b=openBills.find(x=>x.table_id===t.id); const el=document.createElement('div');
+    if (!b) { el.className='tbl'; el.innerHTML=`<div class="name">${t.name}</div><div class="empty">空 席</div>`; el.onclick=()=>createBill(t); }
+    else { const end=billEnd(b), remain=Math.round((end-now)/60000); el.className='tbl busy'+(remain<10?' over':'');
+      const casts=(b.bill_casts||[]).map(c=>`${staff.find(s=>s.id===c.staff_id)?.display_name||''}${c.is_kakari?'(係)':''}${ROLE[c.role]?'('+ROLE[c.role]+')':''}`).join('・');
+      el.innerHTML=`<div class="name">${t.name}</div><div class="row"><span>👤 ${b.guest_count}</span><span>残り ${remain}分</span></div><div class="row muted"><span>${hm(b.set_start)}〜${hm(end)}</span></div><div class="total">${yen(totals[b.id]?.amount_due)}</div><div class="casts">${casts}</div>`;
+      el.onclick=()=>openBill(b.id); }
+    $('tables').appendChild(el); } }
+$('navHall').onclick=()=>{ loadHall(); show('v-hall'); };
+async function createBill(t){ const normal=modes.find(m=>m.code==='normal');
+  const { data:b, error } = await sb.from('bills').insert({ store_id:store.id, business_date:businessDate(), table_id:t.id, guest_count:1, pricing_mode_id:normal?.id, set_minutes:settings.set_minutes, set_unit_price:settings.set_unit_price }).select().single();
+  if (error) { toast(error.message); return; } openBill(b.id); }
 
-// ---------- new table ----------
-function openNew(t){
-  newCtx = { table:t, guests:1, customer:null, roles:{} };
-  $('newTableName').textContent = t.name; $('guestCount').textContent = 1; $('custSel').textContent='なし'; $('custSearch').value='';
-  renderCust(''); renderCastGrid();
-  show('v-new');
-}
-function renderCust(q){
-  const list = customers.filter(c => !q || c.name.includes(q)).slice(0,30);
-  $('custList').innerHTML = list.map(c=>`<button class="chip ${newCtx.customer?.id===c.id?'on':''}" data-id="${c.id}">${c.name}</button>`).join('');
-  $('custList').querySelectorAll('.chip').forEach(b => b.onclick = () => { newCtx.customer = customers.find(c=>c.id===b.dataset.id); $('custSel').textContent = newCtx.customer.name; renderCust($('custSearch').value); });
-}
-$('custSearch').oninput = e => renderCust(e.target.value.trim());
-$('custAdd').onclick = async () => {
-  const name = $('custSearch').value.trim(); if (!name) { toast('お客様名を入力してください'); return; }
-  const { data, error } = await sb.from('customers').insert({ store_id:store.id, name }).select().single();
-  if (error) { toast(error.message); return; }
-  customers.push(data); customers.sort((a,b)=>a.name.localeCompare(b.name,'ja'));
-  newCtx.customer = data; $('custSel').textContent = data.name; renderCust(name);
-};
-$('gPlus').onclick = () => { newCtx.guests++; $('guestCount').textContent = newCtx.guests; };
-$('gMinus').onclick = () => { if (newCtx.guests>1) newCtx.guests--; $('guestCount').textContent = newCtx.guests; };
-function renderCastGrid(){
-  $('castGrid').innerHTML = staff.filter(s=>s.kind==='cast').map(s=>`<div class="s"><div>${s.display_name}</div><div class="roles">
-    ${['kakari','douhan1','douhan2'].map(r=>`<button data-s="${s.id}" data-r="${r}" class="${newCtx.roles[s.id]===r?'on':''}">${ROLE[r]}</button>`).join('')}</div></div>`).join('');
-  $('castGrid').querySelectorAll('button').forEach(b => b.onclick = () => {
-    const s=b.dataset.s, r=b.dataset.r;
-    newCtx.roles[s] = newCtx.roles[s]===r ? undefined : r;
-    renderCastGrid();
-  });
-}
-$('newCancel').onclick = () => show('v-hall');
-$('newCreate').onclick = async () => {
-  const roles = Object.entries(newCtx.roles).filter(([,r])=>r);
-  if (!roles.some(([,r])=>r==='kakari')) { toast('係を1人選んでください'); return; }
-  const normal = modes.find(m=>m.code==='normal');
-  const { data:b, error } = await sb.from('bills').insert({
-    store_id:store.id, business_date:businessDate(), table_id:newCtx.table.id, guest_count:newCtx.guests,
-    pricing_mode_id:normal?.id, set_minutes:settings.set_minutes, set_unit_price:settings.set_unit_price
-  }).select().single();
-  if (error) { toast(error.message); return; }
-  await sb.from('bill_casts').insert(roles.map(([staff_id,role])=>({ bill_id:b.id, staff_id, role })));
-  if (newCtx.customer) await sb.from('bill_customers').insert({ bill_id:b.id, customer_id:newCtx.customer.id });
-  await openBill(b.id);
-};
-
-// ---------- bill detail ----------
+// ---------- bill ----------
 async function openBill(id){
-  const { data, error } = await sb.from('bills')
-    .select('*, bill_casts(id,staff_id,role), bill_extensions(id,minutes,unit_price,qty,is_auto,added_at), bill_items(id,name,qty,unit_price,cast_subtotal_price,back_amount,back_points,is_void,bill_item_splits(id,staff_id,sales_amount,back_amount,back_points)), bill_customers(customer_id), bill_adjustments(id,kind,amount,reason), payments(id,method,amount,paid_at)')
-    .eq('id', id).single();
-  if (error) { toast(error.message); return; }
-  cur = data;
-  const r = await sb.rpc('calc_bill',{p_bill:id}); cur.totals = r.data || {};
-  renderBill(); show('v-bill');
-}
-function renderBill(){
-  const b = cur, t = tables.find(x=>x.id===b.table_id);
-  $('bTable').textContent = t?.name || ''; $('bGuests').textContent = b.guest_count;
-  $('bTime').textContent = `${hm(b.set_start)}〜${hm(billEnd(b))}`;
-  $('bCust').textContent = (b.bill_customers||[]).map(c=>customers.find(x=>x.id===c.customer_id)?.name).filter(Boolean).join('、');
-  $('modeChips').innerHTML = modes.map(m=>`<button class="chip ${b.pricing_mode_id===m.id?'on':''}" data-id="${m.id}">${m.name}</button>`).join('');
-  $('modeChips').querySelectorAll('.chip').forEach(c => c.onclick = () => setMode(c.dataset.id));
-  $('bCasts').innerHTML = (b.bill_casts||[]).map(c=>`<div class="item"><span class="n">${staff.find(s=>s.id===c.staff_id)?.display_name||''}</span><span>${ROLE[c.role]}</span></div>`).join('') || '<div class="muted">なし</div>';
-  const setRow = `<div class="item"><span class="n">セット ${b.set_minutes}分 <small>${yen(b.set_unit_price)}×${b.guest_count}</small></span><span class="amt">${yen(b.set_unit_price*b.guest_count)}</span></div>`;
-  const extRows = (b.bill_extensions||[]).map(e=>`<div class="item"><span class="n">延長 ${e.minutes}分 <small>${e.is_auto?'自動':'手動'} ${yen(e.unit_price)}×${e.qty}</small></span><span class="amt">${yen(e.unit_price*e.qty)}</span><button class="ghost" data-ext="${e.id}">×</button></div>`).join('');
-  $('bSet').innerHTML = setRow + extRows;
-  $('bSet').querySelectorAll('[data-ext]').forEach(x => x.onclick = async () => { await sb.from('bill_extensions').delete().eq('id',x.dataset.ext); openBill(b.id); });
-  const items = (b.bill_items||[]).filter(i=>!i.is_void);
-  $('bItems').innerHTML = items.map(i=>{
-    const sp = (i.bill_item_splits||[]).map(s=>staff.find(x=>x.id===s.staff_id)?.display_name).filter(Boolean).join('/');
-    return `<div class="item"><span class="n">${i.name} ×${i.qty}<br><small>${sp?'振分:'+sp:'振分なし'}</small></span><span class="amt">${yen(i.unit_price*i.qty)}</span><button class="ghost" data-split="${i.id}">振分</button><button class="ghost" data-del="${i.id}">×</button></div>`;
-  }).join('') || '<div class="muted">なし</div>';
-  $('bItems').querySelectorAll('[data-del]').forEach(x => x.onclick = async () => { await sb.from('bill_items').update({is_void:true}).eq('id',x.dataset.del); openBill(b.id); });
-  $('bItems').querySelectorAll('[data-split]').forEach(x => x.onclick = () => openSplit(items.find(i=>i.id===x.dataset.split)));
-  const T = b.totals;
-  $('bTotals').innerHTML = `<span>小計</span><span class="right">${yen(T.subtotal)}</span>
-    <span>サービス料</span><span class="right">${yen(T.service)}</span><span>消費税</span><span class="right">${yen(T.tax)}</span>
-    <span>合計（切上）</span><span class="right">${yen(T.total_rounded)}</span>
-    ${T.adjustment ? `<span>値引/値増</span><span class="right">${yen(T.adjustment)}</span>`:''}
-    <span class="big">請求額</span><span class="big right">${yen(T.amount_due)}</span>`;
-}
-async function setMode(id){
-  const m = modes.find(x=>x.id===id);
-  if (m.code === 'fixed_total') { $('fixedAmount').value = cur.fixed_total || ''; $('fixedModal').classList.add('on'); return; }
-  await sb.from('bills').update({ pricing_mode_id:id, fixed_total:null }).eq('id',cur.id); openBill(cur.id);
-}
-$('fixedCancel').onclick = () => $('fixedModal').classList.remove('on');
-$('fixedOk').onclick = async () => {
-  const v = parseInt($('fixedAmount').value||'0',10); if (!v) { toast('金額を入力してください'); return; }
-  const m = modes.find(x=>x.code==='fixed_total');
-  await sb.from('bills').update({ pricing_mode_id:m.id, fixed_total:v }).eq('id',cur.id);
-  $('fixedModal').classList.remove('on'); openBill(cur.id);
-};
-$('extAdd').onclick = async () => { await sb.from('bill_extensions').insert({ bill_id:cur.id, minutes:settings.ext_minutes, unit_price:settings.ext_unit_price, qty:cur.guest_count, is_auto:false }); openBill(cur.id); };
-$('bBack').onclick = () => { loadHall(); show('v-hall'); };
-$('bVoid').onclick = async () => { if (!confirm('この伝票を取り消しますか？')) return; await sb.from('bills').update({status:'void', closed_at:new Date().toISOString()}).eq('id',cur.id); loadHall(); show('v-hall'); };
-$('bOrder').onclick = () => { renderOrder(categories[0]?.id); show('v-order'); };
-$('bPay').onclick = () => { renderPay(); show('v-pay'); };
+  const { data, error } = await sb.from('bills').select('*, bill_casts(id,staff_id,role,is_kakari), bill_extensions(id,minutes,unit_price,qty,is_auto), bill_items(id,name,qty,unit_price,cast_subtotal_price,back_amount,back_points,is_void,bill_item_splits(id,staff_id,sales_amount,back_amount,back_points)), bill_customers(customer_id), bill_adjustments(id,kind,amount,reason), payments(id,method,amount)').eq('id',id).single();
+  if (error) { toast(error.message); return; } cur=data; const r=await sb.rpc('calc_bill',{p_bill:id}); cur.totals=r.data||{}; renderBill(); show('v-bill'); }
+function renderBill(){ const b=cur, t=tables.find(x=>x.id===b.table_id);
+  $('bTable').textContent=t?.name||''; $('bGuests').textContent=b.guest_count; $('bTime').textContent=`${hm(b.set_start)}〜${hm(billEnd(b))}`;
+  $('modeChips').innerHTML=modes.map(m=>`<button class="chip ${b.pricing_mode_id===m.id?'on':''}" data-id="${m.id}">${m.name}</button>`).join('');
+  $('modeChips').querySelectorAll('.chip').forEach(c=>c.onclick=()=>setMode(c.dataset.id));
+  $('bCust').innerHTML=(b.bill_customers||[]).map(c=>{ const cu=customers.find(x=>x.id===c.customer_id); return `<div class="item"><span class="n">${cu?.name||''}</span><button class="ghost sm" data-rmcust="${c.customer_id}">×</button></div>`; }).join('')||'<div class="muted">未登録</div>';
+  $('bCust').querySelectorAll('[data-rmcust]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_customers').delete().eq('bill_id',b.id).eq('customer_id',x.dataset.rmcust); openBill(b.id); });
+  $('bCasts').innerHTML=(b.bill_casts||[]).map(c=>`<div class="item"><span class="n">${staff.find(s=>s.id===c.staff_id)?.display_name||''} ${c.is_kakari?'<span class="badge k">係</span>':''} ${ROLE[c.role]?`<span class="badge">${ROLE[c.role]}</span>`:''}</span>${c.is_kakari?'':`<button class="ghost sm" data-kakari="${c.id}">係にする</button>`}<button class="ghost sm" data-rmcast="${c.id}">×</button></div>`).join('')||'<div class="muted">未登録</div>';
+  $('bCasts').querySelectorAll('[data-kakari]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_casts').update({is_kakari:false}).eq('bill_id',b.id); await sb.from('bill_casts').update({is_kakari:true}).eq('id',x.dataset.kakari); openBill(b.id); });
+  $('bCasts').querySelectorAll('[data-rmcast]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_casts').delete().eq('id',x.dataset.rmcast); openBill(b.id); });
+  $('bSet').innerHTML=`<div class="item"><span class="n">セット ${b.set_minutes}分 <small>${yen(b.set_unit_price)}×${b.guest_count}</small></span><span class="amt">${yen(b.set_unit_price*b.guest_count)}</span></div>`+
+    (b.bill_extensions||[]).map(e=>`<div class="item"><span class="n">延長 ${e.minutes}分 <small>${e.is_auto?'自動':'手動'} ${yen(e.unit_price)}×${e.qty}</small></span><span class="amt">${yen(e.unit_price*e.qty)}</span><button class="ghost sm" data-ext="${e.id}">×</button></div>`).join('');
+  $('bSet').querySelectorAll('[data-ext]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_extensions').delete().eq('id',x.dataset.ext); openBill(b.id); });
+  const items=(b.bill_items||[]).filter(i=>!i.is_void);
+  $('bItems').innerHTML=items.map(i=>{ const sp=(i.bill_item_splits||[]).map(s=>staff.find(x=>x.id===s.staff_id)?.display_name).filter(Boolean).join('/');
+    return `<div class="item"><span class="n">${i.name} ×${i.qty}<br><small>${sp?'振分:'+sp:'振分なし'}</small></span><span class="amt">${yen(i.unit_price*i.qty)}</span><button class="ghost sm" data-split="${i.id}">振分</button><button class="ghost sm" data-del="${i.id}">×</button></div>`; }).join('')||'<div class="muted">なし</div>';
+  $('bItems').querySelectorAll('[data-del]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_items').update({is_void:true}).eq('id',x.dataset.del); openBill(b.id); });
+  $('bItems').querySelectorAll('[data-split]').forEach(x=>x.onclick=()=>openSplit(items.find(i=>i.id===x.dataset.split)));
+  const T=b.totals;
+  $('bTotals').innerHTML=`<span>小計</span><span class="right">${yen(T.subtotal)}</span><span>サービス料</span><span class="right">${yen(T.service)}</span><span>消費税</span><span class="right">${yen(T.tax)}</span><span>合計（切上）</span><span class="right">${yen(T.total_rounded)}</span>${T.adjustment?`<span>値引/値増</span><span class="right">${yen(T.adjustment)}</span>`:''}<span class="big">請求額</span><span class="big right">${yen(T.amount_due)}</span>`; }
+$('gPlus').onclick=async()=>{ await sb.from('bills').update({guest_count:cur.guest_count+1}).eq('id',cur.id); openBill(cur.id); };
+$('gMinus').onclick=async()=>{ if(cur.guest_count<=1)return; await sb.from('bills').update({guest_count:cur.guest_count-1}).eq('id',cur.id); openBill(cur.id); };
+async function setMode(id){ const m=modes.find(x=>x.id===id);
+  if (m.code==='fixed_total') { $('fixedAmount').value=cur.fixed_total||''; $('fixedModal').classList.add('on'); return; }
+  await sb.from('bills').update({pricing_mode_id:id,fixed_total:null}).eq('id',cur.id); openBill(cur.id); }
+$('fixedCancel').onclick=()=>$('fixedModal').classList.remove('on');
+$('fixedOk').onclick=async()=>{ const v=parseInt($('fixedAmount').value||'0',10); if(!v){toast('金額を入力してください');return;}
+  const m=modes.find(x=>x.code==='fixed_total'); await sb.from('bills').update({pricing_mode_id:m.id,fixed_total:v}).eq('id',cur.id); $('fixedModal').classList.remove('on'); openBill(cur.id); };
+$('extAdd').onclick=async()=>{ await sb.from('bill_extensions').insert({bill_id:cur.id,minutes:settings.ext_minutes,unit_price:settings.ext_unit_price,qty:cur.guest_count,is_auto:false}); openBill(cur.id); };
+$('bBack').onclick=()=>{ loadHall(); show('v-hall'); };
+$('bVoid').onclick=async()=>{ if(!confirm('この伝票を取り消しますか？'))return; await sb.from('bills').update({status:'void',closed_at:new Date().toISOString()}).eq('id',cur.id); loadHall(); show('v-hall'); };
+$('bOrder').onclick=()=>{ renderOrder(categories.find(c=>c.is_visible)?.id); show('v-order'); };
+$('bPay').onclick=()=>{ renderPay(); show('v-pay'); };
+
+// ---------- customer modal ----------
+$('custAddBtn').onclick=()=>{ $('custSearch').value=''; renderCust(''); $('custModal').classList.add('on'); };
+$('custCancel').onclick=()=>$('custModal').classList.remove('on');
+function renderCust(q){ const list=customers.filter(c=>!q||c.name.includes(q)).slice(0,40);
+  $('custList').innerHTML=list.map(c=>`<button class="chip" data-id="${c.id}">${c.name}</button>`).join('')||'<span class="muted">該当なし</span>';
+  $('custList').querySelectorAll('.chip').forEach(b=>b.onclick=()=>attachCust(b.dataset.id)); }
+$('custSearch').oninput=e=>renderCust(e.target.value.trim());
+$('custNew').onclick=async()=>{ const name=$('custSearch').value.trim(); if(!name){toast('名前を入力してください');return;}
+  const { data, error } = await sb.from('customers').insert({store_id:store.id,name}).select().single(); if(error){toast(error.message);return;}
+  customers.push(data); customers.sort((a,b)=>a.name.localeCompare(b.name,'ja')); attachCust(data.id); };
+async function attachCust(id){ const { error } = await sb.from('bill_customers').insert({bill_id:cur.id,customer_id:id}); if(error&&!error.message.includes('duplicate')) toast(error.message); $('custModal').classList.remove('on'); openBill(cur.id); }
+
+// ---------- cast modal（本日出勤者・同伴自動判定） ----------
+$('castAddBtn').onclick=async()=>{
+  const { data } = await sb.from('attendance_events').select('staff_id,event_type,event_at').eq('business_date',businessDate()).in('event_type',['clock_in','douhan']);
+  const present={}; (data||[]).forEach(e=>{ present[e.staff_id]=present[e.staff_id]||{}; present[e.staff_id][e.event_type]=e.event_at; });
+  const already=new Set((cur.bill_casts||[]).map(c=>c.staff_id));
+  const list=staff.filter(s=>s.kind==='cast'&&present[s.id]&&!already.has(s.id));
+  $('castList').innerHTML=list.map(s=>{ const r=douhanRole(present[s.id].douhan); return `<button class="chip" data-id="${s.id}" data-role="${r}">${s.display_name}${ROLE[r]?' '+ROLE[r]:''}</button>`; }).join('')||'<span class="muted">本日の出勤打刻がまだありません</span>';
+  $('castList').querySelectorAll('.chip').forEach(b=>b.onclick=async()=>{ const isFirst=!(cur.bill_casts||[]).some(c=>c.is_kakari);
+    await sb.from('bill_casts').insert({bill_id:cur.id,staff_id:b.dataset.id,role:b.dataset.role,is_kakari:isFirst}); $('castModal').classList.remove('on'); openBill(cur.id); });
+  $('castModal').classList.add('on'); };
+$('castCancel').onclick=()=>$('castModal').classList.remove('on');
+function douhanRole(ts){ if(!ts) return 'none'; const d=new Date(ts); const m=d.getHours()*60+d.getMinutes(); if(m<=20*60+30) return 'douhan1'; if(m<=21*60) return 'douhan2'; return 'none'; }
 
 // ---------- order ----------
-let curCat = null;
-function renderOrder(catId){
-  curCat = catId;
-  $('catChips').innerHTML = categories.map(c=>`<button class="chip ${c.id===catId?'on':''}" data-id="${c.id}">${c.name}</button>`).join('');
-  $('catChips').querySelectorAll('.chip').forEach(c => c.onclick = () => renderOrder(c.dataset.id));
-  $('prodGrid').innerHTML = products.filter(p=>p.category_id===catId).map(p=>`<button class="prod" data-id="${p.id}">${p.name}<span class="p">${yen(p.price)}</span></button>`).join('');
-  $('prodGrid').querySelectorAll('.prod').forEach(b => b.onclick = () => addItem(products.find(p=>p.id===b.dataset.id)));
-}
-async function addItem(p){
-  const { data:item, error } = await sb.from('bill_items').insert({
-    bill_id:cur.id, product_id:p.id, name:p.name, category_id:p.category_id, qty:1, unit_price:p.price,
-    cast_subtotal_price:p.cast_subtotal_price, back_amount:p.back_amount, back_points:p.back_points,
-    is_service_target:p.is_service_target
-  }).select().single();
-  if (error) { toast(error.message); return; }
-  // 既定：係キャストに100%振り分け
-  const kakari = (cur.bill_casts||[]).find(c=>c.role==='kakari');
-  if (kakari) await sb.from('bill_item_splits').insert({ bill_item_id:item.id, staff_id:kakari.staff_id, sales_amount:p.cast_subtotal_price, back_amount:p.back_amount, back_points:p.back_points });
-  toast(`${p.name} を追加`);
-  await openBill(cur.id); show('v-order');
-}
-$('orderBack').onclick = () => openBill(cur.id);
+function renderOrder(catId){ $('catChips').innerHTML=categories.filter(c=>c.is_visible).map(c=>`<button class="chip ${c.id===catId?'on':''}" data-id="${c.id}">${c.name}</button>`).join('');
+  $('catChips').querySelectorAll('.chip').forEach(c=>c.onclick=()=>renderOrder(c.dataset.id));
+  $('prodGrid').innerHTML=products.filter(p=>p.category_id===catId&&p.is_visible).map(p=>`<button class="prod" data-id="${p.id}">${p.name}<span class="p">${yen(p.price)}</span></button>`).join('');
+  $('prodGrid').querySelectorAll('.prod').forEach(b=>b.onclick=()=>addItem(products.find(p=>p.id===b.dataset.id))); }
+async function addItem(p){ const { data:item, error } = await sb.from('bill_items').insert({bill_id:cur.id,product_id:p.id,name:p.name,category_id:p.category_id,qty:1,unit_price:p.price,cast_subtotal_price:p.cast_subtotal_price,back_amount:p.back_amount,back_points:p.back_points,is_service_target:p.is_service_target}).select().single();
+  if(error){toast(error.message);return;} const k=(cur.bill_casts||[]).find(c=>c.is_kakari);
+  if(k) await sb.from('bill_item_splits').insert({bill_item_id:item.id,staff_id:k.staff_id,sales_amount:p.cast_subtotal_price,back_amount:p.back_amount,back_points:p.back_points});
+  toast(`${p.name} を追加`); await openBill(cur.id); show('v-order'); }
+$('orderBack').onclick=()=>openBill(cur.id);
 
 // ---------- split ----------
-let splitItem = null;
-function openSplit(item){
-  splitItem = item;
-  const base = { sales:item.cast_subtotal_price*item.qty, back:item.back_amount*item.qty, pts:Number(item.back_points)*item.qty };
-  $('splitName').textContent = `${item.name} ×${item.qty}`;
-  $('splitBase').textContent = `配分できる合計：売上 ${yen(base.sales)}／バック ${yen(base.back)}／ポイント ${base.pts}`;
-  const cur_ = Object.fromEntries((item.bill_item_splits||[]).map(s=>[s.staff_id,s]));
-  $('splitTable').innerHTML = `<tr><td></td><td>キャスト</td><td>売上</td><td>バック</td><td>ポイント</td></tr>` +
-    staff.filter(s=>s.kind==='cast').map(s=>{ const v=cur_[s.id]; return `<tr>
-      <td><input type="checkbox" data-s="${s.id}" ${v?'checked':''}></td><td>${s.display_name}</td>
-      <td><input type="number" data-f="sales" data-s="${s.id}" value="${v?v.sales_amount:''}"></td>
-      <td><input type="number" data-f="back" data-s="${s.id}" value="${v?v.back_amount:''}"></td>
-      <td><input type="number" data-f="pts" data-s="${s.id}" value="${v?v.back_points:''}"></td></tr>`; }).join('');
-  $('splitModal').dataset.base = JSON.stringify(base);
-  $('splitModal').classList.add('on');
-}
-$('splitEven').onclick = () => {
-  const base = JSON.parse($('splitModal').dataset.base);
-  const checked = [...$('splitTable').querySelectorAll('input[type=checkbox]:checked')].map(c=>c.dataset.s);
-  if (!checked.length) { toast('キャストにチェックを入れてください'); return; }
-  const n = checked.length;
-  checked.forEach(sid => {
-    $('splitTable').querySelector(`input[data-f=sales][data-s="${sid}"]`).value = Math.floor(base.sales/n);
-    $('splitTable').querySelector(`input[data-f=back][data-s="${sid}"]`).value = Math.floor(base.back/n);
-    $('splitTable').querySelector(`input[data-f=pts][data-s="${sid}"]`).value = Math.round(base.pts/n*10)/10;
-  });
-};
-$('splitCancel').onclick = () => $('splitModal').classList.remove('on');
-$('splitOk').onclick = async () => {
-  const rows = [...$('splitTable').querySelectorAll('input[type=checkbox]:checked')].map(c => {
-    const sid = c.dataset.s, g = f => Number($('splitTable').querySelector(`input[data-f=${f}][data-s="${sid}"]`).value||0);
-    return { bill_item_id:splitItem.id, staff_id:sid, sales_amount:g('sales'), back_amount:g('back'), back_points:g('pts') };
-  });
-  await sb.from('bill_item_splits').delete().eq('bill_item_id', splitItem.id);
-  if (rows.length) await sb.from('bill_item_splits').insert(rows);
-  $('splitModal').classList.remove('on'); openBill(cur.id);
-};
+let splitItem=null;
+function openSplit(item){ splitItem=item; const base={sales:item.cast_subtotal_price*item.qty,back:item.back_amount*item.qty,pts:Number(item.back_points)*item.qty};
+  $('splitName').textContent=`${item.name} ×${item.qty}`; $('splitBase').textContent=`配分できる合計：売上 ${yen(base.sales)}／バック ${yen(base.back)}／ポイント ${base.pts}`;
+  const cur_=Object.fromEntries((item.bill_item_splits||[]).map(s=>[s.staff_id,s])); const ids=new Set([...(cur.bill_casts||[]).map(c=>c.staff_id),...Object.keys(cur_)]);
+  const rows=staff.filter(s=>s.kind==='cast'&&(ids.has(s.id)||true));
+  $('splitTable').innerHTML=`<tr><th></th><th>キャスト</th><th>売上</th><th>バック</th><th>ポイント</th></tr>`+rows.map(s=>{ const v=cur_[s.id]; return `<tr><td><input type="checkbox" data-s="${s.id}" ${v?'checked':''}></td><td>${s.display_name}</td><td><input class="n" type="number" data-f="sales" data-s="${s.id}" value="${v?v.sales_amount:''}"></td><td><input class="n" type="number" data-f="back" data-s="${s.id}" value="${v?v.back_amount:''}"></td><td><input class="n" type="number" data-f="pts" data-s="${s.id}" value="${v?v.back_points:''}"></td></tr>`; }).join('');
+  $('splitModal').dataset.base=JSON.stringify(base); $('splitModal').classList.add('on'); }
+$('splitEven').onclick=()=>{ const base=JSON.parse($('splitModal').dataset.base); const ch=[...$('splitTable').querySelectorAll('input[type=checkbox]:checked')].map(c=>c.dataset.s); if(!ch.length){toast('キャストにチェックを入れてください');return;}
+  ch.forEach(sid=>{ $('splitTable').querySelector(`input[data-f=sales][data-s="${sid}"]`).value=Math.floor(base.sales/ch.length); $('splitTable').querySelector(`input[data-f=back][data-s="${sid}"]`).value=Math.floor(base.back/ch.length); $('splitTable').querySelector(`input[data-f=pts][data-s="${sid}"]`).value=Math.round(base.pts/ch.length*10)/10; }); };
+$('splitCancel').onclick=()=>$('splitModal').classList.remove('on');
+$('splitOk').onclick=async()=>{ const rows=[...$('splitTable').querySelectorAll('input[type=checkbox]:checked')].map(c=>{ const sid=c.dataset.s, g=f=>Number($('splitTable').querySelector(`input[data-f=${f}][data-s="${sid}"]`).value||0); return {bill_item_id:splitItem.id,staff_id:sid,sales_amount:g('sales'),back_amount:g('back'),back_points:g('pts')}; });
+  await sb.from('bill_item_splits').delete().eq('bill_item_id',splitItem.id); if(rows.length) await sb.from('bill_item_splits').insert(rows); $('splitModal').classList.remove('on'); openBill(cur.id); };
 
 // ---------- pay ----------
-function renderPay(){
-  const b = cur, T = b.totals;
-  $('pTable').textContent = tables.find(x=>x.id===b.table_id)?.name || '';
-  $('pTotals').innerHTML = `<span>請求額</span><span class="right big">${yen(T.amount_due)}</span>
-    <span>入金済</span><span class="right">${yen(T.paid)}</span><span>未収</span><span class="right big">${yen(T.unpaid)}</span>`;
-  $('payMethods').innerHTML = Object.entries(METHOD).map(([k,v])=>`<button class="chip ${payMethod===k?'on':''}" data-m="${k}">${v}</button>`).join('');
-  $('payMethods').querySelectorAll('.chip').forEach(c => c.onclick = () => { payMethod=c.dataset.m; renderPay(); });
-  $('payAmount').value = T.unpaid > 0 ? T.unpaid : '';
-  $('payList').innerHTML = [...(b.payments||[]).map(p=>`<div class="item"><span class="n">${METHOD[p.method]}</span><span class="amt">${yen(p.amount)}</span></div>`),
-    ...(b.bill_adjustments||[]).map(a=>`<div class="item"><span class="n">${a.kind==='discount'?'値引':'値増'} <small>${a.reason||''}</small></span><span class="amt">${yen(a.amount)}</span><button class="ghost" data-adj="${a.id}">×</button></div>`)].join('');
-  $('payList').querySelectorAll('[data-adj]').forEach(x => x.onclick = async () => { await sb.from('bill_adjustments').delete().eq('id',x.dataset.adj); await openBill(cur.id); renderPay(); show('v-pay'); });
+function renderPay(){ const b=cur,T=b.totals; $('pTable').textContent=tables.find(x=>x.id===b.table_id)?.name||'';
+  $('pTotals').innerHTML=`<span>請求額</span><span class="right big">${yen(T.amount_due)}</span><span>入金済</span><span class="right">${yen(T.paid)}</span><span>未収</span><span class="right big">${yen(T.unpaid)}</span>`;
+  $('payMethods').innerHTML=Object.entries(METHOD).map(([k,v])=>`<button class="chip ${payMethod===k?'on':''}" data-m="${k}">${v}</button>`).join('');
+  $('payMethods').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{payMethod=c.dataset.m;renderPay();});
+  $('payAmount').value=T.unpaid>0?T.unpaid:'';
+  $('payList').innerHTML=[...(b.payments||[]).map(p=>`<div class="item"><span class="n">${METHOD[p.method]}</span><span class="amt">${yen(p.amount)}</span></div>`),...(b.bill_adjustments||[]).map(a=>`<div class="item"><span class="n">${a.kind==='discount'?'値引':'値増'} <small>${a.reason||''}</small></span><span class="amt">${yen(a.amount)}</span><button class="ghost sm" data-adj="${a.id}">×</button></div>`)].join('');
+  $('payList').querySelectorAll('[data-adj]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_adjustments').delete().eq('id',x.dataset.adj); await openBill(cur.id); renderPay(); show('v-pay'); }); }
+async function addAdj(kind){ const v=parseInt($('payAmount').value||'0',10); if(!v){toast('金額を入力してください');return;} await sb.from('bill_adjustments').insert({bill_id:cur.id,kind,amount:v}); await openBill(cur.id); renderPay(); show('v-pay'); }
+$('payAdjDiscount').onclick=()=>addAdj('discount'); $('payAdjSurcharge').onclick=()=>addAdj('surcharge');
+$('payAdd').onclick=async()=>{ const v=parseInt($('payAmount').value||'0',10); if(!v){toast('金額を入力してください');return;}
+  const { error } = await sb.from('payments').insert({bill_id:cur.id,method:payMethod,amount:v,revenue_date:cur.business_date,received_at:(payMethod==='cash'||payMethod==='card')?new Date().toISOString():null});
+  if(error){toast(error.message);return;} await openBill(cur.id); renderPay(); show('v-pay'); };
+$('payBack').onclick=()=>openBill(cur.id);
+$('payClose').onclick=async()=>{ if(cur.totals.unpaid>0){toast(`未収 ${yen(cur.totals.unpaid)} があります。請求書か置きで登録してください`);return;}
+  await sb.from('bills').update({status:'closed',closed_at:new Date().toISOString(),set_end:billEnd(cur).toISOString()}).eq('id',cur.id); toast('会計を締めました'); loadHall(); show('v-hall'); };
+
+// ---------- settings ----------
+const SET = [
+  { key:'tables', name:'テーブル', table:'tables', cols:[['name','名前','text'],['sort_order','並び順','number'],['is_visible','表示','bool']], newRow:()=>({store_id:store.id,name:'',sort_order:(tables.length+1)*10,is_visible:true}) },
+  { key:'categories', name:'カテゴリー', table:'categories', cols:[['name','名前','text'],['short_name','略称','text'],['sort_order','並び順','number'],['is_visible','表示','bool'],['is_industry_target','同業者対象','bool']], newRow:()=>({store_id:store.id,name:'',sort_order:(categories.length+1)*10,is_visible:true,is_industry_target:false}) },
+  { key:'products', name:'商品', table:'products', cols:[['name','名前','text'],['category_id','カテゴリー','cat'],['price','販売価格','number'],['cast_subtotal_price','小計価格','number'],['back_amount','バック','number'],['back_points','ポイント','number'],['is_service_target','サ料対象','bool'],['is_keepable','キープ可','bool'],['is_visible','表示','bool'],['sort_order','並び','number']], newRow:()=>({store_id:store.id,name:'',price:0,cast_subtotal_price:0,back_amount:0,back_points:0,is_service_target:true,is_keepable:false,is_visible:true,sort_order:(products.length+1)*10}) },
+  { key:'customers', name:'お客様', table:'customers', cols:[['name','名前','text'],['memo','メモ','text']], newRow:()=>({store_id:store.id,name:'',memo:''}) },
+  { key:'pos', name:'会計設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number']] },
+];
+let setCur='tables';
+$('navSettings').onclick=()=>{ renderSettings(setCur); show('v-settings'); };
+async function renderSettings(key){ setCur=key; await loadMasters(); const def=SET.find(s=>s.key===key);
+  $('setMenu').innerHTML=SET.map(s=>`<button class="${s.key===key?'on':''}" data-k="${s.key}">${s.name}</button>`).join('');
+  $('setMenu').querySelectorAll('button').forEach(b=>b.onclick=()=>renderSettings(b.dataset.k));
+  const rows = def.single ? [settings] : ({tables,categories,products,customers})[key];
+  const cell=(r,[k,label,type])=>{ if(type==='bool') return `<input type="checkbox" data-k="${k}" ${r[k]?'checked':''}>`;
+    if(type==='cat') return `<select data-k="${k}">${categories.map(c=>`<option value="${c.id}" ${r[k]===c.id?'selected':''}>${c.name}</option>`).join('')}</select>`;
+    return `<input class="${type==='number'?'n':''}" type="${type}" data-k="${k}" value="${r[k]??''}">`; };
+  let html = def.single
+    ? `<table class="t">${def.cols.map(c=>`<tr data-id="${settings.store_id}"><td>${c[1]}</td><td>${cell(settings,c)}</td></tr>`).join('')}</table><div class="bar"><button class="primary" id="setSaveSingle">保存</button></div>`
+    : `<div class="bar" style="margin:0 0 10px"><input id="setFilter" placeholder="検索" style="flex:1"><button class="ok" id="setAdd">＋ 追加</button></div><table class="t"><tr>${def.cols.map(c=>`<th>${c[1]}</th>`).join('')}<th></th></tr>${rows.map(r=>`<tr data-id="${r.id}">${def.cols.map(c=>`<td>${cell(r,c)}</td>`).join('')}<td><button class="ok sm" data-save="${r.id}">保存</button></td></tr>`).join('')}</table>`;
+  $('setBody').innerHTML=html;
+  const readRow=tr=>{ const o={}; def.cols.forEach(([k,,type])=>{ const el=tr.querySelector(`[data-k="${k}"]`); o[k]= type==='bool'?el.checked : type==='number'?Number(el.value||0) : el.value; }); return o; };
+  if (def.single) { $('setSaveSingle').onclick=async()=>{ const o=readRow($('setBody').querySelector('table')); const { error } = await sb.from('pos_settings').update(o).eq('store_id',settings.store_id); toast(error?error.message:'保存しました'); }; return; }
+  $('setBody').querySelectorAll('[data-save]').forEach(b=>b.onclick=async()=>{ const tr=b.closest('tr'); const o=readRow(tr); const { error } = await sb.from(def.table).update(o).eq('id',tr.dataset.id); toast(error?error.message:'保存しました'); });
+  $('setAdd').onclick=async()=>{ const { error } = await sb.from(def.table).insert(def.newRow()); if(error){toast(error.message);return;} renderSettings(key); };
+  $('setFilter').oninput=e=>{ const q=e.target.value.trim(); $('setBody').querySelectorAll('tr[data-id]').forEach(tr=>{ tr.style.display = !q || tr.textContent.includes(q) || [...tr.querySelectorAll('input')].some(i=>String(i.value).includes(q)) ? '' : 'none'; }); };
 }
-async function addAdj(kind){
-  const v = parseInt($('payAmount').value||'0',10); if (!v) { toast('金額を入力してください'); return; }
-  await sb.from('bill_adjustments').insert({ bill_id:cur.id, kind, amount:v });
-  await openBill(cur.id); renderPay(); show('v-pay');
-}
-$('payAdjDiscount').onclick = () => addAdj('discount');
-$('payAdjSurcharge').onclick = () => addAdj('surcharge');
-$('payAdd').onclick = async () => {
-  const v = parseInt($('payAmount').value||'0',10); if (!v) { toast('金額を入力してください'); return; }
-  // 売上計上日：現金・カード・請求書＝営業日、置き＝入金日（入金登録時に更新）
-  const { error } = await sb.from('payments').insert({ bill_id:cur.id, method:payMethod, amount:v, revenue_date:cur.business_date, received_at: (payMethod==='cash'||payMethod==='card') ? new Date().toISOString() : null });
-  if (error) { toast(error.message); return; }
-  await openBill(cur.id); renderPay(); show('v-pay');
-};
-$('payBack').onclick = () => openBill(cur.id);
-$('payClose').onclick = async () => {
-  if (cur.totals.unpaid > 0) { toast(`未収 ${yen(cur.totals.unpaid)} があります。請求書か置きで登録してください`); return; }
-  await sb.from('bills').update({ status:'closed', closed_at:new Date().toISOString(), set_end:billEnd(cur).toISOString() }).eq('id',cur.id);
-  toast('会計を締めました'); loadHall(); show('v-hall');
-};
 
 start();
 </script>
