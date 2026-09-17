@@ -23,7 +23,7 @@
   .cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
   .cam .hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;background:rgba(0,0,0,.45)}
 
-  .types{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .types{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
   .type{height:64px;border:none;border-radius:32px;color:#fff;font-size:22px;font-weight:700;opacity:.45;transition:opacity .15s,transform .1s}
   .type.on{opacity:1;transform:scale(1.04);box-shadow:0 6px 18px rgba(0,0,0,.2)}
   .type.douhan{background:var(--douhan)} .type.after{background:var(--after)}
@@ -55,6 +55,12 @@
   @keyframes pop{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
   @keyframes rise{0%{transform:translateY(16px);opacity:0}100%{transform:translateY(0);opacity:1}}
 
+  /* 同伴の準備時間の警告 */
+  .fx.late{background:#c62828}
+  .fx.late .msg{padding:0 40px}
+  .fx.late .msg .big{font-size:44px;line-height:1.35}
+  .fx.late .msg .sub{font-size:26px;margin-top:18px;line-height:1.5}
+  .fx.late button{margin-top:36px;height:64px;padding:0 48px;border:none;border-radius:32px;background:#fff;color:#c62828;font-size:22px;font-weight:700}
   /* 同伴：キラキラ＋紙吹雪 */
   .fx.douhan{background:radial-gradient(circle at 50% 40%,#ffd86b 0%,#f5a623 45%,#d97706 100%)}
   .spark{position:absolute;width:14px;height:14px;background:#fff;clip-path:polygon(50% 0,61% 39%,100% 50%,61% 61%,50% 100%,39% 61%,0 50%,39% 39%);animation:twinkle 1.2s ease-in-out infinite}
@@ -107,7 +113,6 @@
   </div>
 
   <div class="types">
-    <button class="type douhan" data-type="douhan">同伴</button>
     <button class="type after"  data-type="after">アフター</button>
     <button class="type in"     data-type="clock_in">出勤</button>
     <button class="type out"    data-type="clock_out">退勤</button>
@@ -196,7 +201,7 @@ document.querySelectorAll('.type').forEach(b => { b.onclick = () => setType(b.da
 function onStaffTap(staff){
   if (!currentType) {
     const g = document.getElementById('guide');
-    g.textContent = '⚠️ 先に「同伴 / アフター / 出勤 / 退勤」を選んでください';
+    g.textContent = '⚠️ 先に「アフター / 出勤 / 退勤」を選んでください';
     g.classList.remove('warn'); void g.offsetWidth; g.classList.add('warn');
     return;
   }
@@ -241,7 +246,8 @@ async function punch(staff){
 
     if (type === 'douhan')      await fxDouhan(staff.display_name);
     else if (type === 'after')  await fxAfter(staff.display_name);
-    else showToast(`${staff.display_name}　${TYPE_LABEL[type]}`, photoPath ? '記録しました' : '記録しました（写真なし）', 1500);
+    else { await showToast(`${staff.display_name}　${TYPE_LABEL[type]}`, photoPath ? '記録しました' : '記録しました（写真なし）', 1500);
+      if (type === 'clock_in') await checkDouhanLate(staff); }
   } catch (e) {
     showToast('エラー', e.message || String(e), 2500);
   } finally {
@@ -256,6 +262,31 @@ function showToast(main, sub, ms){
   t.innerHTML = `${main}<small>${sub}</small>`;
   t.classList.add('show');
   return new Promise(r => setTimeout(() => { t.classList.remove('show'); r(); }, ms));
+}
+
+// ---------- 同伴の準備時間チェック（同伴は会計の伝票で付ける。伝票の立ち上げ〜出勤打刻が設定分数を超えたら本人に警告。打刻は止めない） ----------
+async function checkDouhanLate(staff){
+  try {
+    let q = sb.from('pos_settings').select('douhan_punch_limit_min');
+    if (store?.id) q = q.eq('store_id', store.id);
+    const st = await q.limit(1);
+    const limit = Number(st.data?.[0]?.douhan_punch_limit_min ?? 10);
+    if (!(limit > 0)) return;
+    const since = new Date(Date.now() - 20*3600*1000).toISOString();
+    const { data, error } = await sb.from('bill_casts').select('role, bills!inner(opened_at,status)').eq('staff_id', staff.id).in('role', ['douhan1','douhan2','douhan']).neq('bills.status','void').gte('bills.opened_at', since);
+    if (error || !data?.length) return;
+    const first = Math.min(...data.map(r => new Date(r.bills.opened_at).getTime()));
+    const mins = Math.floor((Date.now() - first) / 60000);
+    if (mins <= limit) return;
+    await fxLate(limit);
+  } catch (e) { console.warn('douhan check failed', e); }
+}
+function fxLate(limit){
+  const fx = document.getElementById('fx');
+  fx.className = 'fx show late';
+  fx.querySelectorAll(':scope > :not(.msg)').forEach(n => n.remove());
+  document.getElementById('fxMsg').innerHTML = `<div class="big">お客様が着席して${limit}分以上経過してます！</div><div class="sub">次回の同伴以降もっと早めの準備と着席をお願いいたします。</div><button id="lateOk">確認しました</button>`;
+  return new Promise(r => { let done=false; const end=()=>{ if(done) return; done=true; fx.className='fx'; r(); }; document.getElementById('lateOk').onclick=end; setTimeout(end, 20000); });
 }
 
 // ---------- 演出 ----------
