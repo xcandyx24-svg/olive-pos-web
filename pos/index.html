@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.3 -->
+<title>OLIVE 会計</title><!-- v10.5 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -28,7 +28,8 @@
   .tbl .row{display:flex;justify-content:space-between;font-size:14px}.tbl .total{font-size:22px;font-weight:700;text-align:right}.tbl .casts{font-size:13px;color:#444}
   .alert{background:#fde8e8;color:#9b1c1c;padding:10px 14px;border-radius:10px;margin-bottom:12px;font-weight:700}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
-  .cols{display:grid;grid-template-columns:.6fr .9fr 1.1fr 1.1fr;gap:12px}
+  .cols{display:grid;grid-template-columns:.85fr .9fr .95fr 1.1fr;gap:12px}
+  .item.cast{flex-direction:column;align-items:stretch;gap:6px}.item.cast .n{flex:none;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:17px;font-weight:700}.item.cast .nm{white-space:nowrap}.badge{white-space:nowrap}.item.cast .btns{display:flex;gap:6px}.item.cast .btns button{flex:1;padding-left:6px;padding-right:6px;white-space:nowrap}.item.cast .btns button[data-rmcast]{flex:none}
   h2{margin:0 0 10px;font-size:15px;color:var(--muted)}
   .list{display:flex;flex-direction:column;gap:6px}
   .item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:#fafafa;border:1px solid var(--line)}
@@ -137,7 +138,7 @@
   </div>
   <div class="cols" style="margin-top:12px">
     <div><h2>基本構成</h2><div class="list" id="bCust"></div><button class="ghost sm" id="custAddBtn" style="margin-top:6px">＋ お客様</button>
-      <div class="list" id="bCasts" style="margin-top:10px"></div><button class="ghost sm" id="castAddBtn" style="margin-top:6px">＋ キャスト（係・同伴）</button>
+      <div class="list" id="bCasts" style="margin-top:10px"></div><button class="ghost sm" id="castAddBtn" style="margin-top:6px">＋ キャスト</button>
       <div class="list" id="bTags" style="margin-top:14px"></div><button class="ghost sm" id="tagBtn" style="margin-top:6px">＋ お預かりタグ</button></div>
     <div><h2>1セット目・延長</h2><div class="list" id="bSet"></div><div class="bar" style="margin-top:6px"><button class="ghost sm" id="extAdd">延長（30分）</button><button class="ghost sm" id="svcBtn">サービス料</button></div></div>
     <div id="bOrders" style="display:contents"><div><h2>ボトル</h2><div class="list" id="bItems"></div></div><div><h2>ドリンク・フード他</h2><div class="list" id="bItems2"></div></div></div>
@@ -218,7 +219,7 @@
   <div class="muted">出勤中</div><div class="chips" id="castList"></div>
   <button class="ghost sm" id="castMoreBtn" style="margin-top:10px">出勤していないキャストから選ぶ ▾</button>
   <div class="chips hidden" id="castListAll" style="margin-top:8px"></div>
-  <div class="muted" style="margin-top:8px">同伴①②は打刻時刻から自動判定。係は追加後に「係にする」で指定。未出勤で付けた人には「未出勤」が付きます</div>
+  <div class="muted" style="margin-top:8px">係・同伴は追加後に伝票で指定（同伴①②は伝票の立ち上げ時刻で自動判定。同伴は客数まで）。未出勤で付けた人には「未出勤」が付きます</div>
   <div class="bar"><button class="ghost" id="castCancel">伝票へ戻る</button></div>
 </div></div>
 
@@ -267,7 +268,8 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
 const yen = n => (n ?? 0).toLocaleString('ja-JP') + '円';
 const hm = t => { const d=new Date(t); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
-const ROLE = { douhan1:'同伴①', douhan2:'同伴②', none:'' };
+const ROLE = { douhan1:'同伴①', douhan2:'同伴②', douhan:'同伴', none:'' };
+const isDouhan=r=>r==='douhan1'||r==='douhan2'||r==='douhan';
 const METHOD = { cash:'現金', card:'カード', invoice:'請求書', oki:'置き' };
 let store, settings, modes=[], tables=[], categories=[], products=[], staff=[], customers=[], openBills=[], cur=null, payMethod='cash';
 function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),1800); }
@@ -419,8 +421,12 @@ function renderBill(){ const b=cur, t=tables.find(x=>x.id===b.table_id);
   $('bTags').innerHTML=(b.bill_tags||[]).filter(t=>!t.returned_at).map(t=>`<div class="item"><span class="n">🏷 ${TAGK[t.kind]||t.kind} ${t.tag_no?'#'+t.tag_no:''} <small>${t.memo||''}</small></span></div>`).join('');
   $('bCust').innerHTML=(b.bill_customers||[]).map(c=>{ const cu=customers.find(x=>x.id===c.customer_id); return `<div class="item"><span class="n">${cu?.name||''}</span><button class="ghost sm" data-rmcust="${c.customer_id}">×</button></div>`; }).join('')||'<div class="muted">未登録</div>';
   $('bCust').querySelectorAll('[data-rmcust]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_customers').delete().eq('bill_id',b.id).eq('customer_id',x.dataset.rmcust); openBill(b.id); });
-  $('bCasts').innerHTML=(b.bill_casts||[]).map(c=>`<div class="item"><span class="n">${present.has(c.staff_id)?'✓ ':''}${staffAll.find(s=>s.id===c.staff_id)?.display_name||staff.find(s=>s.id===c.staff_id)?.display_name||''} ${c.is_kakari?'<span class="badge k">係</span>':''} ${ROLE[c.role]?`<span class="badge">${ROLE[c.role]}</span>`:''}${present.has(c.staff_id)?'':' <span class="badge gray">未出勤</span>'}</span>${c.is_kakari?`<button class="ghost sm" data-unkakari="${c.id}">係を外す</button>`:`<button class="ghost sm" data-kakari="${c.id}">係にする</button>`}<button class="ghost sm" data-rmcast="${c.id}">×</button></div>`).join('')||'<div class="muted">未登録</div>';
+  $('bCasts').innerHTML=(b.bill_casts||[]).map(c=>`<div class="item cast"><span class="n"><span class="nm">${present.has(c.staff_id)?'✓ ':''}${staffAll.find(s=>s.id===c.staff_id)?.display_name||staff.find(s=>s.id===c.staff_id)?.display_name||''}</span> ${c.is_kakari?'<span class="badge k">係</span>':''} ${ROLE[c.role]?`<span class="badge">${ROLE[c.role]}</span>`:''}${present.has(c.staff_id)?'':' <span class="badge gray">未出勤</span>'}</span><div class="btns">${c.is_kakari?`<button class="ghost sm" data-unkakari="${c.id}">係を外す</button>`:`<button class="ghost sm" data-kakari="${c.id}">係にする</button>`}${isDouhan(c.role)?`<button class="ghost sm" data-undouhan="${c.id}">同伴を外す</button>`:`<button class="ghost sm" data-douhan="${c.id}">同伴にする</button>`}<button class="ghost sm" data-rmcast="${c.id}">×</button></div></div>`).join('')||'<div class="muted">未登録</div>';
   $('bCasts').querySelectorAll('[data-kakari]').forEach(x=>x.onclick=async()=>{ const { error } = await sb.from('bill_casts').update({is_kakari:true}).eq('id',x.dataset.kakari); if(error) toast(error.message); await syncHcBack(); openBill(b.id); });
+  $('bCasts').querySelectorAll('[data-douhan]').forEach(x=>x.onclick=async()=>{ const n=(b.bill_casts||[]).filter(c=>isDouhan(c.role)).length; if(n>=b.guest_count){ toast(`同伴は客数（${b.guest_count}名）までです`); return; } const on=!!settings.douhan_is_kakari; const { error } = await sb.from('bill_casts').update(on?{role:douhanRole(b.opened_at),is_kakari:true}:{role:douhanRole(b.opened_at)}).eq('id',x.dataset.douhan); if(error){ toast(error.message); return; }
+    if(on){ for(const o of (b.bill_casts||[]).filter(c=>c.id!==x.dataset.douhan&&c.is_kakari&&!isDouhan(c.role))){ const r=await sb.from('bill_casts').update({is_kakari:false}).eq('id',o.id); if(r.error){ toast(r.error.message); return; } await syncHcBack(o.staff_id); } await syncHcBack(); }
+    openBill(b.id); });
+  $('bCasts').querySelectorAll('[data-undouhan]').forEach(x=>x.onclick=async()=>{ const on=!!settings.douhan_is_kakari; const bc=(b.bill_casts||[]).find(c=>c.id===x.dataset.undouhan); const { error } = await sb.from('bill_casts').update(on?{role:'none',is_kakari:false}:{role:'none'}).eq('id',x.dataset.undouhan); if(error){ toast(error.message); return; } if(on&&bc?.is_kakari) await syncHcBack(bc.staff_id); openBill(b.id); });
   $('bCasts').querySelectorAll('[data-unkakari]').forEach(x=>x.onclick=async()=>{ const bc=(b.bill_casts||[]).find(c=>c.id===x.dataset.unkakari); await sb.from('bill_casts').update({is_kakari:false}).eq('id',x.dataset.unkakari); await syncHcBack(bc?.staff_id); openBill(b.id); });
   $('bCasts').querySelectorAll('[data-rmcast]').forEach(x=>x.onclick=async()=>{ const bc=(b.bill_casts||[]).find(c=>c.id===x.dataset.rmcast); await sb.from('bill_casts').delete().eq('id',x.dataset.rmcast); if(bc?.is_kakari) await syncHcBack(bc.staff_id); openBill(b.id); });
   $('bSet').innerHTML=`<div class="item"><span class="n">1セット目 ${b.set_minutes}分 <small>${yen(b.set_unit_price)}×${b.guest_count}</small></span><span class="amt">${yen(b.set_unit_price*b.guest_count)}</span></div>`+
@@ -533,7 +539,7 @@ $('castAddBtn').onclick=async()=>{
   const already=new Set((cur.bill_casts||[]).map(c=>c.staff_id));
   const list=staff.filter(s=>s.kind==='cast'&&present[s.id]&&!already.has(s.id));
   const others=staff.filter(s=>s.kind==='cast'&&!present[s.id]&&!already.has(s.id));
-  $('castList').innerHTML=list.map(s=>{ const r=douhanRole(present[s.id].douhan); return `<button class="chip" data-id="${s.id}" data-role="${r}">${s.display_name}${ROLE[r]?' '+ROLE[r]:''}</button>`; }).join('')||'<span class="muted">本日の出勤打刻がまだありません</span>';
+  $('castList').innerHTML=list.map(s=>`<button class="chip" data-id="${s.id}" data-role="none">${s.display_name}</button>`).join('')||'<span class="muted">本日の出勤打刻がまだありません</span>';
   $('castListAll').innerHTML=others.map(s=>`<button class="chip" data-id="${s.id}" data-role="none">${s.display_name}</button>`).join('')||'<span class="muted">なし</span>';
   $('castListAll').classList.add('hidden'); $('castMoreBtn').textContent='出勤していないキャストから選ぶ ▾';
   const pick=async b=>{ const isFirst=!(cur.bill_casts||[]).some(c=>c.is_kakari);
@@ -545,7 +551,7 @@ $('castAddBtn').onclick=async()=>{
   $('castModal').classList.add('on'); };
 $('castMoreBtn').onclick=()=>{ const el=$('castListAll'); el.classList.toggle('hidden'); $('castMoreBtn').textContent=el.classList.contains('hidden')?'出勤していないキャストから選ぶ ▾':'出勤していないキャストから選ぶ ▴'; };
 $('castCancel').onclick=()=>$('castModal').classList.remove('on');
-function douhanRole(ts){ if(!ts) return 'none'; const d=new Date(ts); const m=d.getHours()*60+d.getMinutes(); if(m<=20*60+30) return 'douhan1'; if(m<=21*60) return 'douhan2'; return 'none'; }
+function douhanRole(ts){ const d=ts?new Date(ts):new Date(); const m=d.getHours()*60+d.getMinutes(); if(m<8*60) return 'douhan'; if(m<=20*60+30) return 'douhan1'; if(m<=21*60) return 'douhan2'; return 'douhan'; }
 
 // ---------- order（d-system準拠の4列：カテゴリー／メニュー／選択／注文→確定） ----------
 // ルール：売上は全部係に付く（複数なら等分）。3列目で選ぶのはバック・ポイントを付ける人だけ（選んだ人数で等分・切り捨て。選ばなければバックなし）
@@ -628,7 +634,7 @@ const SET = [
   { key:'products', name:'メニュー', table:'products', label:r=>`${r.name}`, sub:r=>yen(r.price), cols:[['name','メニュー名','text'],['short_name','略称','text'],['category_id','カテゴリー','cat'],['price','販売価格（税抜）','number'],['cast_subtotal_price','小計価格（係小計に入る額）','number'],['back_amount','バック金額','number'],['back_points','バックポイント','number'],['is_service_target','サービス料の対象','bool'],['is_keepable','キープ可','bool'],['in_stock','在庫あり','bool'],['is_visible','表示','bool']], newRow:()=>({store_id:store.id,name:'新メニュー',category_id:categories[0]?.id,price:0,cast_subtotal_price:0,back_amount:0,back_points:0,is_service_target:true,is_keepable:false,in_stock:true,is_visible:true}) },
   { key:'customers', name:'お客様情報', table:'customers', label:r=>r.name, cols:[['name','お客様名','text'],['memo','メモ','text']], newRow:()=>({store_id:store.id,name:'新しいお客様',memo:''}), nosort:true },
   { key:'print', name:'印刷設定', local:true, cols:[['print_method','印刷方法','select',[['tmpa','プリンター（TM Print Assistant）'],['browser','ブラウザ印刷（PDF）']]]] },
-  { key:'pos', name:'料金設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number'],['auto_hc_product_id','自動で人数分つけるHC（なし＝付けない）','prod'],['auto_bc_product_id','自動で人数分つけるBC（なし＝付けない）','prod']] },
+  { key:'pos', name:'料金設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number'],['auto_hc_product_id','自動で人数分つけるHC（なし＝付けない）','prod'],['auto_bc_product_id','自動で人数分つけるBC（なし＝付けない）','prod'],['douhan_is_kakari','同伴にしたら自動で係にする（ON＝売上は同伴の人に付く。同伴以外の係は外れる／OFF＝同伴と係は別々）','bool']] },
   { key:'audit', name:'操作ログ', audit:true },
 ];
 let setCur='tables', setSel=null, setEditMode=false, setCatFilter=null;
