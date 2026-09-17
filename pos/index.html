@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v7 -->
+<title>OLIVE 会計</title><!-- v8 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -286,10 +286,10 @@ function renderHall(totals){ const now=new Date();
   $('bdHall').textContent=openBills.length;
   $('tables').innerHTML='';
   for (const t of tables.filter(t=>t.is_visible)) { const b=openBills.find(x=>x.table_id===t.id); const el=document.createElement('div');
-    if (!b) { el.className='tbl'; el.innerHTML=`<div class="name">${t.name}</div><div class="empty">空 席</div>`; el.onclick=()=>openNew(t); }
+    if (!b) { el.className='tbl'; el.innerHTML=`<div class="name">${t.name}${t.vip_set_fee>0?' <span class="badge warnb">VIP</span>':''}</div><div class="empty">空 席</div>`; el.onclick=()=>openNew(t); }
     else { const end=billEnd(b), remain=Math.round((end-now)/60000); el.className='tbl busy'+(remain<10?' over':'');
       const k=(b.bill_casts||[]).find(c=>c.is_kakari); const kn=k?staff.find(s=>s.id===k.staff_id)?.display_name:'';
-      el.innerHTML=`<div class="name">${t.name}</div><div class="row"><span>👤 ${b.guest_count}</span><span>残り ${remain<0?'-':''}${Math.abs(remain).toLocaleString()}分</span></div><div class="pill">${hm(b.set_start)}〜${hm(end)}</div><div class="total">${yen(totals[b.id]?.amount_due)}</div><div class="casts">${kn?'☑ '+kn:''}</div>${(()=>{const n=(b.bill_tags||[]).filter(t=>!t.returned_at).length;return n?`<div class="tags">🏷 お預かり ${n}</div>`:''})()}`;
+      el.innerHTML=`<div class="name">${t.name}${t.vip_set_fee>0?' <span class="badge warnb">VIP</span>':''}</div><div class="row"><span>👤 ${b.guest_count}</span><span>残り ${remain<0?'-':''}${Math.abs(remain).toLocaleString()}分</span></div><div class="pill">${hm(b.set_start)}〜${hm(end)}</div><div class="total">${yen(totals[b.id]?.amount_due)}</div><div class="casts">${kn?'☑ '+kn:''}</div>${(()=>{const n=(b.bill_tags||[]).filter(t=>!t.returned_at).length;return n?`<div class="tags">🏷 お預かり ${n}</div>`:''})()}`;
       el.onclick=()=>openBill(b.id); }
     $('tables').appendChild(el); }
   for (const b of okiBills) { const el=document.createElement('div'); const unpaid=(b.payments||[]).filter(p=>!p.received_at).reduce((a,p)=>a+p.amount,0);
@@ -363,7 +363,7 @@ let present=new Set(); const TAGK={coat:'コート',bag:'バッグ',umbrella:'�
 function renderBill(){ const b=cur, t=tables.find(x=>x.id===b.table_id);
   $('bTable').textContent=t?.name||''; $('bGuests').textContent=b.guest_count; $('bTime').textContent=`${hm(b.set_start)}〜${hm(billEnd(b))}`;
   const mode=modes.find(m=>m.id===b.pricing_mode_id); const T0=b.totals;
-  $('bFlags').innerHTML=(mode&&mode.code!=='normal'?`<span class="badge warnb">${mode.name}</span>`:'')+(b.service_rate_override!=null?`<span class="badge warnb">サ料 ${b.service_rate_override}%</span>`:'')+((b.bill_tags||[]).filter(t=>!t.returned_at).length?`<span class="badge tag">🏷 お預かり ${(b.bill_tags||[]).filter(t=>!t.returned_at).length}</span>`:'');
+  $('bFlags').innerHTML=(t?.vip_set_fee>0?'<span class="badge warnb">VIP卓</span>':'')+(mode&&mode.code!=='normal'?`<span class="badge warnb">${mode.name}</span>`:'')+(b.service_rate_override!=null?`<span class="badge warnb">サ料 ${b.service_rate_override}%</span>`:'')+((b.bill_tags||[]).filter(t=>!t.returned_at).length?`<span class="badge tag">🏷 お預かり ${(b.bill_tags||[]).filter(t=>!t.returned_at).length}</span>`:'');
   $('bTags').innerHTML=(b.bill_tags||[]).filter(t=>!t.returned_at).map(t=>`<div class="item"><span class="n">🏷 ${TAGK[t.kind]||t.kind} ${t.tag_no?'#'+t.tag_no:''} <small>${t.memo||''}</small></span></div>`).join('');
   $('bCust').innerHTML=(b.bill_customers||[]).map(c=>{ const cu=customers.find(x=>x.id===c.customer_id); return `<div class="item"><span class="n">${cu?.name||''}</span><button class="ghost sm" data-rmcust="${c.customer_id}">×</button></div>`; }).join('')||'<div class="muted">未登録</div>';
   $('bCust').querySelectorAll('[data-rmcust]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_customers').delete().eq('bill_id',b.id).eq('customer_id',x.dataset.rmcust); openBill(b.id); });
@@ -371,7 +371,8 @@ function renderBill(){ const b=cur, t=tables.find(x=>x.id===b.table_id);
   $('bCasts').querySelectorAll('[data-kakari]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_casts').update({is_kakari:false}).eq('bill_id',b.id); await sb.from('bill_casts').update({is_kakari:true}).eq('id',x.dataset.kakari); openBill(b.id); });
   $('bCasts').querySelectorAll('[data-rmcast]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_casts').delete().eq('id',x.dataset.rmcast); openBill(b.id); });
   $('bSet').innerHTML=`<div class="item"><span class="n">1セット目 ${b.set_minutes}分 <small>${yen(b.set_unit_price)}×${b.guest_count}</small></span><span class="amt">${yen(b.set_unit_price*b.guest_count)}</span></div>`+
-    (b.bill_extensions||[]).map(e=>`<div class="item"><span class="n">延長 ${e.minutes}分 <small>${e.is_auto?'自動':'手動'} ${yen(e.unit_price)}×${e.qty}</small></span><span class="amt">${yen(e.unit_price*e.qty)}</span><button class="ghost sm" data-ext="${e.id}">×</button></div>`).join('');
+    (t?.vip_set_fee>0?`<div class="item"><span class="n"><span class="badge warnb">VIP</span> VIP代 <small>部屋につき1回</small></span><span class="amt">${yen(t.vip_set_fee)}</span></div>`:'')+
+    (b.bill_extensions||[]).map(e=>`<div class="item"><span class="n">延長 ${e.minutes}分 <small>${e.is_auto?'自動':'手動'} ${yen(e.unit_price)}×${e.qty}</small></span><span class="amt">${yen(e.unit_price*e.qty)}</span><button class="ghost sm" data-ext="${e.id}">×</button></div>`+(t?.vip_ext_fee>0?`<div class="item"><span class="n">　VIP延長 <small>30分ごと</small></span><span class="amt">${yen(t.vip_ext_fee)}</span></div>`:'')).join('');
   $('bSet').querySelectorAll('[data-ext]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_extensions').delete().eq('id',x.dataset.ext); openBill(b.id); });
   const items=(b.bill_items||[]).filter(i=>!i.is_void);
   $('bItems').innerHTML=items.map(i=>{ const sp=(i.bill_item_splits||[]).map(s=>staff.find(x=>x.id===s.staff_id)?.display_name).filter(Boolean).join('/');
@@ -411,8 +412,8 @@ function buildLines(kind){ const b=cur,T=b.totals,t=tables.find(x=>x.id===b.tabl
   L.push({t:`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${hm(d)}  ${t?.name||''}  ${b.guest_count}名`});
   const custs=(b.bill_customers||[]).map(c=>customers.find(x=>x.id===c.customer_id)?.name).filter(Boolean).join('・'); if(custs) L.push({t:custs+' 様'});
   L.push({t:'-'.repeat(32)});
-  if(T.set) L.push({t:padLine(`セット ${b.set_minutes}分 ×${b.guest_count}`,T.set.toLocaleString())});
-  (b.bill_extensions||[]).forEach(e=>L.push({t:padLine(`延長 ${e.minutes}分 ×${e.qty}`,(e.unit_price*e.qty).toLocaleString())}));
+  if(T.set) L.push({t:padLine(`セット ${b.set_minutes}分 ×${b.guest_count}`,T.set.toLocaleString())}); if(T.vip_set) L.push({t:padLine('VIP代',T.vip_set.toLocaleString())});
+  (b.bill_extensions||[]).forEach(e=>L.push({t:padLine(`延長 ${e.minutes}分 ×${e.qty}`,(e.unit_price*e.qty).toLocaleString())})); if(T.vip_ext) L.push({t:padLine('VIP延長',T.vip_ext.toLocaleString())});
   (b.bill_items||[]).filter(i=>!i.is_void).forEach(i=>{ L.push({t:padLine(`${i.name} ×${i.qty}`,(i.unit_price*i.qty).toLocaleString())}); if(kind==='detail'){ const sp=(i.bill_item_splits||[]).map(s=>staffAll.find(x=>x.id===s.staff_id)?.display_name).filter(Boolean).join('/'); if(sp) L.push({t:'   → '+sp}); } });
   L.push({t:'-'.repeat(32)});
   L.push({t:padLine('小計',T.subtotal.toLocaleString())}); if(T.service) L.push({t:padLine(`サービス料 ${T.service_rate}%`,T.service.toLocaleString())}); L.push({t:padLine(`消費税 ${T.tax_rate}%`,T.tax.toLocaleString())});
@@ -520,7 +521,7 @@ $('payClose').onclick=async()=>{ if(cur.totals.unpaid>0){toast(`未収 ${yen(cur
 
 // ---------- settings（d-system風：一覧＋詳細、編集モードで長押し並び替え・削除） ----------
 const SET = [
-  { key:'tables', name:'テーブル', table:'tables', label:r=>r.name, cols:[['name','テーブル名','text'],['is_visible','表示','bool']], newRow:()=>({store_id:store.id,name:'新しいテーブル',is_visible:true}) },
+  { key:'tables', name:'テーブル', table:'tables', label:r=>r.name, cols:[['name','テーブル名','text'],['is_visible','表示','bool'],['vip_set_fee','VIP代（1セットに加算、0＝通常卓）','number'],['vip_ext_fee','VIP延長（30分ごとに加算）','number']], newRow:()=>({store_id:store.id,name:'新しいテーブル',is_visible:true}) },
   { key:'categories', name:'カテゴリー', table:'categories', label:r=>r.name, cols:[['name','カテゴリー名','text'],['short_name','略称','text'],['is_visible','表示','bool'],['is_industry_target','同業者モードの対象','bool']], newRow:()=>({store_id:store.id,name:'新しいカテゴリー',is_visible:true,is_industry_target:false}) },
   { key:'products', name:'メニュー', table:'products', label:r=>`${r.name}`, sub:r=>yen(r.price), cols:[['name','メニュー名','text'],['short_name','略称','text'],['category_id','カテゴリー','cat'],['price','販売価格（税抜）','number'],['cast_subtotal_price','小計価格（係小計に入る額）','number'],['back_amount','バック金額','number'],['back_points','バックポイント','number'],['is_service_target','サービス料の対象','bool'],['is_keepable','キープ可','bool'],['in_stock','在庫あり','bool'],['is_visible','表示','bool']], newRow:()=>({store_id:store.id,name:'新メニュー',category_id:categories[0]?.id,price:0,cast_subtotal_price:0,back_amount:0,back_points:0,is_service_target:true,is_keepable:false,in_stock:true,is_visible:true}) },
   { key:'customers', name:'お客様情報', table:'customers', label:r=>r.name, cols:[['name','お客様名','text'],['memo','メモ','text']], newRow:()=>({store_id:store.id,name:'新しいお客様',memo:''}), nosort:true },
