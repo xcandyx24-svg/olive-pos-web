@@ -31,7 +31,7 @@
   .cols{display:grid;grid-template-columns:.85fr .9fr .95fr 1.1fr;gap:12px}
   .item.cast{flex-direction:column;align-items:stretch;gap:6px}.item.cast .n{flex:none;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:17px;font-weight:700}.item.cast .nm{white-space:nowrap}.badge{white-space:nowrap}.item.cast .btns{display:flex;gap:6px}.item.cast .btns button{flex:1;padding-left:6px;padding-right:6px;white-space:nowrap}.item.cast .btns button[data-rmcast]{flex:none}
   h2{margin:0 0 10px;font-size:15px;color:var(--muted)}
-  .cols>div,#bOrders>div{min-width:0}.cols .item{flex-wrap:wrap}.cols .item .n{flex:1 1 120px;min-width:0;overflow-wrap:anywhere}.cols .item.cast .n{flex:none}
+  .cols>div,#bOrders>div{min-width:0}.cols .item{flex-wrap:wrap}.cols .item .n{flex:1 1 90px;min-width:0;overflow-wrap:anywhere}#bCust .item .n{flex:1 1 40px}.tbl .cust{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cols .item.cast .n{flex:none}
   button:disabled{opacity:.4;cursor:not-allowed}
   .pillbtn.brown.on{background:#3a2a10;box-shadow:0 0 0 3px #e0c98a}
   .list{display:flex;flex-direction:column;gap:6px}
@@ -42,7 +42,7 @@
   .bar{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center}
   .chips{display:flex;flex-wrap:wrap;gap:8px}.chip{padding:10px 14px;border-radius:999px;background:#eee;font-size:15px}.chip.on{background:var(--ink);color:#fff}
   .prodgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
-  .ord4{display:grid;grid-template-columns:minmax(104px,140px) minmax(170px,1fr) minmax(190px,300px) minmax(190px,280px);gap:10px;height:calc(100vh - 170px);min-height:420px}
+  .ord4{display:grid;grid-template-columns:minmax(100px,.6fr) minmax(200px,1.6fr) minmax(170px,1.2fr) minmax(170px,1.1fr);gap:10px;height:calc(100vh - 170px);min-height:420px}
   .ord4 .col{min-width:0;border:1px solid var(--line);border-radius:10px;background:#fafafa;display:flex;flex-direction:column;min-height:0}
   .ord4 .col h3{margin:0;padding:8px 10px;font-size:14px;border-bottom:1px solid var(--line);background:#f0f0f0;border-radius:10px 10px 0 0}
   .ord4 .body{overflow:auto;padding:8px;flex:1;display:flex;flex-direction:column;gap:6px}
@@ -339,7 +339,7 @@ function renderHall(totals){ const now=new Date(); const cnames=b=>(b.bill_custo
     if (!b) { el.className='tbl'; el.innerHTML=`<div class="name">${esc(t.name)}${t.vip_set_fee>0?' <span class="badge warnb">VIP</span>':''}</div><div class="empty">空 席</div>`; el.onclick=()=>openNew(t); }
     else { const end=billEnd(b), remain=Math.round((end-now)/60000); el.className='tbl busy'+(remain<10?' over':'');
       const k=(b.bill_casts||[]).find(c=>c.is_kakari); const kn=k?staff.find(s=>s.id===k.staff_id)?.display_name:'';
-      el.innerHTML=`<div class="name">${esc(t.name)}${t.vip_set_fee>0?' <span class="badge warnb">VIP</span>':''}</div><div class="row"><span>👤 ${b.guest_count}${cnames(b)?' '+esc(cnames(b)):''}</span><span>残り ${remain<0?'-':''}${Math.abs(remain).toLocaleString()}分</span></div><div class="pill">${hm(b.set_start)}〜${hm(end)}</div><div class="total">${yen(totals[b.id]?.amount_due)}</div><div class="casts">${kn?'☑ '+esc(kn):''}</div>${(()=>{const n=(b.bill_tags||[]).filter(t=>!t.returned_at).length;return n?`<div class="tags">🏷 お預かり ${n}</div>`:''})()}`;
+      el.innerHTML=`<div class="name">${esc(t.name)}${t.vip_set_fee>0?' <span class="badge warnb">VIP</span>':''}</div>${cnames(b)?`<div class="cust">${esc(cnames(b))} 様</div>`:''}<div class="row"><span>👤 ${b.guest_count}</span><span>残り ${remain<0?'-':''}${Math.abs(remain).toLocaleString()}分</span></div><div class="pill">${hm(b.set_start)}〜${hm(end)}</div><div class="total">${yen(totals[b.id]?.amount_due)}</div><div class="casts">${kn?'☑ '+esc(kn):''}</div>${(()=>{const n=(b.bill_tags||[]).filter(t=>!t.returned_at).length;return n?`<div class="tags">🏷 お預かり ${n}</div>`:''})()}`;
       el.onclick=()=>openBill(b.id); }
     $('tables').appendChild(el); }
   for (const b of okiBills) { const el=document.createElement('div'); const unpaid=(b.payments||[]).filter(p=>!p.received_at).reduce((a,p)=>a+p.amount,0);
