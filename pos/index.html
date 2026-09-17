@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.12 -->
+<title>OLIVE 会計</title><!-- v10.13 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -73,6 +73,7 @@
   .lst .row.on{background:#e8eefb;border-color:var(--blue);color:var(--ink)}#v-cust .card>div{min-width:0}#cuBtSel{min-width:0}.lst .row .nm{flex:1}.lst .row .hd{color:#aaa;font-size:20px;padding:0 6px;touch-action:none}.lst .row.drag{opacity:.4}
   .form{display:flex;flex-direction:column;gap:10px}.form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}.form input,.form select{font-size:16px}
   .form .sw{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--ink)}.form .sw input{width:22px;height:22px}
+  #v-settings .settings{height:calc(100dvh - 150px);min-height:420px}#v-settings .settings>div{min-height:0;overflow-y:auto}#v-settings .settings>div:nth-child(2){display:flex;flex-direction:column;overflow:hidden}#setList{flex:1;overflow-y:auto;min-height:0;padding-bottom:24px}#setCat{position:sticky;top:0;z-index:1;flex:none}.form label.sw{flex-direction:row;align-items:center;font-size:15px;color:var(--ink)}.lst .row small{white-space:nowrap}
 
   header{background:#3a3a3a;color:#fff;padding:8px 16px;gap:10px}
   header .store{background:#7a6a4a;color:#fff;padding:10px 40px;border-radius:10px;font-size:20px}
@@ -175,7 +176,7 @@
 </div></section>
 
 <section class="view" id="v-cust"><div class="card settings" style="grid-template-columns:260px 1fr 1.2fr">
-  <div><div style="display:flex;gap:6px;margin-bottom:8px"><input id="cuSearch" placeholder="名前・会社名で検索" style="flex:1"><button class="primary sm" id="cuNew">＋新規</button></div><div class="lst" id="cuList" style="max-height:70vh;overflow:auto"></div></div>
+  <div><div style="display:flex;gap:6px;margin-bottom:8px"><input id="cuSearch" placeholder="名前・会社名で検索" style="flex:1"><button class="primary sm" id="cuNew" style="white-space:nowrap">＋新規</button></div><div class="lst" id="cuList" style="max-height:70vh;overflow:auto"></div></div>
   <div id="cuForm" class="form"></div>
   <div id="cuSide"></div>
 </div></section>
@@ -277,9 +278,9 @@ async function start(){ const { data:{ session } } = await sb.auth.getSession();
 async function loadMasters(){
   const [s,st,pm,tb,ca,pr,sf,cu] = await Promise.all([
     sb.from('stores').select('id,name').limit(1), sb.from('pos_settings').select('*').limit(1),
-    sb.from('pricing_modes').select('*').eq('is_active',true).order('sort_order'), sb.from('tables').select('*').order('sort_order'),
-    sb.from('categories').select('*').order('sort_order'), sb.from('products').select('*').order('sort_order'),
-    sb.from('staff').select('id,display_name,kind').eq('is_active',true).order('sort_order'), sb.from('customers').select('*').order('name')]);
+    sb.from('pricing_modes').select('*').eq('is_active',true).order('sort_order').order('id'), sb.from('tables').select('*').order('sort_order').order('id'),
+    sb.from('categories').select('*').order('sort_order').order('id'), sb.from('products').select('*').order('sort_order').order('id'),
+    sb.from('staff').select('id,display_name,kind').eq('is_active',true).order('sort_order').order('id'), sb.from('customers').select('*').order('name')]);
   store=s.data?.[0]; settings=st.data?.[0]; modes=pm.data||[]; tables=tb.data||[]; categories=ca.data||[]; products=pr.data||[]; staff=sf.data||[]; customers=cu.data||[];
   $('storeName').textContent = store?.name || '店舗未設定';
 }
@@ -361,7 +362,7 @@ $('cShowInactive').onclick=()=>{ cDeleteMode=!cDeleteMode; renderCasts(); };
 $('cSearch').oninput=()=>renderCasts();
 $('cNew').onclick=async()=>{ const { data, error } = await sb.from('staff').insert({store_id:store.id,display_name:'新しいキャスト',kind:'cast',sort_order:(Math.max(0,...staff.map(s=>s.sort_order||0))+1)}).select().single(); if(error){toast(error.message);return;} await logOp('キャスト新規登録',{name:data.display_name},null,true); await loadStaffAll(); cSel=data; cMode='all'; renderCasts(); };
 let staffAll=[];
-async function loadStaffAll(){ const { data } = await sb.from('staff').select('*').order('sort_order'); staffAll=data||[]; staff=staffAll.filter(s=>s.is_active).map(s=>({id:s.id,display_name:s.display_name,kind:s.kind,sort_order:s.sort_order})); }
+async function loadStaffAll(){ const { data } = await sb.from('staff').select('*').order('sort_order').order('id'); staffAll=data||[]; staff=staffAll.filter(s=>s.is_active).map(s=>({id:s.id,display_name:s.display_name,kind:s.kind,sort_order:s.sort_order})); }
 async function renderCasts(){ await loadStaffAll(); const present=await updateCastBadge(); const q=$('cSearch').value.trim();
   let adv={}; if(cMode==='today'){ const { data } = await sb.from('daily_advances').select('staff_id,amount').eq('business_date',businessDate()); (data||[]).forEach(a=>adv[a.staff_id]=a.amount); }
   let rows=staffAll.filter(s=>cDeleteMode?true:s.is_active); if(cMode==='today') rows=rows.filter(s=>present.has(s.id)); if(q) rows=rows.filter(s=>(s.display_name+(s.real_name||'')).includes(q));
@@ -371,12 +372,7 @@ async function renderCasts(){ await loadStaffAll(); const present=await updateCa
   $('cList').querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{ const s=staffAll.find(x=>x.id===b.dataset.del); if(!await uiConfirm(`${s.display_name} を削除しますか？（在籍から外します。過去のデータは残ります）`))return; const { error } = await sb.from('staff').update({is_active:false}).eq('id',s.id); if(!error) await logOp('キャスト削除',{name:s.display_name},null,true); toast(error?error.message:'削除しました'); renderCasts(); });
   $('cList').querySelectorAll('[data-restore]').forEach(b=>b.onclick=async()=>{ const { error } = await sb.from('staff').update({is_active:true}).eq('id',b.dataset.restore); if(!error) await logOp('キャストを戻す',{name:snm(b.dataset.restore)},null,true); toast(error?error.message:'戻しました'); renderCasts(); });
   $('cList').querySelectorAll('[data-adv]').forEach(inp=>inp.onchange=async()=>{ const v=parseInt(inp.value||'0',10)||0; const { error } = await sb.from('daily_advances').upsert({store_id:store.id,staff_id:inp.dataset.adv,business_date:businessDate(),amount:v},{onConflict:'staff_id,business_date'}); if(!error) await logOp('日払い',{name:snm(inp.dataset.adv),amount:v},null,true); toast(error?('日払い保存エラー：'+error.message):`日払い ${v.toLocaleString()}円 を保存しました`); });
-  if (cSorting) { const list=$('cList'); let dragging=null,timer=null;
-    list.querySelectorAll('.rrow').forEach(row=>{ const h=row.querySelector('.hd'); if(!h)return;
-      h.onpointerdown=e=>{ e.preventDefault(); timer=setTimeout(()=>{dragging=row;row.classList.add('drag');},150); h.setPointerCapture(e.pointerId); };
-      h.onpointermove=e=>{ if(!dragging)return; const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.rrow'); if(!el||el===dragging)return; const r=el.getBoundingClientRect(); if(e.clientY<r.top+r.height/2) list.insertBefore(dragging,el); else list.insertBefore(dragging,el.nextSibling); };
-      h.onpointerup=async()=>{ clearTimeout(timer); if(!dragging)return; dragging.classList.remove('drag'); dragging=null; const ids=[...list.querySelectorAll('.rrow')].map(r=>r.dataset.id); await Promise.all(ids.map((id,i)=>sb.from('staff').update({sort_order:(i+1)*10}).eq('id',id))); toast('並び順を保存しました'); renderCasts(); };
-      h.onpointercancel=()=>{ clearTimeout(timer); if(dragging){dragging.classList.remove('drag');dragging=null;} }; }); }
+  if (cSorting) dragSort($('cList'),'.rrow',async ids=>{ const rs=await Promise.all(ids.map((id,i)=>sb.from('staff').update({sort_order:(i+1)*10}).eq('id',id))); const er=rs.find(r=>r.error); toast(er?('並び順を保存できませんでした：'+er.error.message):'並び順を保存しました'); renderCasts(); });
   renderCastForm(); }
 function renderCastForm(){ const f=$('cForm'); const s=cSel; if(!s){ f.innerHTML='<div class="muted">一覧の「編集」を押してください</div>'; return; }
   f.innerHTML=`<label>源氏名<input data-k="display_name" value="${esc(s.display_name||'')}"></label><label>本名<input data-k="real_name" value="${esc(s.real_name||'')}"></label>
@@ -659,7 +655,7 @@ const CUF=[['name','お名前'],['company','会社名'],['receipt_name','領収�
 function renderCuForm(){ const c=customers.find(x=>x.id===cuSel); if(!c){ $('cuForm').innerHTML='<div class="muted">左の一覧からお客様を選ぶか、「＋新規」で登録してください</div>'; $('cuSide').innerHTML=''; return; }
   const casts=staff.filter(s=>s.kind==='cast');
   $('cuForm').innerHTML=CUF.map(([k,l])=>k==='kakari_staff_id'?`<label>${l}<select data-k="${k}"><option value="">なし</option>${casts.map(s=>`<option value="${s.id}" ${c[k]===s.id?'selected':''}>${esc(s.display_name)}</option>`).join('')}</select></label>`:k==='memo'?`<label>${l}<textarea data-k="${k}" rows="4" style="width:100%">${esc(c[k]||'')}</textarea></label>`:`<label>${l}<input data-k="${k}" value="${esc(c[k]||'')}"></label>`).join('')+`<div class="bar"><button class="primary" id="cuSave">保存</button><button class="ghost sm" id="cuDel" style="color:var(--muted)">削除</button></div>`;
-  $('cuSave').onclick=async()=>{ const patch={}; $('cuForm').querySelectorAll('[data-k]').forEach(i=>patch[i.dataset.k]=i.value.trim()||null); if(!patch.name){toast('お名前は必須です');return;}
+  $('cuSave').onclick=async()=>{ const patch={}; $('cuForm').querySelectorAll('[data-k]').forEach(i=>patch[i.dataset.k]=i.value.trim()||null); if(!patch.name){toast('お名前は必須です');return;} if(patch.birthday){ const m=patch.birthday.replace(/[０-９／]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)).match(/^(\d{1,2})[\/月.\-](\d{1,2})日?$/); const dim=[31,29,31,30,31,30,31,31,30,31,30,31]; if(!m||+m[1]<1||+m[1]>12||+m[2]<1||+m[2]>dim[+m[1]-1]){ toast('お誕生日は 11/24 のように入力してください'); return; } patch.birthday=`${+m[1]}/${+m[2]}`; }
     const changed=Object.keys(patch).filter(k=>(c[k]||null)!==patch[k]); if(!changed.length){toast('変更はありません');return;}
     const { error } = await sb.from('customers').update(patch).eq('id',c.id); if(error){ toast(error.message.includes('column')?'SQL 011 が未適用です：'+error.message:error.message); return; }
     await logOp('顧客変更',{name:c.name,fields:changed}); Object.assign(c,patch); toast('保存しました'); renderCuList(); };
@@ -675,7 +671,7 @@ async function renderCuSide(c){ $('cuSide').innerHTML='<div class="muted">読み
   if(cuSel!==c.id) return;
   const ym=businessDate().slice(0,7); const mv=visits.filter(b=>b.business_date.startsWith(ym)); const msum=mv.reduce((a,b)=>a+(tot[b.id]||0),0);
   $('cuSide').innerHTML=`<h2>キープボトル</h2>`+(bt.error?`<div class="muted">SQL 011 が未適用です：${esc(bt.error.message)}</div>`:
-    `<div class="list">${open.map(b=>`<div class="item"><span class="n">${esc(b.name)}<br><small>${b.opened_on||''}${b.kakari_staff_id?'　係:'+esc(nm(b.kakari_staff_id)):''}</small></span><select data-rem="${b.id}">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select><button class="ghost sm" data-fin="${b.id}">飲み切り</button></div>`).join('')||'<div class="muted">なし</div>'}</div>
+    `<div class="list">${open.map(b=>`<div class="item" style="flex-wrap:wrap;gap:6px"><span class="n" style="flex:1 1 100%">${esc(b.name)}<br><small>${b.opened_on||''}${b.kakari_staff_id?'　係:'+esc(nm(b.kakari_staff_id)):''}</small></span><select data-rem="${b.id}">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select><button class="ghost sm" data-fin="${b.id}">飲み切り</button></div>`).join('')||'<div class="muted">なし</div>'}</div>
      <div style="display:flex;gap:6px;margin-top:8px"><select id="cuBtSel" style="flex:1"><option value="">ボトルを選ぶ</option>${keep.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><button class="ghost sm" id="cuBtAdd">＋ボトル</button></div>`+
      (done.length?`<div class="muted" style="font-size:12px;margin-top:6px">飲み切り済み：${done.slice(0,10).map(b=>esc(b.name)).join('、')}</div>`:''))+
     `<h2 style="margin-top:18px">来店履歴</h2><div class="muted" style="font-size:13px;margin-bottom:6px">今月 ${mv.length}回・${yen(msum)}　／　累計 ${visits.length}回</div>
@@ -684,7 +680,7 @@ async function renderCuSide(c){ $('cuSide').innerHTML='<div class="muted">読み
   $('cuSide').querySelectorAll('[data-fin]').forEach(x=>x.onclick=async()=>{ const b=bottles.find(z=>z.id===x.dataset.fin); if(!await uiConfirm(`${b.name} を飲み切りにしますか？`))return; await sb.from('customer_bottles').update({is_finished:true,remaining:0,updated_at:new Date().toISOString()}).eq('id',b.id); await logOp('ボトル飲み切り',{customer:c.name,bottle:b.name}); renderCuSide(c); });
   if($('cuBtAdd')) $('cuBtAdd').onclick=async()=>{ const p=products.find(z=>z.id===$('cuBtSel').value); if(!p){toast('ボトルを選んでください');return;} const { error } = await sb.from('customer_bottles').insert({store_id:store.id,customer_id:c.id,product_id:p.id,name:p.name,remaining:10,kakari_staff_id:c.kakari_staff_id||null}); if(error){toast(error.message);return;} await logOp('ボトル登録',{customer:c.name,bottle:p.name}); renderCuSide(c); }; }
 function setRows(def){ if(def.single) return [settings]; let r=({tables,categories,products,customers})[def.key]; if(def.key==='products'&&setCatFilter) r=r.filter(p=>p.category_id===setCatFilter); return r; }
-async function renderSettings(key, keepSel){ if(key!==setCur){ setSel=null; setEditMode=false; setCatFilter=null; } setCur=key; await loadMasters(); const def=SET.find(s=>s.key===key);
+async function renderSettings(key, keepSel){ if(key!==setCur){ setSel=null; setEditMode=false; setCatFilter=null; $('setFilter').value=''; } setCur=key; await loadMasters(); const def=SET.find(s=>s.key===key);
   $('setMenu').innerHTML=SET.map(s=>`<button class="${s.key===key?'on':''}" data-k="${s.key}">${s.name}</button>`).join('')+'<button class="ghost" id="setLogout">ログアウト</button>';
   $('setMenu').querySelectorAll('button[data-k]').forEach(b=>b.onclick=()=>renderSettings(b.dataset.k));
   $('setLogout').onclick=async()=>{ if(!await uiConfirm('ログアウトしますか？')) return; await sb.auth.signOut(); location.reload(); };
@@ -716,11 +712,13 @@ async function renderSettings(key, keepSel){ if(key!==setCur){ setSel=null; setE
   if(setSel) setSel=rows.find(r=>r.id===setSel.id)||null; // 保存後は読み直した最新の行を表示する（古い値が残らないように）
   let head='';
   if (key==='products') head=`<select id="setCat" style="margin-bottom:6px"><option value="">--- すべて ---</option>${categories.map(c=>`<option value="${c.id}" ${setCatFilter===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>`;
+  const _st=$('setList').dataset.key===key?$('setList').scrollTop:0; $('setList').dataset.key=key;
   $('setList').innerHTML=head+rows.map(r=>`<div class="row ${setSel?.id===r.id?'on':''}" data-id="${r.id}">${setEditMode?`<button class="danger sm" data-del="${r.id}">削除</button>`:''}<span class="nm">${esc(def.label(r))}${def.sub?` <small class="muted">${def.sub(r)}</small>`:''}${r.is_visible===false?' <small class="muted">（非表示）</small>':''}</span>${setEditMode&&!def.nosort?'<span class="hd">≡</span>':''}</div>`).join('');
   if (key==='products') $('setCat').onchange=e=>{ setCatFilter=e.target.value||null; renderSettings(key,true); };
   $('setList').querySelectorAll('.row').forEach(row=>{ row.onclick=e=>{ if(e.target.dataset.del||e.target.classList.contains('hd'))return; setSel=rows.find(r=>r.id===row.dataset.id); renderSettings(key,true); }; });
   $('setList').querySelectorAll('[data-del]').forEach(b=>b.onclick=async e=>{ e.stopPropagation(); const r=rows.find(x=>x.id===b.dataset.del); if(!await uiConfirm(`「${def.label(r)}」を削除しますか？`))return;
     const { error } = await sb.from(def.table).delete().eq('id',b.dataset.del); if(error){ toast('使用中のため削除できません。非表示にしてください'); return; } await logOp('設定の削除',{kind:def.name,name:def.label(r)},null,true); setSel=null; renderSettings(key,true); });
+  $('setList').scrollTop=_st; { const q=$('setFilter').value.trim(); if(q) $('setList').querySelectorAll('.row').forEach(r=>{ r.style.display=r.textContent.includes(q)?'':'none'; }); const on=$('setList').querySelector('.row.on'); if(on){ const a=on.getBoundingClientRect(), l=$('setList').getBoundingClientRect(); if(a.top<l.top+40||a.bottom>l.bottom) on.scrollIntoView({block:'center'}); } }
   if (setEditMode && !def.nosort) enableDrag(def);
   renderForm(def);
 }
@@ -743,13 +741,15 @@ $('setAdd').onclick=async()=>{ const def=SET.find(s=>s.key===setCur); const rows
 $('setEdit').onclick=()=>{ setEditMode=!setEditMode; renderSettings(setCur,true); };
 $('setFilter').oninput=e=>{ const q=e.target.value.trim(); $('setList').querySelectorAll('.row').forEach(r=>{ r.style.display=!q||r.textContent.includes(q)?'':'none'; }); };
 // 長押しドラッグ並び替え
-function enableDrag(def){ const list=$('setList'); let dragging=null, timer=null;
-  list.querySelectorAll('.row').forEach(row=>{ const h=row.querySelector('.hd'); if(!h)return;
-    h.onpointerdown=e=>{ e.preventDefault(); timer=setTimeout(()=>{ dragging=row; row.classList.add('drag'); },150); h.setPointerCapture(e.pointerId); };
-    h.onpointermove=e=>{ if(!dragging)return; const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.row'); if(!el||el===dragging||el.parentElement!==list)return; const rect=el.getBoundingClientRect(); if(e.clientY<rect.top+rect.height/2) list.insertBefore(dragging,el); else list.insertBefore(dragging,el.nextSibling); };
-    h.onpointerup=async e=>{ clearTimeout(timer); if(!dragging)return; dragging.classList.remove('drag'); dragging=null;
-      const ids=[...list.querySelectorAll('.row')].map(r=>r.dataset.id); await Promise.all(ids.map((id,i)=>sb.from(def.table).update({sort_order:(i+1)*10}).eq('id',id))); toast('並び順を保存しました'); renderSettings(def.key,true); };
-    h.onpointercancel=()=>{ clearTimeout(timer); if(dragging){dragging.classList.remove('drag');dragging=null;} }; }); }
+function enableDrag(def){ dragSort($('setList'),'.row',async ids=>{ const rs=await Promise.all(ids.map((id,i)=>sb.from(def.table).update({sort_order:(i+1)*10}).eq('id',id))); const er=rs.find(r=>r.error); toast(er?('並び順を保存できませんでした：'+er.error.message):'並び順を保存しました'); renderSettings(def.key,true); }); }
+// 行を動かすと指の追跡が切れるため、動き・離すは画面全体で受ける
+function dragSort(list,sel,onDone){
+  list.querySelectorAll(sel).forEach(row=>{ const h=row.querySelector('.hd'); if(!h)return;
+    h.onpointerdown=e=>{ e.preventDefault(); let dragging=null, moved=false;
+      const timer=setTimeout(()=>{ dragging=row; row.classList.add('drag'); },150);
+      const move=ev=>{ if(!dragging)return; ev.preventDefault(); const el=document.elementFromPoint(ev.clientX,ev.clientY)?.closest(sel); if(!el||el===dragging||el.parentElement!==list)return; const r=el.getBoundingClientRect(); const before=ev.clientY<r.top+r.height/2; const ref=before?el:el.nextSibling; if(ref===dragging||ref===dragging.nextSibling)return; list.insertBefore(dragging,ref); moved=true; };
+      const end=async()=>{ clearTimeout(timer); window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',end); window.removeEventListener('pointercancel',end); if(!dragging)return; dragging.classList.remove('drag'); dragging=null; if(moved) await onDone([...list.querySelectorAll(sel)].map(r=>r.dataset.id)); };
+      window.addEventListener('pointermove',move,{passive:false}); window.addEventListener('pointerup',end); window.addEventListener('pointercancel',end); }; }); }
 
 start();
 </script>
