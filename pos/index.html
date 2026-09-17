@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.6 -->
+<title>OLIVE 会計</title><!-- v10.7 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -102,7 +102,6 @@
 </form></div>
 
 <header>
-  <button class="menuBtn" id="navTop">メニュー</button>
   <div class="store" id="storeName">—</div>
   <div class="dt"><small id="hdDate">—</small><span id="clock">--:--</span></div>
   <nav class="nav">
@@ -111,7 +110,6 @@
     <button id="navCasts">在籍<br>キャスト<span class="bd" id="bdCasts">0</span></button>
     <button id="navCust">顧客</button>
     <button id="navSettings">設定</button>
-    <button id="navTop2">トップ</button>
   </nav>
 </header>
 
@@ -192,12 +190,6 @@
     <div class="rlist" id="cList"></div>
     <div><h2>詳細</h2><div class="form" id="cForm"><div class="muted">一覧の「編集」を押してください</div></div></div>
   </div>
-</div></section>
-
-<section class="view" id="v-top"><div class="card">
-  <h2>トップ</h2>
-  <div class="bar"><button class="primary" id="topHall">ホール状況へ</button><button class="ghost" id="topLogout">ログアウト</button></div>
-  <div class="muted" style="margin-top:12px">売上済伝票一覧・データ確認は管理画面（段階3）で作ります</div>
 </div></section>
 
 <section class="view" id="v-settings"><div class="card settings">
@@ -352,9 +344,6 @@ function renderHall(totals){ const now=new Date();
 async function updateCastBadge(){ const { data } = await sb.from('attendance_events').select('staff_id').eq('business_date',businessDate()).in('event_type',['clock_in','douhan']); const s=new Set((data||[]).map(e=>e.staff_id)); $('bdCasts').textContent=s.size; return s; }
 $('navHall').onclick=()=>{ loadHall(); show('v-hall'); };
 $('navOrder').onclick=()=>{ if(cur&&cur.status==='open'){ openOrder(); } else { toast('卓を選んでください'); loadHall(); show('v-hall'); } };
-$('navTop').onclick=$('navTop2').onclick=()=>show('v-top');
-$('topHall').onclick=()=>{ loadHall(); show('v-hall'); };
-$('topLogout').onclick=async()=>{ await sb.auth.signOut(); location.reload(); };
 
 // ---------- 在籍キャスト ----------
 let cMode='today', cSorting=false, cDeleteMode=false, cSel=null;
@@ -678,8 +667,9 @@ async function renderCuSide(c){ $('cuSide').innerHTML='<div class="muted">読み
   if($('cuBtAdd')) $('cuBtAdd').onclick=async()=>{ const p=products.find(z=>z.id===$('cuBtSel').value); if(!p){toast('ボトルを選んでください');return;} const { error } = await sb.from('customer_bottles').insert({store_id:store.id,customer_id:c.id,product_id:p.id,name:p.name,remaining:10,kakari_staff_id:c.kakari_staff_id||null}); if(error){toast(error.message);return;} await logOp('ボトル登録',{customer:c.name,bottle:p.name}); renderCuSide(c); }; }
 function setRows(def){ if(def.single) return [settings]; let r=({tables,categories,products,customers})[def.key]; if(def.key==='products'&&setCatFilter) r=r.filter(p=>p.category_id===setCatFilter); return r; }
 async function renderSettings(key, keepSel){ if(key!==setCur){ setSel=null; setEditMode=false; setCatFilter=null; } setCur=key; await loadMasters(); const def=SET.find(s=>s.key===key);
-  $('setMenu').innerHTML=SET.map(s=>`<button class="${s.key===key?'on':''}" data-k="${s.key}">${s.name}</button>`).join('');
-  $('setMenu').querySelectorAll('button').forEach(b=>b.onclick=()=>renderSettings(b.dataset.k));
+  $('setMenu').innerHTML=SET.map(s=>`<button class="${s.key===key?'on':''}" data-k="${s.key}">${s.name}</button>`).join('')+'<button class="ghost" id="setLogout" style="margin-top:auto">ログアウト</button>';
+  $('setMenu').querySelectorAll('button[data-k]').forEach(b=>b.onclick=()=>renderSettings(b.dataset.k));
+  $('setLogout').onclick=async()=>{ if(!await uiConfirm('ログアウトしますか？')) return; await sb.auth.signOut(); location.reload(); };
   $('setAdd').style.display=def.single?'none':''; $('setEdit').style.display=(def.single||def.nosort)?'none':''; $('setEdit').textContent=setEditMode?'完了':'編集'; $('setEdit').classList.toggle('on',setEditMode);
   $('setFilter').style.display=def.single?'none':'';
   if (def.local) { $('setAdd').style.display='none'; $('setEdit').style.display='none'; $('setFilter').style.display='none'; $('setList').innerHTML='';
