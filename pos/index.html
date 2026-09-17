@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v9 -->
+<title>OLIVE 会計</title><!-- v9.2 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -143,7 +143,7 @@
   </div>
   <div style="display:flex;justify-content:space-between;align-items:end;margin-top:12px;flex-wrap:wrap;gap:12px">
     <div class="totals" id="bTotals"></div>
-    <div class="bar"><button class="ghost" id="bBack">ホールへ</button><button class="danger" id="bVoid">伝票取消</button>
+    <div class="bar"><button class="ghost" id="bBack">ホールへ</button><button class="ghost sm" id="bVoid" style="color:var(--muted)">伝票取消</button>
       <button class="ghost" id="prEst">概算印刷</button><button class="ghost" id="prBill">会計印刷</button><button class="ghost" id="prDetail">明細印刷</button>
       <button class="primary" id="bOrder">注文</button><button class="gold" id="bPay">会計</button></div>
   </div>
@@ -287,6 +287,9 @@ async function loadHall(){
   renderHall(totals);
 }
 let extOpen=false;
+// ---------- 操作ログ（不正予防）：pos_audit_log に追記のみ。画面から消せない ----------
+async function logOp(action, detail, reason){ try{ const t=tables.find(x=>x.id===cur?.table_id); const { error } = await sb.from('pos_audit_log').insert({store_id:store.id,bill_id:cur?.id||null,action,detail:{table:t?.name||null,...detail},reason:reason||null}); if(error) console.warn('audit',error.message); }catch(e){ console.warn('audit',e); } }
+function askReason(title){ const r=prompt(title+'\n理由を入力してください（必須・操作ログに残ります）'); if(r===null) return null; if(!r.trim()){ toast('理由が未入力のため中止しました'); return null; } return r.trim(); }
 function billEnd(b){ const ext=(b.bill_extensions||[]).reduce((a,e)=>a+e.minutes,0)+(b.ext_waived_minutes||0); return new Date(new Date(b.set_start).getTime()+(b.set_minutes+ext)*60000); }
 async function autoExtend(){ const now=new Date(); let added=false;
   for (const b of openBills) { const mode=modes.find(m=>m.id===b.pricing_mode_id); if (mode && !mode.include_set) continue;
@@ -398,7 +401,7 @@ function renderBill(){ const b=cur, t=tables.find(x=>x.id===b.table_id);
         (t?.vip_ext_fee>0?`<div class="item"><span class="n">VIP${settings.ext_minutes}分延長 ×${ex.length}回</span><span class="amt">${yen(t.vip_ext_fee*ex.length)}</span></div>`:''); })()+
     (b.ext_waived_minutes>0?`<div class="muted" style="font-size:12px;padding:2px 4px">削除した延長 ${b.ext_waived_minutes}分（料金なし）</div>`:'');
   if($('extSum')) $('extSum').onclick=()=>{ extOpen=!extOpen; openBill(b.id); };
-  $('bSet').querySelectorAll('[data-ext]').forEach(x=>x.onclick=async()=>{ const e=(b.bill_extensions||[]).find(z=>z.id===x.dataset.ext); await sb.from('bill_extensions').delete().eq('id',x.dataset.ext);
+  $('bSet').querySelectorAll('[data-ext]').forEach(x=>x.onclick=async()=>{ const e=(b.bill_extensions||[]).find(z=>z.id===x.dataset.ext); await logOp('延長削除',{minutes:e?.minutes,amount:e?e.unit_price*e.qty:null,is_auto:e?.is_auto}); await sb.from('bill_extensions').delete().eq('id',x.dataset.ext);
     // 削除後に時間が足りなくなる分は「料金なしの延長」として記録（自動延長で復活しないように）
     const rest=(b.bill_extensions||[]).filter(z=>z.id!==x.dataset.ext); const endAfter=billEnd({...b,bill_extensions:rest});
     if(e&&endAfter<new Date()){ const r=await sb.from('bills').update({ext_waived_minutes:(b.ext_waived_minutes||0)+e.minutes}).eq('id',b.id); if(r.error) toast('SQL 009 が未適用です：'+r.error.message); }
@@ -409,11 +412,11 @@ function renderBill(){ const b=cur, t=tables.find(x=>x.id===b.table_id);
     return `<div class="item"><span class="n">${i.name} ×${i.qty}<br><small>${sp?'振分:'+sp:'振分なし'}</small></span><button class="ghost sm amt" data-price="${i.id}" style="min-width:90px">${yen(i.unit_price*i.qty)}</button><button class="ghost sm" data-split="${i.id}">振分</button><button class="ghost sm" data-del="${i.id}">×</button></div>`; };
   $('bItems').innerHTML=items.filter(isBottle).map(itemRow).join('')||'<div class="muted">なし</div>';
   $('bItems2').innerHTML=items.filter(i=>!isBottle(i)).map(itemRow).join('')||'<div class="muted">なし</div>';
-  $('bOrders').querySelectorAll('[data-price]').forEach(x=>x.onclick=async()=>{ const it=items.find(i=>i.id===x.dataset.price); const v=prompt(`${it.name} の1つあたりの金額`, it.unit_price); if(v===null)return; const np=parseInt(v,10); if(isNaN(np)||np<0){toast('金額が正しくありません');return;}
+  $('bOrders').querySelectorAll('[data-price]').forEach(x=>x.onclick=async()=>{ const it=items.find(i=>i.id===x.dataset.price); const v=prompt(`${it.name} の1つあたりの金額`, it.unit_price); if(v===null)return; const np=parseInt(v,10); if(isNaN(np)||np<0){toast('金額が正しくありません');return;} if(np===it.unit_price)return; const why=askReason(`${it.name} の金額を ${yen(it.unit_price)} → ${yen(np)} に変更します。`); if(!why)return; await logOp('金額変更',{item:it.name,qty:it.qty,before:it.unit_price,after:np},why);
     await sb.from('bill_items').update({unit_price:np,cast_subtotal_price:np}).eq('id',it.id);
     const sp=it.bill_item_splits||[]; if(sp.length===1) await sb.from('bill_item_splits').update({sales_amount:np*it.qty}).eq('id',sp[0].id);
     openBill(b.id); });
-  $('bOrders').querySelectorAll('[data-del]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_items').update({is_void:true}).eq('id',x.dataset.del); openBill(b.id); });
+  $('bOrders').querySelectorAll('[data-del]').forEach(x=>x.onclick=async()=>{ const it=items.find(i=>i.id===x.dataset.del); await logOp('注文削除',{item:it?.name,qty:it?.qty,amount:it?it.unit_price*it.qty:null}); await sb.from('bill_items').update({is_void:true}).eq('id',x.dataset.del); openBill(b.id); });
   $('bOrders').querySelectorAll('[data-split]').forEach(x=>x.onclick=()=>openSplit(items.find(i=>i.id===x.dataset.split)));
   const T=b.totals;
   $('bTotals').innerHTML=`<span>小計</span><span class="right">${yen(T.subtotal)}</span><span>サービス料${T.service_rate!=null?' '+T.service_rate+'%':''}</span><span class="right">${yen(T.service)}</span><span>消費税</span><span class="right">${yen(T.tax)}</span><span>合計（切上）</span><span class="right">${yen(T.total_rounded)}</span>${T.adjustment?`<span>値引/値増</span><span class="right">${yen(T.adjustment)}</span>`:''}<span class="big">請求額</span><span class="big right">${yen(T.amount_due)}</span>`; }
@@ -421,7 +424,7 @@ $('gPlus').onclick=async()=>{ const n=cur.guest_count+1; await sb.from('bills').
 $('gMinus').onclick=async()=>{ if(cur.guest_count<=1)return; const n=cur.guest_count-1; await sb.from('bills').update({guest_count:n}).eq('id',cur.id); await syncAutoHc(n); openBill(cur.id); };
 $('svcBtn').onclick=()=>{ const m=modes.find(x=>x.id===cur.pricing_mode_id); $('svcNow').textContent=`現在：${m?.name||'通常'}　サービス料 ${cur.totals.service_rate}%${cur.service_rate_override!=null?'（この伝票だけ変更中）':''}`; $('svcRate').value=cur.totals.service_rate; $('svcModal').classList.add('on'); };
 $('svcCancel').onclick=()=>$('svcModal').classList.remove('on');
-$('svcRateOk').onclick=async()=>{ const v=parseFloat($('svcRate').value); if(isNaN(v)||v<0||v>100){toast('0〜100で入力してください');return;} const normal=modes.find(m=>m.code==='normal'); const { error } = await sb.from('bills').update({service_rate_override:v===Number(settings.service_rate)?null:v,pricing_mode_id:normal.id,fixed_total:null}).eq('id',cur.id); if(error){toast(error.message);return;} $('svcModal').classList.remove('on'); openBill(cur.id); };
+$('svcRateOk').onclick=async()=>{ const v=parseFloat($('svcRate').value); if(isNaN(v)||v<0||v>100){toast('0〜100で入力してください');return;} const normal=modes.find(m=>m.code==='normal'); await logOp('サービス料率変更',{before:cur.totals?.service_rate,after:v}); const { error } = await sb.from('bills').update({service_rate_override:v===Number(settings.service_rate)?null:v,pricing_mode_id:normal.id,fixed_total:null}).eq('id',cur.id); if(error){toast(error.message);return;} $('svcModal').classList.remove('on'); openBill(cur.id); };
 $('svcNormal').onclick=async()=>{ await sb.from('bills').update({service_rate_override:null}).eq('id',cur.id); $('svcModal').classList.remove('on'); openBill(cur.id); };
 
 // ---------- お預かりタグ ----------
@@ -468,7 +471,7 @@ $('prReceipt').onclick=()=>{ const name=prompt('宛名（空欄可）',(cur.bill
 $('extAdd').textContent=`延長（${settings?.ext_minutes||30}分）`;
 $('extAdd').onclick=async()=>{ await sb.from('bill_extensions').insert({bill_id:cur.id,minutes:settings.ext_minutes,unit_price:settings.ext_unit_price,qty:cur.guest_count,is_auto:false}); openBill(cur.id); };
 $('bBack').onclick=()=>{ loadHall(); show('v-hall'); };
-$('bVoid').onclick=async()=>{ if(!confirm('この伝票を取り消しますか？'))return; await sb.from('bills').update({status:'void',closed_at:new Date().toISOString()}).eq('id',cur.id); loadHall(); show('v-hall'); };
+$('bVoid').onclick=async()=>{ const why=askReason('この伝票を取り消します。'); if(!why)return; await logOp('伝票取消',{total:cur.totals?.total??null,guest_count:cur.guest_count,items:(cur.bill_items||[]).filter(i=>!i.is_void).map(i=>`${i.name}×${i.qty}`)},why); await sb.from('bills').update({status:'void',closed_at:new Date().toISOString()}).eq('id',cur.id); loadHall(); show('v-hall'); };
 $('bOrder').onclick=()=>openOrder();
 $('bPay').onclick=()=>{ renderPay(); show('v-pay'); };
 
@@ -562,11 +565,11 @@ function renderPay(){ const b=cur,T=b.totals; $('pTable').textContent=tables.fin
   const ind=modes.find(m=>m.code==='industry'), isInd=b.pricing_mode_id===ind?.id;
   $('payMethods').innerHTML=Object.entries(METHOD).map(([k,v])=>`<button class="chip ${payMethod===k?'on':''}" data-m="${k}">${v}</button>`).join('')+`<button class="chip ${isInd?'on':''}" id="payInd" style="margin-left:auto;border:1px solid var(--line)">同業${isInd?' ✓':''}</button>`;
   $('payMethods').querySelectorAll('.chip[data-m]').forEach(c=>c.onclick=()=>{payMethod=c.dataset.m;renderPay();});
-  $('payInd').onclick=async()=>{ const normal=modes.find(m=>m.code==='normal'); await sb.from('bills').update({pricing_mode_id:isInd?normal.id:ind.id,fixed_total:null}).eq('id',cur.id); await openBill(cur.id); renderPay(); show('v-pay'); };
+  $('payInd').onclick=async()=>{ const normal=modes.find(m=>m.code==='normal'); await logOp(isInd?'同業を解除':'同業に切替',{total_before:cur.totals?.total??null}); await sb.from('bills').update({pricing_mode_id:isInd?normal.id:ind.id,fixed_total:null}).eq('id',cur.id); await openBill(cur.id); renderPay(); show('v-pay'); };
   $('payAmount').value=T.unpaid>0?T.unpaid:'';
   $('payList').innerHTML=[...(b.payments||[]).map(p=>`<div class="item"><span class="n">${METHOD[p.method]}</span><span class="amt">${yen(p.amount)}</span></div>`),...(b.bill_adjustments||[]).map(a=>`<div class="item"><span class="n">${a.kind==='discount'?'値引':'値増'} <small>${a.reason||''}</small></span><span class="amt">${yen(a.amount)}</span><button class="ghost sm" data-adj="${a.id}">×</button></div>`)].join('');
-  $('payList').querySelectorAll('[data-adj]').forEach(x=>x.onclick=async()=>{ await sb.from('bill_adjustments').delete().eq('id',x.dataset.adj); await openBill(cur.id); renderPay(); show('v-pay'); }); }
-async function addAdj(kind){ const v=parseInt($('payAmount').value||'0',10); if(!v){toast('金額を入力してください');return;} await sb.from('bill_adjustments').insert({bill_id:cur.id,kind,amount:v}); await openBill(cur.id); renderPay(); show('v-pay'); }
+  $('payList').querySelectorAll('[data-adj]').forEach(x=>x.onclick=async()=>{ const a=(cur.bill_adjustments||[]).find(z=>z.id===x.dataset.adj); await logOp('値引・値増の削除',{kind:a?.kind,amount:a?.amount,reason:a?.reason}); await sb.from('bill_adjustments').delete().eq('id',x.dataset.adj); await openBill(cur.id); renderPay(); show('v-pay'); }); }
+async function addAdj(kind){ const v=parseInt($('payAmount').value||'0',10); if(!v){toast('金額を入力してください');return;} const why=askReason(`${kind==='discount'?'値引':'値増'} ${yen(v)} を入れます。`); if(!why)return; await logOp(kind==='discount'?'値引':'値増',{amount:v},why); await sb.from('bill_adjustments').insert({bill_id:cur.id,kind,amount:v,reason:why}); await openBill(cur.id); renderPay(); show('v-pay'); }
 $('payAdjDiscount').onclick=()=>addAdj('discount'); $('payAdjSurcharge').onclick=()=>addAdj('surcharge');
 $('payAdd').onclick=async()=>{ const v=parseInt($('payAmount').value||'0',10); if(!v){toast('金額を入力してください');return;}
   const { error } = await sb.from('payments').insert({bill_id:cur.id,method:payMethod,amount:v,revenue_date:cur.business_date,received_at:(payMethod==='cash'||payMethod==='card')?new Date().toISOString():null});
@@ -584,6 +587,7 @@ const SET = [
   { key:'customers', name:'お客様情報', table:'customers', label:r=>r.name, cols:[['name','お客様名','text'],['memo','メモ','text']], newRow:()=>({store_id:store.id,name:'新しいお客様',memo:''}), nosort:true },
   { key:'print', name:'印刷設定', local:true, cols:[['print_method','印刷方法','select',[['tmpa','プリンター（TM Print Assistant）'],['browser','ブラウザ印刷（PDF）']]]] },
   { key:'pos', name:'料金設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number'],['auto_hc_product_id','自動で人数分つけるHC（なし＝付けない）','prod'],['auto_bc_product_id','自動で人数分つけるBC（なし＝付けない）','prod']] },
+  { key:'audit', name:'操作ログ', audit:true },
 ];
 let setCur='tables', setSel=null, setEditMode=false, setCatFilter=null;
 $('navSettings').onclick=()=>{ renderSettings(setCur); show('v-settings'); };
@@ -596,6 +600,12 @@ async function renderSettings(key, keepSel){ if(key!==setCur){ setSel=null; setE
   if (def.local) { $('setAdd').style.display='none'; $('setEdit').style.display='none'; $('setFilter').style.display='none'; $('setList').innerHTML='';
     $('setForm').innerHTML=`<label>印刷方法<select id="pmSel"><option value="tmpa" ${PRINT.method==='tmpa'?'selected':''}>プリンター（Epson TM Print Assistant）</option><option value="browser" ${PRINT.method==='browser'?'selected':''}>ブラウザ印刷（PDF）</option></select></label><div class="muted">プリンター印刷はタブレットに「Epson TM Print Assistant」アプリを入れ、TM-m30IIIとBluetoothまたはWi-Fiで接続しておく必要があります。設定はこの端末だけに保存されます。</div>`;
     $('pmSel').onchange=e=>{ PRINT.method=e.target.value; localStorage.setItem('print_method',PRINT.method); toast('保存しました'); }; return; }
+  if (def.audit) { $('setAdd').style.display='none'; $('setEdit').style.display='none'; $('setFilter').style.display='none'; $('setForm').innerHTML='';
+    const { data, error } = await sb.from('pos_audit_log').select('*').eq('store_id',store.id).order('created_at',{ascending:false}).limit(300);
+    if(error){ $('setList').innerHTML=`<div class="muted">操作ログを読めません（SQL 010 が未適用の可能性）：${esc(error.message)}</div>`; return; }
+    const f=d=>{ const x=new Date(d); return `${x.getMonth()+1}/${x.getDate()} ${String(x.getHours()).padStart(2,'0')}:${String(x.getMinutes()).padStart(2,'0')}`; };
+    const dt=o=>Object.entries(o||{}).filter(([k,v])=>v!==null&&v!==undefined&&k!=='table').map(([k,v])=>`${k}:${Array.isArray(v)?v.join('、'):v}`).join(' / ');
+    $('setList').innerHTML=(data||[]).map(l=>`<div class="item" style="display:block"><b>${esc(l.action)}</b> <small>${f(l.created_at)}　${esc(l.detail?.table||'')}</small><br><small>${esc(dt(l.detail))}</small>${l.reason?`<br><small>理由：${esc(l.reason)}</small>`:''}</div>`).join('')||'<div class="muted">まだ記録はありません</div>'; return; }
   if (def.single) { $('setList').innerHTML=''; setSel=settings; renderForm(def); return; }
   const rows=setRows(def);
   let head='';
