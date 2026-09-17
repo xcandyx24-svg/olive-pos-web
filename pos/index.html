@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v9.2 -->
+<title>OLIVE 会計</title><!-- v9.3 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -221,6 +221,12 @@
   <div class="bar"><button class="ghost" id="splitCancel">伝票へ戻る</button><button id="splitEven" style="margin-left:auto">均等</button><button class="primary" id="splitOk">確定</button></div>
 </div></div>
 
+<div class="modal" id="uiDlg" style="z-index:60"><div class="box" style="width:460px">
+  <div id="uiDlgMsg" style="white-space:pre-wrap;font-size:16px;margin-bottom:12px"></div>
+  <input id="uiDlgIn" style="width:100%;font-size:18px">
+  <div class="bar" style="justify-content:flex-end"><button class="ghost" id="uiDlgNo">キャンセル</button><button class="primary" id="uiDlgOk">OK</button></div>
+</div></div>
+
 <div class="modal" id="svcModal"><div class="box" style="width:460px">
   <h2 style="color:var(--ink)">サービス料</h2>
   <div class="muted" id="svcNow" style="margin-bottom:10px"></div>
@@ -289,7 +295,12 @@ async function loadHall(){
 let extOpen=false;
 // ---------- 操作ログ（不正予防）：pos_audit_log に追記のみ。画面から消せない ----------
 async function logOp(action, detail, reason){ try{ const t=tables.find(x=>x.id===cur?.table_id); const { error } = await sb.from('pos_audit_log').insert({store_id:store.id,bill_id:cur?.id||null,action,detail:{table:t?.name||null,...detail},reason:reason||null}); if(error) console.warn('audit',error.message); }catch(e){ console.warn('audit',e); } }
-function askReason(title){ const r=prompt(title+'\n理由を入力してください（必須・操作ログに残ります）'); if(r===null) return null; if(!r.trim()){ toast('理由が未入力のため中止しました'); return null; } return r.trim(); }
+// ブラウザ標準の確認・入力ダイアログ（サイト名が出る）を使わず、画面内のダイアログで聞く
+function uiDlg(msg, withInput, def){ return new Promise(res=>{ $('uiDlgMsg').textContent=msg; const inp=$('uiDlgIn'); inp.style.display=withInput?'':'none'; inp.value=def??''; $('uiDlg').classList.add('on'); if(withInput) setTimeout(()=>{ inp.focus(); inp.select(); },50);
+  const done=v=>{ $('uiDlg').classList.remove('on'); $('uiDlgOk').onclick=$('uiDlgNo').onclick=inp.onkeydown=null; res(v); };
+  $('uiDlgOk').onclick=()=>done(withInput?inp.value:true); $('uiDlgNo').onclick=()=>done(withInput?null:false); inp.onkeydown=e=>{ if(e.key==='Enter'&&!e.isComposing) done(inp.value); }; }); }
+const uiConfirm=msg=>uiDlg(msg,false), uiPrompt=(msg,def)=>uiDlg(msg,true,def);
+async function askReason(title){ const r=await uiPrompt(title+'\n理由を入力してください（必須・操作ログに残ります）'); if(r===null) return null; if(!r.trim()){ toast('理由が未入力のため中止しました'); return null; } return r.trim(); }
 function billEnd(b){ const ext=(b.bill_extensions||[]).reduce((a,e)=>a+e.minutes,0)+(b.ext_waived_minutes||0); return new Date(new Date(b.set_start).getTime()+(b.set_minutes+ext)*60000); }
 async function autoExtend(){ const now=new Date(); let added=false;
   for (const b of openBills) { const mode=modes.find(m=>m.id===b.pricing_mode_id); if (mode && !mode.include_set) continue;
@@ -341,7 +352,7 @@ async function renderCasts(){ await loadStaffAll(); const present=await updateCa
   $('cTodayN').textContent=present.size; $('cTabToday').classList.toggle('on',cMode==='today'); $('cTabAll').classList.toggle('on',cMode==='all'); $('cSort').textContent=cSorting?'完了':'並べ替え'; $('cShowInactive').classList.toggle('on',cDeleteMode); $('cShowInactive').textContent=cDeleteMode?'削除終了':'削除表示';
   $('cList').innerHTML=rows.map(s=>`<div class="rrow ${s.is_active?'':'inactive'}" data-id="${s.id}">${cSorting?'<span class="hd">≡</span>':''}<span class="nm">${s.kind==='hall'?'★【雇用】':''}${s.display_name}${s.real_name?' <small class="muted">'+s.real_name+'</small>':''}${present.has(s.id)?' <span class="badge k">出勤</span>':''}${s.is_active?'':' <span class="badge" style="background:#999">削除済</span>'}</span>${cMode==='today'?`<span class="muted" style="font-size:14px">日払い</span><input type="number" class="adv" data-adv="${s.id}" value="${adv[s.id]??''}" placeholder="0" style="width:110px;font-size:18px;text-align:right">`:''}${cDeleteMode?(s.is_active?`<button class="sm" style="background:#c0392b;color:#fff" data-del="${s.id}">削除</button>`:`<button class="sm" data-restore="${s.id}">戻す</button>`):`<button class="primary sm" data-edit="${s.id}">編集</button>`}</div>`).join('')||'<div class="muted">該当なし</div>';
   $('cList').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{ cSel=staffAll.find(s=>s.id===b.dataset.edit); renderCastForm(); });
-  $('cList').querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{ const s=staffAll.find(x=>x.id===b.dataset.del); if(!confirm(`${s.display_name} を削除しますか？（在籍から外します。過去のデータは残ります）`))return; const { error } = await sb.from('staff').update({is_active:false}).eq('id',s.id); toast(error?error.message:'削除しました'); renderCasts(); });
+  $('cList').querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{ const s=staffAll.find(x=>x.id===b.dataset.del); if(!await uiConfirm(`${s.display_name} を削除しますか？（在籍から外します。過去のデータは残ります）`))return; const { error } = await sb.from('staff').update({is_active:false}).eq('id',s.id); toast(error?error.message:'削除しました'); renderCasts(); });
   $('cList').querySelectorAll('[data-restore]').forEach(b=>b.onclick=async()=>{ const { error } = await sb.from('staff').update({is_active:true}).eq('id',b.dataset.restore); toast(error?error.message:'戻しました'); renderCasts(); });
   $('cList').querySelectorAll('[data-adv]').forEach(inp=>inp.onchange=async()=>{ const v=parseInt(inp.value||'0',10)||0; const { error } = await sb.from('daily_advances').upsert({store_id:store.id,staff_id:inp.dataset.adv,business_date:businessDate(),amount:v},{onConflict:'staff_id,business_date'}); toast(error?('日払い保存エラー：'+error.message):`日払い ${v.toLocaleString()}円 を保存しました`); });
   if (cSorting) { const list=$('cList'); let dragging=null,timer=null;
@@ -412,7 +423,7 @@ function renderBill(){ const b=cur, t=tables.find(x=>x.id===b.table_id);
     return `<div class="item"><span class="n">${i.name} ×${i.qty}<br><small>${sp?'振分:'+sp:'振分なし'}</small></span><button class="ghost sm amt" data-price="${i.id}" style="min-width:90px">${yen(i.unit_price*i.qty)}</button><button class="ghost sm" data-split="${i.id}">振分</button><button class="ghost sm" data-del="${i.id}">×</button></div>`; };
   $('bItems').innerHTML=items.filter(isBottle).map(itemRow).join('')||'<div class="muted">なし</div>';
   $('bItems2').innerHTML=items.filter(i=>!isBottle(i)).map(itemRow).join('')||'<div class="muted">なし</div>';
-  $('bOrders').querySelectorAll('[data-price]').forEach(x=>x.onclick=async()=>{ const it=items.find(i=>i.id===x.dataset.price); const v=prompt(`${it.name} の1つあたりの金額`, it.unit_price); if(v===null)return; const np=parseInt(v,10); if(isNaN(np)||np<0){toast('金額が正しくありません');return;} if(np===it.unit_price)return; const why=askReason(`${it.name} の金額を ${yen(it.unit_price)} → ${yen(np)} に変更します。`); if(!why)return; await logOp('金額変更',{item:it.name,qty:it.qty,before:it.unit_price,after:np},why);
+  $('bOrders').querySelectorAll('[data-price]').forEach(x=>x.onclick=async()=>{ const it=items.find(i=>i.id===x.dataset.price); const v=await uiPrompt(`${it.name} の1つあたりの金額`, it.unit_price); if(v===null)return; const np=parseInt(v,10); if(isNaN(np)||np<0){toast('金額が正しくありません');return;} if(np===it.unit_price)return; const why=await askReason(`${it.name} の金額を ${yen(it.unit_price)} → ${yen(np)} に変更します。`); if(!why)return; await logOp('金額変更',{item:it.name,qty:it.qty,before:it.unit_price,after:np},why);
     await sb.from('bill_items').update({unit_price:np,cast_subtotal_price:np}).eq('id',it.id);
     const sp=it.bill_item_splits||[]; if(sp.length===1) await sb.from('bill_item_splits').update({sales_amount:np*it.qty}).eq('id',sp[0].id);
     openBill(b.id); });
@@ -467,11 +478,11 @@ function doPrint(L){ if(PRINT.method==='browser'){ $('printArea').innerHTML=line
   const url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&reselect=yes&data='+encodeURIComponent(linesToXml(L))+'&back='+encodeURIComponent(location.href);
   location.href=url; }
 $('prEst').onclick=()=>doPrint(buildLines('estimate')); $('prBill').onclick=()=>doPrint(buildLines('bill')); $('prDetail').onclick=()=>doPrint(buildLines('detail'));
-$('prReceipt').onclick=()=>{ const name=prompt('宛名（空欄可）',(cur.bill_customers||[]).map(c=>customers.find(x=>x.id===c.customer_id)?.name).filter(Boolean)[0]||''); if(name===null)return; doPrint(buildReceiptLines(name.trim())); };
+$('prReceipt').onclick=async()=>{ const name=await uiPrompt('宛名（空欄可）',(cur.bill_customers||[]).map(c=>customers.find(x=>x.id===c.customer_id)?.name).filter(Boolean)[0]||''); if(name===null)return; doPrint(buildReceiptLines(name.trim())); };
 $('extAdd').textContent=`延長（${settings?.ext_minutes||30}分）`;
 $('extAdd').onclick=async()=>{ await sb.from('bill_extensions').insert({bill_id:cur.id,minutes:settings.ext_minutes,unit_price:settings.ext_unit_price,qty:cur.guest_count,is_auto:false}); openBill(cur.id); };
 $('bBack').onclick=()=>{ loadHall(); show('v-hall'); };
-$('bVoid').onclick=async()=>{ const why=askReason('この伝票を取り消します。'); if(!why)return; await logOp('伝票取消',{total:cur.totals?.total??null,guest_count:cur.guest_count,items:(cur.bill_items||[]).filter(i=>!i.is_void).map(i=>`${i.name}×${i.qty}`)},why); await sb.from('bills').update({status:'void',closed_at:new Date().toISOString()}).eq('id',cur.id); loadHall(); show('v-hall'); };
+$('bVoid').onclick=async()=>{ const why=await askReason('この伝票を取り消します。'); if(!why)return; await logOp('伝票取消',{total:cur.totals?.total??null,guest_count:cur.guest_count,items:(cur.bill_items||[]).filter(i=>!i.is_void).map(i=>`${i.name}×${i.qty}`)},why); await sb.from('bills').update({status:'void',closed_at:new Date().toISOString()}).eq('id',cur.id); loadHall(); show('v-hall'); };
 $('bOrder').onclick=()=>openOrder();
 $('bPay').onclick=()=>{ renderPay(); show('v-pay'); };
 
@@ -569,14 +580,14 @@ function renderPay(){ const b=cur,T=b.totals; $('pTable').textContent=tables.fin
   $('payAmount').value=T.unpaid>0?T.unpaid:'';
   $('payList').innerHTML=[...(b.payments||[]).map(p=>`<div class="item"><span class="n">${METHOD[p.method]}</span><span class="amt">${yen(p.amount)}</span></div>`),...(b.bill_adjustments||[]).map(a=>`<div class="item"><span class="n">${a.kind==='discount'?'値引':'値増'} <small>${a.reason||''}</small></span><span class="amt">${yen(a.amount)}</span><button class="ghost sm" data-adj="${a.id}">×</button></div>`)].join('');
   $('payList').querySelectorAll('[data-adj]').forEach(x=>x.onclick=async()=>{ const a=(cur.bill_adjustments||[]).find(z=>z.id===x.dataset.adj); await logOp('値引・値増の削除',{kind:a?.kind,amount:a?.amount,reason:a?.reason}); await sb.from('bill_adjustments').delete().eq('id',x.dataset.adj); await openBill(cur.id); renderPay(); show('v-pay'); }); }
-async function addAdj(kind){ const v=parseInt($('payAmount').value||'0',10); if(!v){toast('金額を入力してください');return;} const why=askReason(`${kind==='discount'?'値引':'値増'} ${yen(v)} を入れます。`); if(!why)return; await logOp(kind==='discount'?'値引':'値増',{amount:v},why); await sb.from('bill_adjustments').insert({bill_id:cur.id,kind,amount:v,reason:why}); await openBill(cur.id); renderPay(); show('v-pay'); }
+async function addAdj(kind){ const v=parseInt($('payAmount').value||'0',10); if(!v){toast('金額を入力してください');return;} const why=await askReason(`${kind==='discount'?'値引':'値増'} ${yen(v)} を入れます。`); if(!why)return; await logOp(kind==='discount'?'値引':'値増',{amount:v},why); await sb.from('bill_adjustments').insert({bill_id:cur.id,kind,amount:v,reason:why}); await openBill(cur.id); renderPay(); show('v-pay'); }
 $('payAdjDiscount').onclick=()=>addAdj('discount'); $('payAdjSurcharge').onclick=()=>addAdj('surcharge');
 $('payAdd').onclick=async()=>{ const v=parseInt($('payAmount').value||'0',10); if(!v){toast('金額を入力してください');return;}
   const { error } = await sb.from('payments').insert({bill_id:cur.id,method:payMethod,amount:v,revenue_date:cur.business_date,received_at:(payMethod==='cash'||payMethod==='card')?new Date().toISOString():null});
   if(error){toast(error.message);return;} await openBill(cur.id); renderPay(); show('v-pay'); };
 $('payBack').onclick=()=>openBill(cur.id);
 $('payClose').onclick=async()=>{ if(cur.totals.unpaid>0){toast(`未収 ${yen(cur.totals.unpaid)} があります。請求書か置きで登録してください`);return;}
-  const tg=(cur.bill_tags||[]).filter(t=>!t.returned_at); if(tg.length&&!confirm(`⚠ お預かり品が ${tg.length} 点あります（${tg.map(t=>TAGK[t.kind]+(t.tag_no?'#'+t.tag_no:'')).join('、')}）。お返ししましたか？\nOK＝返却済みとして締める`))return; if(tg.length) await sb.from('bill_tags').update({returned_at:new Date().toISOString()}).in('id',tg.map(t=>t.id));
+  const tg=(cur.bill_tags||[]).filter(t=>!t.returned_at); if(tg.length&&!await uiConfirm(`⚠ お預かり品が ${tg.length} 点あります（${tg.map(t=>TAGK[t.kind]+(t.tag_no?'#'+t.tag_no:'')).join('、')}）。お返ししましたか？\nOK＝返却済みとして締める`))return; if(tg.length) await sb.from('bill_tags').update({returned_at:new Date().toISOString()}).in('id',tg.map(t=>t.id));
   await sb.from('bills').update({status:'closed',closed_at:new Date().toISOString(),set_end:billEnd(cur).toISOString()}).eq('id',cur.id); toast('会計を締めました'); loadHall(); show('v-hall'); };
 
 // ---------- settings（d-system風：一覧＋詳細、編集モードで長押し並び替え・削除） ----------
@@ -613,7 +624,7 @@ async function renderSettings(key, keepSel){ if(key!==setCur){ setSel=null; setE
   $('setList').innerHTML=head+rows.map(r=>`<div class="row ${setSel?.id===r.id?'on':''}" data-id="${r.id}">${setEditMode?`<button class="danger sm" data-del="${r.id}">削除</button>`:''}<span class="nm">${def.label(r)}${def.sub?` <small class="muted">${def.sub(r)}</small>`:''}${r.is_visible===false?' <small class="muted">（非表示）</small>':''}</span>${setEditMode&&!def.nosort?'<span class="hd">≡</span>':''}</div>`).join('');
   if (key==='products') $('setCat').onchange=e=>{ setCatFilter=e.target.value||null; renderSettings(key,true); };
   $('setList').querySelectorAll('.row').forEach(row=>{ row.onclick=e=>{ if(e.target.dataset.del||e.target.classList.contains('hd'))return; setSel=rows.find(r=>r.id===row.dataset.id); renderSettings(key,true); }; });
-  $('setList').querySelectorAll('[data-del]').forEach(b=>b.onclick=async e=>{ e.stopPropagation(); const r=rows.find(x=>x.id===b.dataset.del); if(!confirm(`「${def.label(r)}」を削除しますか？`))return;
+  $('setList').querySelectorAll('[data-del]').forEach(b=>b.onclick=async e=>{ e.stopPropagation(); const r=rows.find(x=>x.id===b.dataset.del); if(!await uiConfirm(`「${def.label(r)}」を削除しますか？`))return;
     const { error } = await sb.from(def.table).delete().eq('id',b.dataset.del); if(error){ toast('使用中のため削除できません。非表示にしてください'); return; } setSel=null; renderSettings(key,true); });
   if (setEditMode && !def.nosort) enableDrag(def);
   renderForm(def);
