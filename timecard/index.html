@@ -235,11 +235,12 @@ async function punch(staff){
   try {
     let photoPath = null;
     const blob = await capture();
-    if (blob) {
+    if (!blob) { await showToast('写真が撮れません', 'カメラを許可してから、もう一度押してください', 3000); return; }
+    {
       const d = new Date();
       photoPath = `${store?.id || 'store'}/${d.toISOString().slice(0,10)}/${staff.id}_${type}_${d.getTime()}.jpg`;
       const { error: upErr } = await sb.storage.from('selfies').upload(photoPath, blob, { contentType:'image/jpeg' });
-      if (upErr) { photoPath = null; console.warn('upload failed', upErr); }
+      if (upErr) { console.warn('upload failed', upErr); await showToast('写真を保存できません', '通信を確認して、もう一度押してください', 3000); return; }
     }
     const { error } = await sb.rpc('punch', { p_staff_id: staff.id, p_type: type, p_photo: photoPath });
     if (error) throw error;
