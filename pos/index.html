@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.5 -->
+<title>OLIVE 会計</title><!-- v10.6 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -634,7 +634,7 @@ const SET = [
   { key:'products', name:'メニュー', table:'products', label:r=>`${r.name}`, sub:r=>yen(r.price), cols:[['name','メニュー名','text'],['short_name','略称','text'],['category_id','カテゴリー','cat'],['price','販売価格（税抜）','number'],['cast_subtotal_price','小計価格（係小計に入る額）','number'],['back_amount','バック金額','number'],['back_points','バックポイント','number'],['is_service_target','サービス料の対象','bool'],['is_keepable','キープ可','bool'],['in_stock','在庫あり','bool'],['is_visible','表示','bool']], newRow:()=>({store_id:store.id,name:'新メニュー',category_id:categories[0]?.id,price:0,cast_subtotal_price:0,back_amount:0,back_points:0,is_service_target:true,is_keepable:false,in_stock:true,is_visible:true}) },
   { key:'customers', name:'お客様情報', table:'customers', label:r=>r.name, cols:[['name','お客様名','text'],['memo','メモ','text']], newRow:()=>({store_id:store.id,name:'新しいお客様',memo:''}), nosort:true },
   { key:'print', name:'印刷設定', local:true, cols:[['print_method','印刷方法','select',[['tmpa','プリンター（TM Print Assistant）'],['browser','ブラウザ印刷（PDF）']]]] },
-  { key:'pos', name:'料金設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number'],['auto_hc_product_id','自動で人数分つけるHC（なし＝付けない）','prod'],['auto_bc_product_id','自動で人数分つけるBC（なし＝付けない）','prod'],['douhan_is_kakari','同伴にしたら自動で係にする（ON＝売上は同伴の人に付く。同伴以外の係は外れる／OFF＝同伴と係は別々）','bool']] },
+  { key:'pos', name:'料金設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number'],['auto_hc_product_id','自動で人数分つけるHC（なし＝付けない）','prod'],['auto_bc_product_id','自動で人数分つけるBC（なし＝付けない）','prod'],['douhan_punch_limit_min','同伴の準備時間の目安（分）：伝票の立ち上げ〜出勤打刻がこれを超えるとタイムカードで本人に警告（0＝警告しない）','number'],['douhan_is_kakari','同伴にしたら自動で係にする（ON＝売上は同伴の人に付く。同伴以外の係は外れる／OFF＝同伴と係は別々）','bool']] },
   { key:'audit', name:'操作ログ', audit:true },
 ];
 let setCur='tables', setSel=null, setEditMode=false, setCatFilter=null;
