@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.32 -->
+<title>OLIVE 会計</title><!-- v10.33 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -422,7 +422,8 @@ async function createBill(t, n, c){ const normal=modes.find(m=>m.code==='normal'
   const bc=settings.auto_bc_product_id&&products.find(p=>p.id===settings.auto_bc_product_id);
   if (bc) await sb.from('bill_items').insert({bill_id:b.id,product_id:bc.id,name:bc.name,category_id:bc.category_id,qty:n||1,unit_price:bc.price,cast_subtotal_price:bc.cast_subtotal_price,back_amount:bc.back_amount,back_points:bc.back_points,is_service_target:bc.is_service_target});
   await logOp('伝票立ち上げ',{guest_count:n||1,customer:c?.name||null}); await openBill(b.id); if(addedK){ await syncHcBack(); await openBill(b.id); } }
-async function syncAutoHc(n){ for(const pid of [settings.auto_hc_product_id, settings.auto_bc_product_id]){ if(!pid) continue; const it=(cur.bill_items||[]).find(i=>i.product_id===pid&&!i.is_void); if(!it) continue; if(it.qty!==n){ await sb.from('bill_items').update({qty:n}).eq('id',it.id); const sp=it.bill_item_splits||[]; if(sp.length===1) await sb.from('bill_item_splits').update({sales_amount:it.cast_subtotal_price*n,back_amount:it.back_amount*n,back_points:Number(it.back_points)*n}).eq('id',sp[0].id); } } }
+async function syncAutoHc(n){ for(const pid of [settings.auto_hc_product_id, settings.auto_bc_product_id]){ if(!pid) continue; const it=(cur.bill_items||[]).find(i=>i.product_id===pid&&!i.is_void); if(!it) continue; if(it.qty!==n){ await sb.from('bill_items').update({qty:n}).eq('id',it.id); const sp=it.bill_item_splits||[]; const m=sp.length; if(m===1) await sb.from('bill_item_splits').update({sales_amount:it.cast_subtotal_price*n,back_amount:it.back_amount*n,back_points:Number(it.back_points)*n}).eq('id',sp[0].id);
+    else if(m>1){ const bk=it.back_amount*n, pt=Number(it.back_points)*n, eb=Math.floor(bk/m), ep=Math.floor(pt/m*10)/10; for(let j=0;j<m;j++) await sb.from('bill_item_splits').update({back_amount:eb+(j===0?bk-eb*m:0),back_points:j===0?Math.round((pt-ep*(m-1))*10)/10:ep}).eq('id',sp[j].id); } } } } // 振分済みで客数が変わったら、今の振分の人数で等分し直す（端数は最初の人）
 
 // ---------- bill ----------
 async function openBill(id){ if(!cur||cur.id!==id) extOpen=false;
@@ -583,15 +584,19 @@ async function attachCust(id){ if(custPick){ const c=customers.find(x=>x.id===id
 $('castAddBtn').onclick=async()=>{
   const { data } = await sb.from('attendance_events').select('staff_id,event_type,event_at').eq('business_date',businessDate()).in('event_type',['clock_in','douhan']);
   const present={}; (data||[]).forEach(e=>{ present[e.staff_id]=present[e.staff_id]||{}; present[e.staff_id][e.event_type]=e.event_at; });
-  const already=new Set((cur.bill_casts||[]).map(c=>c.staff_id));
-  const list=staff.filter(s=>s.kind==='cast'&&present[s.id]&&!already.has(s.id));
-  const others=staff.filter(s=>s.kind==='cast'&&!present[s.id]&&!already.has(s.id));
+    const list=staff.filter(s=>s.kind==='cast'&&present[s.id]);
+  const others=staff.filter(s=>s.kind==='cast'&&!present[s.id]);
   $('castList').innerHTML=list.map(s=>`<button class="chip" data-id="${s.id}" data-role="none">${esc(s.display_name)}</button>`).join('')||'<span class="muted">本日の出勤打刻がまだありません</span>';
   $('castListAll').innerHTML=others.map(s=>`<button class="chip" data-id="${s.id}" data-role="none">${esc(s.display_name)}</button>`).join('')||'<span class="muted">なし</span>';
   $('castListAll').classList.add('hidden'); $('castMoreBtn').textContent='出勤していないキャストから選ぶ ▾';
   let castRoleSel='kakari'; const roleUi=()=>$('castRole').querySelectorAll('[data-cr]').forEach(x=>x.classList.toggle('on',x.dataset.cr===castRoleSel)); $('castRole').querySelectorAll('[data-cr]').forEach(x=>x.onclick=()=>{ castRoleSel=x.dataset.cr; roleUi(); }); roleUi();
   // 係は何人でも追加できる（売上は係全員で等分）。同伴にしても他の係は外さない。設定ONなら同伴の人も係になる
   const pick=async b=>{ const isFirst=!(cur.bill_casts||[]).some(c=>c.is_kakari); const dh=castRoleSel==='douhan';
+    // 既に伝票に付いている人を選んだ時は、追加ではなくその人の係／同伴を更新する
+    const ex=(cur.bill_casts||[]).find(c=>c.staff_id===b.dataset.id);
+    if(ex){ const upd={}; if(dh){ if(!isDouhan(ex.role)){ const n=(cur.bill_casts||[]).filter(c=>isDouhan(c.role)).length; if(n>=cur.guest_count){ toast(`同伴は客数（${cur.guest_count}名）までです`); return; } upd.role=douhanRole(cur.opened_at); } if(settings.douhan_is_kakari&&!ex.is_kakari) upd.is_kakari=true; } else if(!ex.is_kakari) upd.is_kakari=true;
+      if(Object.keys(upd).length){ const { error } = await sb.from('bill_casts').update(upd).eq('id',ex.id); if(error){toast(error.message);return;} await logOp(dh?'同伴を追加':'係を追加',{name:snm(ex.staff_id),kakari:upd.is_kakari??ex.is_kakari,kind:upd.role?ROLE[upd.role]:null,update:true}); if(isFirst&&upd.is_kakari) await syncHcBack(); }
+      $('castModal').classList.remove('on'); openBill(cur.id); return; }
     if(dh){ const n=(cur.bill_casts||[]).filter(c=>isDouhan(c.role)).length; if(n>=cur.guest_count){ toast(`同伴は客数（${cur.guest_count}名）までです`); return; } }
     const role=dh?douhanRole(cur.opened_at):'none'; const mk=dh?!!settings.douhan_is_kakari:true;
     const { error } = await sb.from('bill_casts').insert({bill_id:cur.id,staff_id:b.dataset.id,role,is_kakari:mk}); if(error){toast(error.message);return;} await logOp(dh?'同伴を追加':'係を追加',{name:snm(b.dataset.id),kakari:mk,kind:dh?ROLE[role]:null});
@@ -700,7 +705,7 @@ const SET = [
   { key:'categories', name:'カテゴリー', table:'categories', label:r=>r.name, cols:[['name','カテゴリー名','text'],['short_name','略称','text'],['is_visible','表示','bool'],['is_industry_target','同業者モードの対象','bool']], newRow:()=>({store_id:store.id,name:'新しいカテゴリー',is_visible:true,is_industry_target:false}) },
   { key:'products', name:'メニュー', table:'products', label:r=>`${r.name}`, sub:r=>yen(r.price), cols:[['name','メニュー名','text'],['short_name','略称','text'],['category_id','カテゴリー','cat'],['price','販売価格（税抜）','number'],['cast_subtotal_price','小計価格（係小計に入る額）','number'],['back_amount','バック金額','number'],['back_points','バックポイント','number'],['is_service_target','サービス料の対象','bool'],['is_keepable','キープ可','bool'],['in_stock','在庫あり','bool'],['is_visible','表示','bool']], newRow:()=>({store_id:store.id,name:'新メニュー',category_id:categories[0]?.id,price:0,cast_subtotal_price:0,back_amount:0,back_points:0,is_service_target:true,is_keepable:false,in_stock:true,is_visible:true}) },
   { key:'print', name:'印刷設定', local:true, cols:[['print_method','印刷方法','select',[['tmpa','プリンター（TM Print Assistant）'],['browser','ブラウザ印刷（PDF）']]]] },
-  { key:'pos', name:'料金設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number'],['auto_hc_product_id','自動で人数分つけるHC（なし＝付けない）','prod'],['auto_bc_product_id','自動で人数分つけるBC（なし＝付けない）','prod'],['douhan_punch_limit_min','同伴の準備時間の目安（分）：伝票の立ち上げ〜出勤打刻がこれを超えるとタイムカードで本人に警告（0＝警告しない）','number'],['receipt_mail_to','領収書メールの宛先（閉店作業の「領収書をメールで送る」で使うアドレス）','text'],['advance_cap_cast','日払いの上限（キャスト）円','number'],['advance_cap_hall','日払いの上限（黒服）円','number'],['trial_withholding_rate','体験入店の日払いから引く源泉（%）','number'],['bottle_keep_months','ボトル保管の目安（か月）：これ以上ご来店のないお客様のボトルを「ボトル」画面で抽出','number'],['douhan_is_kakari','同伴にしたら自動で係にする（ON＝同伴の人も係になる。ほかの係は残り、売上は係全員で等分／OFF＝同伴と係は別々）','bool']] },
+  { key:'pos', name:'料金設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number'],['auto_hc_product_id','自動で人数分つけるHC（なし＝付けない）','prod'],['auto_bc_product_id','自動で人数分つけるBC（なし＝付けない）','prod'],['douhan_punch_limit_min','同伴の準備時間の目安（分）：伝票の立ち上げ〜出勤打刻がこれを超えるとタイムカードで本人に警告（0＝警告しない）','number'],['receipt_mail_to','領収書メールの宛先（閉店作業の「領収書をメールで送る」で使うアドレス）','text'],['advance_cap_cast','日払いの上限（キャスト）円','number'],['advance_cap_hall','日払いの上限（黒服）円','number'],['trial_withholding_rate','体験入店の日払いから引く源泉（%）','number'],['bottle_keep_months','ボトル保管の目安（か月）：これ以上ご来店のないお客様のボトルを「ボトル」画面で抽出','number'],['douhan_is_kakari','同伴にしたら自動で係にする（ON＝同伴にした人は自動で係にもなる。ほかの係も追加でき、売上は係全員で等分／OFF＝同伴と係は別々）','bool']] },
   { key:'bills', name:'伝票一覧', bills:true },
   { key:'closing', name:'閉店作業', closing:true },
   { key:'audit', name:'操作ログ', audit:true },
