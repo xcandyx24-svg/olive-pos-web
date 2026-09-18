@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.20 -->
+<title>OLIVE 会計</title><!-- v10.21 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -336,6 +336,9 @@ function uiDlg(msg, withInput, def){ return new Promise(res=>{ $('uiDlgMsg').tex
   const done=v=>{ $('uiDlg').classList.remove('on'); $('uiDlgOk').onclick=$('uiDlgNo').onclick=inp.onkeydown=null; res(v); };
   $('uiDlgOk').onclick=()=>done(withInput?inp.value:true); $('uiDlgNo').onclick=()=>done(withInput?null:false); inp.onkeydown=e=>{ if(e.key==='Enter'&&!e.isComposing) done(inp.value); }; }); }
 const uiConfirm=msg=>uiDlg(msg,false), uiPrompt=(msg,def)=>uiDlg(msg,true,def);
+// 選択肢から1つ選ぶダイアログ（キャンセルは null）
+function uiPick(msg, opts){ return new Promise(res=>{ $('uiDlgMsg').textContent=msg; $('uiDlgIn').style.display='none'; let box=$('uiDlgPick'); if(!box){ box=document.createElement('div'); box.id='uiDlgPick'; box.style.cssText='display:flex;flex-direction:column;gap:8px;margin:12px 0'; $('uiDlgMsg').after(box); } box.innerHTML=opts.map((o,i)=>`<button class="ghost" data-pk="${i}" style="font-size:18px;padding:12px">${esc(o.label)}</button>`).join(''); $('uiDlgOk').style.display='none'; $('uiDlg').classList.add('on');
+  const done=v=>{ $('uiDlg').classList.remove('on'); box.innerHTML=''; $('uiDlgOk').style.display=''; $('uiDlgNo').onclick=null; res(v); }; box.querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>done(opts[Number(b.dataset.pk)].value)); $('uiDlgNo').onclick=()=>done(null); }); }
 async function askReason(title){ const r=await uiPrompt(title+'\n理由を入力してください（必須・操作ログに残ります）'); if(r===null) return null; if(!r.trim()){ toast('理由が未入力のため中止しました'); return null; } return r.trim(); }
 function billEnd(b){ const ext=(b.bill_extensions||[]).reduce((a,e)=>a+e.minutes,0)+(b.ext_waived_minutes||0); return new Date(new Date(b.set_start).getTime()+(b.set_minutes+ext)*60000); }
 async function autoExtend(){ const now=new Date(); let added=false;
@@ -611,9 +614,13 @@ function renderCart(){ $('oCart').innerHTML=oCart.map((l,i)=>`<div class="oline 
 function buildSplits(itemId, line){ const q=line.qty, back=line.p.back_amount*q, pts=Number(line.p.back_points)*q, n=line.casts.length; // 売上は常に係。ここはバックとポイントだけ
   return line.casts.map(id=>({bill_item_id:itemId,staff_id:id,sales_amount:0,back_amount:Math.floor(back/n),back_points:Math.floor(pts/n*10)/10})); }
 $('oConfirm').onclick=async()=>{ if(!oCart.length){ toast('メニューを選んでください'); return; }
+  // キープ可の商品：伝票のお客様にボトルを自動登録する。お客様が未登録なら注文を入れない／複数なら誰のボトルか選ぶ
+  const keepFor=new Map(); const keepLines=oCart.filter(l=>l.p.is_keepable); if(keepLines.length){ const bcs=[...new Set((cur.bill_customers||[]).map(x=>x.customer_id))]; if(!bcs.length){ await uiConfirm('先にお客様名を登録してください'); return; }
+    for(const l of keepLines){ if(bcs.length===1){ keepFor.set(l,bcs[0]); continue; } const pick=await uiPick(`${l.p.name} はどなたのボトルですか？`, bcs.map(id=>({label:(customers.find(c=>c.id===id)?.name||'（不明）')+' 様',value:id}))); if(!pick) return; keepFor.set(l,pick); } }
   $('oConfirm').disabled=true;
   try{ for(const l of oCart){ const p=l.p; const { data:item, error } = await sb.from('bill_items').insert({bill_id:cur.id,product_id:p.id,name:p.name,category_id:p.category_id,qty:l.qty,unit_price:p.price,cast_subtotal_price:p.cast_subtotal_price,back_amount:p.back_amount,back_points:p.back_points,is_service_target:p.is_service_target}).select().single();
-      if(error){ toast(error.message); return; } const sp=buildSplits(item.id,l); if(sp.length){ const r=await sb.from('bill_item_splits').insert(sp); if(r.error){ toast(r.error.message); return; } } }
+      if(error){ toast(error.message); return; } const sp=buildSplits(item.id,l); if(sp.length){ const r=await sb.from('bill_item_splits').insert(sp); if(r.error){ toast(r.error.message); return; } }
+      if(keepFor.has(l)){ const cid=keepFor.get(l); const cu=customers.find(c=>c.id===cid); const kk=(cur.bill_casts||[]).find(c=>c.is_kakari)?.staff_id||cu?.kakari_staff_id||null; for(let k=0;k<l.qty;k++){ const rb=await sb.from('customer_bottles').insert({store_id:store.id,customer_id:cid,product_id:p.id,name:p.name,remaining:10,kakari_staff_id:kk}); if(rb.error){ toast('ボトル登録エラー：'+rb.error.message); break; } } await logOp('ボトル登録（注文から自動）',{customer:cu?.name||null,bottle:p.name,qty:l.qty}); } }
     const n=oCart.reduce((a,l)=>a+l.qty,0); oCart=[]; oSel=-1; await openBill(cur.id); renderOrder(); show('v-order'); toast(`${n}点を注文しました`); }
   finally{ $('oConfirm').disabled=false; } };
 $('orderBack').onclick=()=>openBill(cur.id);
