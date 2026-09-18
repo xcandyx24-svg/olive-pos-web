@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.21 -->
+<title>OLIVE 会計</title><!-- v10.22 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -177,7 +177,7 @@
 </div></section>
 
 <section class="view" id="v-cust"><div class="card settings" style="grid-template-columns:260px 1fr 1.2fr">
-  <div><div style="display:flex;gap:6px;margin-bottom:8px"><input id="cuSearch" placeholder="名前・会社名で検索" style="flex:1"><button class="primary sm" id="cuNew" style="white-space:nowrap">＋新規</button></div><div class="lst" id="cuList" style="max-height:70vh;overflow:auto"></div></div>
+  <div style="min-width:0"><div style="display:flex;gap:6px;margin-bottom:8px"><input id="cuSearch" placeholder="名前・会社名で検索" style="flex:1 1 0;min-width:0;width:0"><button class="primary sm" id="cuNew" style="white-space:nowrap;flex:none">＋新規</button></div><div class="lst" id="cuList" style="max-height:70vh;overflow:auto"></div></div>
   <div id="cuForm" class="form"></div>
   <div id="cuSide"></div>
 </div></section>
