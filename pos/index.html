@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.17 -->
+<title>OLIVE 会計</title><!-- v10.18 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -667,6 +667,7 @@ const SET = [
   { key:'print', name:'印刷設定', local:true, cols:[['print_method','印刷方法','select',[['tmpa','プリンター（TM Print Assistant）'],['browser','ブラウザ印刷（PDF）']]]] },
   { key:'pos', name:'料金設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number'],['auto_hc_product_id','自動で人数分つけるHC（なし＝付けない）','prod'],['auto_bc_product_id','自動で人数分つけるBC（なし＝付けない）','prod'],['douhan_punch_limit_min','同伴の準備時間の目安（分）：伝票の立ち上げ〜出勤打刻がこれを超えるとタイムカードで本人に警告（0＝警告しない）','number'],['bottle_keep_months','ボトル保管の目安（か月）：これ以上ご来店のないお客様のボトルを「ボトル」画面で抽出','number'],['douhan_is_kakari','同伴にしたら自動で係にする（ON＝売上は同伴の人に付く。同伴以外の係は外れる／OFF＝同伴と係は別々）','bool']] },
   { key:'bills', name:'伝票一覧', bills:true },
+  { key:'closing', name:'閉店作業', closing:true },
   { key:'audit', name:'操作ログ', audit:true },
 ];
 let setCur='tables', setSel=null, setEditMode=false, setCatFilter=null;
@@ -735,17 +736,86 @@ async function renderCuSide(c){ $('cuSide').innerHTML='<div class="muted">読み
   $('cuSide').querySelectorAll('[data-exp]').forEach(x=>x.onclick=async()=>{ const b=bottles.find(z=>z.id===x.dataset.exp); if(await expireBottle(b,c.name)) renderCuSide(c); });
   $('cuSide').querySelectorAll('[data-unexp]').forEach(x=>x.onclick=async()=>{ const b=bottles.find(z=>z.id===x.dataset.unexp); if(await unexpireBottle(b,c.name)) renderCuSide(c); });
   if($('cuBtAdd')) $('cuBtAdd').onclick=async()=>{ const p=products.find(z=>z.id===$('cuBtSel').value); if(!p){toast('ボトルを選んでください');return;} const { error } = await sb.from('customer_bottles').insert({store_id:store.id,customer_id:c.id,product_id:p.id,name:p.name,remaining:10,kakari_staff_id:c.kakari_staff_id||null}); if(error){toast(error.message);return;} await logOp('ボトル登録',{customer:c.name,bottle:p.name}); renderCuSide(c); }; }
+// ---------- 閉店作業（入出金の登録 → ボトル残量 → レジ金合わせ → 月間一覧） ----------
+const DENOMS=[[10000,'1万円札'],[5000,'5千円札'],[2000,'2千円札'],[1000,'千円札'],[500,'500円玉'],[100,'100円玉'],[50,'50円玉'],[10,'10円玉'],[5,'5円玉'],[1,'1円玉']];
+let clDate=null, clCounts={}, clDeposit=0, clOpening=0, clMonth=null, clCtx=null;
+function clRange(d){ const a=new Date(`${d}T08:00:00`); return [a.toISOString(), new Date(a.getTime()+24*3600*1000).toISOString()]; }
+const clNum=v=>{ const n=parseInt(String(v??'').replace(/[^0-9]/g,''),10); return isNaN(n)?0:n; };
+async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=today; } if(!clMonth) clMonth=clDate.slice(0,7); const d=clDate; const box=$('setList'); box.innerHTML='<div class="muted">読み込み中…</div>'; const [from,to]=clRange(d);
+  const [mv,adv,pay,cls,prev,bc]=await Promise.all([
+    sb.from('cash_movements').select('*').eq('store_id',store.id).eq('business_date',d).order('created_at'),
+    sb.from('daily_advances').select('staff_id,amount').eq('store_id',store.id).eq('business_date',d),
+    sb.from('payments').select('amount,bills!inner(status,store_id)').eq('method','cash').gte('paid_at',from).lt('paid_at',to),
+    sb.from('register_closings').select('*').eq('store_id',store.id).eq('business_date',d).maybeSingle(),
+    sb.from('register_closings').select('business_date,next_float').eq('store_id',store.id).lt('business_date',d).order('business_date',{ascending:false}).limit(1),
+    sb.from('bill_customers').select('customer_id,bills!inner(business_date,status,store_id)').eq('bills.business_date',d) ]);
+  if(setCur!=='closing') return;
+  if(mv.error||cls.error){ box.innerHTML=`<div class="muted">SQL 018 が未適用の可能性があります：${esc((mv.error||cls.error).message)}</div>`; return; }
+  const moves=mv.data||[]; const outSum=moves.filter(m=>m.kind==='out').reduce((a,m)=>a+m.amount,0), inSum=moves.filter(m=>m.kind==='in').reduce((a,m)=>a+m.amount,0);
+  const advRows=(adv.data||[]).filter(a=>a.amount>0); const advSum=advRows.reduce((a,x)=>a+x.amount,0);
+  const cashSales=(pay.data||[]).filter(p=>p.bills&&p.bills.store_id===store.id&&p.bills.status!=='void').reduce((a,p)=>a+(p.amount||0),0);
+  const saved=cls.data||null; const prevRow=(prev.data||[])[0]||null; const hasPrev=!!prevRow;
+  clCtx={d,outSum,inSum,advSum,cashSales,saved,hasPrev,prevFloat:prevRow?prevRow.next_float:0};
+  const custIds=[...new Set((bc.data||[]).filter(x=>x.bills&&x.bills.store_id===store.id&&x.bills.status!=='void').map(x=>x.customer_id))];
+  let bottles=[]; if(custIds.length){ const bt=await sb.from('customer_bottles').select('*').in('customer_id',custIds).eq('is_finished',false); bottles=(bt.data||[]).filter(b=>!b.expired_on); }
+  if(setCur!=='closing') return;
+  const nm=id=>staffAll.find(x=>x.id===id)?.display_name||staff.find(x=>x.id===id)?.display_name||''; const cn=id=>customers.find(c=>c.id===id)?.name||'';
+  const H=t=>`<h2 style="margin:18px 0 8px">${t}</h2>`;
+  const cnt=saved?(saved.counts||{}):clCounts;
+  box.innerHTML=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:18px">閉店作業</b><input type="date" id="clDateIn" value="${d}"><span class="badge ${saved?'k':'warnb'}">${saved?'精算済み':'未精算'}</span></div>
+  ${H('① 入出金の登録（経費の現金払い・立替など）')}
+  ${saved?'<div class="muted" style="margin-bottom:6px">精算済みのため変更できません（直す時は下の「この精算を削除」から）</div>':`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select id="clKind"><option value="out">出金</option><option value="in">入金</option></select><input id="clAmt" type="number" inputmode="numeric" placeholder="金額" style="width:130px;text-align:right"><input id="clMemo" placeholder="内容（例：氷、タクシー代立替）" style="flex:1;min-width:160px"><button class="ok sm" id="clAdd">追加</button></div>`}
+  <div class="list">${moves.map(m=>`<div class="item"><span class="badge ${m.kind==='out'?'gray':''}">${m.kind==='out'?'出金':'入金'}</span><span class="n">${esc(m.memo||'')}</span><span class="amt">${yen(m.amount)}</span>${saved?'':`<button class="ghost sm" data-mvdel="${m.id}">削除</button>`}</div>`).join('')||'<div class="muted">登録なし</div>'}
+  <div class="item"><span class="badge gray">出金</span><span class="n">日払い合計 <small>${advRows.length?esc(advRows.map(a=>nm(a.staff_id)+' '+a.amount.toLocaleString()).join('、')):'なし'}（在籍キャストの出勤リストで入力）</small></span><span class="amt">${yen(advSum)}</span></div></div>
+  ${H('② ボトル残量（今日ご来店のお客様のキープボトル）')}
+  <div class="list">${bottles.map(b=>`<div class="item"><span class="n">${esc(b.name)}<br><small>${esc(cn(b.customer_id))} 様</small></span><select data-clrem="${b.id}">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select></div>`).join('')||'<div class="muted">該当なし（伝票に「＋お客様」で登録された方のボトルが出ます）</div>'}</div>
+  ${H('③ レジ金合わせ')}
+  <div style="display:grid;grid-template-columns:minmax(260px,1fr) minmax(280px,1fr);gap:18px;align-items:start">
+    <div><div style="display:grid;grid-template-columns:1fr 90px 1fr;gap:6px;align-items:center"><b>金種</b><b style="text-align:center">枚数</b><b style="text-align:right">金額</b>${DENOMS.map(([v,n])=>`<span>${n}</span><input type="number" inputmode="numeric" min="0" data-den="${v}" value="${cnt[v]??''}" ${saved?'disabled':''} style="text-align:right"><span class="right" data-denamt="${v}"></span>`).join('')}<b>合計金額</b><span></span><b class="right" id="clCounted"></b></div></div>
+    <div class="totals" style="display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center">
+      <span>本日釣銭</span>${saved||hasPrev?`<span class="right" id="clOpenTxt"></span>`:`<input id="clOpenIn" type="number" inputmode="numeric" value="${clOpening||''}" placeholder="初回のみ入力" style="width:150px;text-align:right">`}
+      <span>現金売上 <small class="muted">その日に受け取った現金</small></span><span class="right" id="clSales"></span>
+      <span>入金合計</span><span class="right" id="clIn"></span>
+      <span>出金合計 <small class="muted">日払いを含む</small></span><span class="right" id="clOut"></span>
+      <span>レジ内現金（理論値）</span><span class="right" id="clExp"></span>
+      <span>レジ内現金</span><span class="right" id="clCnt2"></span>
+      <b>現金過不足</b><b class="right" id="clDiff"></b>
+      <span>預金金額</span>${saved?`<span class="right" id="clDepTxt"></span>`:`<input id="clDepIn" type="number" inputmode="numeric" value="${clDeposit||''}" style="width:150px;text-align:right">`}
+      <span>翌日釣銭準備金</span><span class="right" id="clNext"></span>
+    </div></div>
+  <div class="bar" style="margin-top:12px">${saved?`<button class="ghost" id="clDel" style="color:var(--muted)">この精算を削除</button>`:`<button class="primary" id="clSave">精算を保存</button>`}</div>
+  ${H('月間一覧')}<div style="margin-bottom:8px"><input type="month" id="clMonthIn" value="${clMonth}"></div><div id="clMonthBox" style="overflow-x:auto"></div>`;
+  $('clDateIn').onchange=e=>{ if(e.target.value){ clDate=e.target.value; clCounts={}; clDeposit=0; renderClosing(); } };
+  $('clMonthIn').onchange=e=>{ if(e.target.value){ clMonth=e.target.value; clRenderMonth(); } };
+  box.querySelectorAll('[data-den]').forEach(i=>i.oninput=()=>{ clCounts[i.dataset.den]=clNum(i.value); clRecalc(); });
+  if($('clDepIn')) $('clDepIn').oninput=e=>{ clDeposit=clNum(e.target.value); clRecalc(); };
+  if($('clOpenIn')) $('clOpenIn').oninput=e=>{ clOpening=clNum(e.target.value); clRecalc(); };
+  if($('clAdd')) $('clAdd').onclick=async()=>{ const amount=clNum($('clAmt').value), kind=$('clKind').value, memo=$('clMemo').value.trim(); if(!amount){ toast('金額を入力してください'); return; } if(!memo){ toast('内容を入力してください'); return; } $('clAdd').disabled=true; const r=await sb.from('cash_movements').insert({store_id:store.id,business_date:d,kind,amount,memo}); if(r.error){ toast(r.error.message); $('clAdd').disabled=false; return; } await logOp(kind==='out'?'レジ出金の登録':'レジ入金の登録',{date:d,amount,memo},null,true); renderClosing(); };
+  box.querySelectorAll('[data-mvdel]').forEach(x=>x.onclick=async()=>{ const m=moves.find(z=>z.id===x.dataset.mvdel); if(!m||!await uiConfirm(`${m.kind==='out'?'出金':'入金'} ${yen(m.amount)}（${m.memo}）を削除しますか？`))return; const r=await sb.from('cash_movements').delete().eq('id',m.id); if(r.error){ toast(r.error.message); return; } await logOp('レジ入出金の削除',{date:d,kind:m.kind,amount:m.amount,memo:m.memo},null,true); renderClosing(); });
+  box.querySelectorAll('[data-clrem]').forEach(x=>x.onchange=async()=>{ const b=bottles.find(z=>z.id===x.dataset.clrem); const v=Number(x.value); const r=await sb.from('customer_bottles').update({remaining:v,updated_at:new Date().toISOString()}).eq('id',b.id); if(r.error){ toast(r.error.message); return; } await logOp('ボトル残量変更',{customer:cn(b.customer_id),bottle:b.name,before:b.remaining,after:v},null,true); b.remaining=v; toast('残量を保存しました'); });
+  if($('clSave')) $('clSave').onclick=async()=>{ const v=clRecalc(); if(!await uiConfirm(`${d} のレジ精算を保存しますか？\nレジ内現金 ${yen(v.counted)}／過不足 ${v.diff>0?'+':''}${yen(v.diff)}`))return; $('clSave').disabled=true; const r=await sb.from('register_closings').insert({store_id:store.id,business_date:d,counts:clCounts,opening_float:v.opening,cash_sales:cashSales,cash_in:inSum,cash_out:outSum+advSum,expected:v.expected,counted:v.counted,diff:v.diff,deposit:v.deposit,next_float:v.next}); if(r.error){ toast(r.error.message); $('clSave').disabled=false; return; } await logOp('レジ精算を保存',{date:d,expected:v.expected,counted:v.counted,diff:v.diff,deposit:v.deposit,next_float:v.next},null,true); toast('精算を保存しました'); clCounts={}; clDeposit=0; renderClosing(); };
+  if($('clDel')) $('clDel').onclick=async()=>{ if(!await uiConfirm(`${d} の精算記録を削除しますか？\n削除すると未精算に戻ります（操作ログに残ります）。`))return; const r=await sb.from('register_closings').delete().eq('id',saved.id); if(r.error){ toast(r.error.message); return; } await logOp('レジ精算を削除',{date:d,expected:saved.expected,counted:saved.counted,diff:saved.diff,deposit:saved.deposit},null,true); clCounts=saved.counts||{}; clDeposit=saved.deposit||0; clOpening=saved.opening_float||0; toast('削除しました'); renderClosing(); };
+  clRecalc(); clRenderMonth(); }
+function clRecalc(){ const c=clCtx; if(!c) return {}; const s=c.saved; const cnt=s?(s.counts||{}):clCounts; let counted=0; DENOMS.forEach(([v])=>{ const a=v*clNum(cnt[v]); counted+=a; const el=document.querySelector(`[data-denamt="${v}"]`); if(el) el.textContent=yen(a); });
+  const opening=s?s.opening_float:(c.hasPrev?c.prevFloat:clOpening); const sales=s?s.cash_sales:c.cashSales, cin=s?s.cash_in:c.inSum, cout=s?s.cash_out:(c.outSum+c.advSum); const expected=opening+sales+cin-cout; if(s) counted=s.counted; const diff=counted-expected; const deposit=s?s.deposit:clDeposit; const next=counted-deposit;
+  const T=(id,t)=>{ const e=$(id); if(e) e.textContent=t; }; T('clCounted',yen(counted)); T('clOpenTxt',yen(opening)); T('clSales',yen(sales)); T('clIn',yen(cin)); T('clOut',yen(cout)); T('clExp',yen(expected)); T('clCnt2',yen(counted)); T('clDiff',(diff>0?'+':'')+yen(diff)); T('clDepTxt',yen(deposit)); T('clNext',yen(next)); const de=$('clDiff'); if(de) de.style.color=diff===0?'':'#c0392b';
+  return {opening,expected,counted,diff,deposit,next}; }
+async function clRenderMonth(){ const el=$('clMonthBox'); if(!el) return; const [y,m]=clMonth.split('-').map(Number); const last=new Date(y,m,0).getDate(); const r=await sb.from('register_closings').select('*').eq('store_id',store.id).gte('business_date',`${clMonth}-01`).lte('business_date',`${clMonth}-${String(last).padStart(2,'0')}`).order('business_date'); if(!$('clMonthBox')) return; if(r.error){ el.innerHTML=`<div class="muted">${esc(r.error.message)}</div>`; return; }
+  const W=['日','月','火','水','木','金','土']; const rows=r.data||[]; const td='style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap"';
+  el.innerHTML=rows.length?`<table style="border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums"><tr>${['日付','本日釣銭','現金売上','入金合計','出金合計','理論値','レジ内現金','過不足','預金'].map(h=>`<th ${td}>${h}</th>`).join('')}</tr>${rows.map(x=>{ const dt=new Date(x.business_date+'T00:00:00'); return `<tr data-cld="${x.business_date}" style="cursor:pointer"><td ${td}>${x.business_date.slice(5).replace('-','/')}（${W[dt.getDay()]}）</td><td ${td}>${yen(x.opening_float)}</td><td ${td}>${yen(x.cash_sales)}</td><td ${td}>${yen(x.cash_in)}</td><td ${td}>${yen(x.cash_out)}</td><td ${td}>${yen(x.expected)}</td><td ${td}>${yen(x.counted)}</td><td ${td} ${x.diff?'':''}>${x.diff>0?'+':''}${yen(x.diff)}</td><td ${td}>${yen(x.deposit)}</td></tr>`; }).join('')}</table>`:'<div class="muted">この月の精算記録はありません</div>';
+  el.querySelectorAll('[data-cld]').forEach(t=>t.onclick=()=>{ clDate=t.dataset.cld; clCounts={}; clDeposit=0; renderClosing(); }); }
 function setRows(def){ if(def.single) return [settings]; let r=({tables,categories,products,customers})[def.key]; if(def.key==='products'&&setCatFilter) r=r.filter(p=>p.category_id===setCatFilter); return r; }
 async function renderSettings(key, keepSel){ if(key!==setCur){ setSel=null; setEditMode=false; setCatFilter=null; $('setFilter').value=''; } setCur=key; await loadMasters(); const def=SET.find(s=>s.key===key);
   $('setMenu').innerHTML=SET.map(s=>`<button class="${s.key===key?'on':''}" data-k="${s.key}">${s.name}</button>`).join('')+'<button class="ghost" id="setLogout">ログアウト</button>';
   $('setMenu').querySelectorAll('button[data-k]').forEach(b=>b.onclick=()=>renderSettings(b.dataset.k));
   $('setLogout').onclick=async()=>{ if(!await uiConfirm('ログアウトしますか？')) return; await sb.auth.signOut(); location.reload(); };
-  $('setList').parentElement.style.gridColumn=(def.audit||def.bills)?'2 / 4':''; $('setForm').parentElement.style.display=(def.audit||def.bills)?'none':'';
+  $('setList').parentElement.style.gridColumn=(def.audit||def.bills||def.closing)?'2 / 4':''; $('setForm').parentElement.style.display=(def.audit||def.bills||def.closing)?'none':'';
   $('setAdd').style.display=def.single?'none':''; $('setEdit').style.display=(def.single||def.nosort)?'none':''; $('setEdit').textContent=setEditMode?'完了':'編集'; $('setEdit').classList.toggle('on',setEditMode);
   $('setFilter').style.display=def.single?'none':'';
   if (def.local) { $('setAdd').style.display='none'; $('setEdit').style.display='none'; $('setFilter').style.display='none'; $('setList').innerHTML='';
     $('setForm').innerHTML=`<label>印刷方法<select id="pmSel"><option value="tmpa" ${PRINT.method==='tmpa'?'selected':''}>プリンター（Epson TM Print Assistant）</option><option value="browser" ${PRINT.method==='browser'?'selected':''}>ブラウザ印刷（PDF）</option></select></label><div class="muted">プリンター印刷はタブレットに「Epson TM Print Assistant」アプリを入れ、TM-m30IIIとBluetoothまたはWi-Fiで接続しておく必要があります。設定はこの端末だけに保存されます。</div>`;
     $('pmSel').onchange=e=>{ PRINT.method=e.target.value; localStorage.setItem('print_method',PRINT.method); toast('保存しました'); }; return; }
+  if (def.closing) { $('setAdd').style.display='none'; $('setEdit').style.display='none'; $('setFilter').style.display='none'; $('setForm').innerHTML=''; await renderClosing(); return; }
   if (def.bills) { $('setAdd').style.display='none'; $('setEdit').style.display='none'; $('setFilter').style.display='none'; $('setForm').innerHTML=''; $('setList').innerHTML='<div class="muted">読み込み中…</div>';
     const today=businessDate(); const BSEL='id,status,table_id,guest_count,opened_at,closed_at,business_date,bill_customers(customer_id),payments(method,amount,received_at,revenue_date)';
     const q1 = await sb.from('bills').select(BSEL).eq('business_date',today).order('opened_at',{ascending:false}); const error=q1.error;
