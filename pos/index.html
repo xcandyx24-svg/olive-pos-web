@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.22 -->
+<title>OLIVE 会計</title><!-- v10.23 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -112,7 +112,6 @@
     <button id="navHall">ホール<br>状況<span class="bd" id="bdHall">0</span></button>
     <button id="navOrder">注文</button>
     <button id="navCasts">在籍<br>キャスト<span class="bd" id="bdCasts">0</span></button>
-    <button id="navBottle">ボトル</button>
     <button id="navCust">顧客</button>
     <button id="navSettings">設定</button>
   </nav>
@@ -176,21 +175,10 @@
   <div class="bar"><button class="ghost" id="payBack">伝票へ戻る</button><button class="ghost" id="prReceipt">領収書印刷</button><button class="primary" id="payClose">会計を締める</button></div>
 </div></section>
 
-<section class="view" id="v-cust"><div class="card settings" style="grid-template-columns:260px 1fr 1.2fr">
-  <div style="min-width:0"><div style="display:flex;gap:6px;margin-bottom:8px"><input id="cuSearch" placeholder="名前・会社名で検索" style="flex:1 1 0;min-width:0;width:0"><button class="primary sm" id="cuNew" style="white-space:nowrap;flex:none">＋新規</button></div><div class="lst" id="cuList" style="max-height:70vh;overflow:auto"></div></div>
+<section class="view" id="v-cust"><div class="card settings" style="grid-template-columns:280px minmax(0,1.25fr) minmax(0,1fr)">
+  <div style="min-width:0"><div style="display:flex;gap:6px;margin-bottom:8px"><input id="cuSearch" placeholder="名前・会社名で検索" style="flex:1 1 0;min-width:0;width:0"><button class="primary sm" id="cuNew" style="white-space:nowrap;flex:none">＋新規</button></div><div id="cuModes" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="chip on" data-cm="all">全員</button><button class="chip" data-cm="bottle">ボトルあり</button><button class="chip" data-cm="old" id="cuOldBtn">6か月以上ご来店なし</button></div><div class="lst" id="cuList" style="max-height:70vh;overflow:auto"></div></div>
   <div id="cuForm" class="form"></div>
   <div id="cuSide"></div>
-</div></section>
-
-<section class="view" id="v-bottle"><div class="card">
-  <div class="bar" style="margin:0 0 10px;flex-wrap:wrap;gap:8px;align-items:center">
-    <button class="pillbtn brown" data-bf="all">すべて</button>
-    <button class="pillbtn brown" data-bf="old" id="btOldBtn">6か月以上ご来店なし</button>
-    <button class="pillbtn brown" data-bf="exp">期限切れ済み</button>
-    <input id="btSearch" placeholder="ボトル名・お客様名で検索" style="flex:1;min-width:180px;font-size:16px">
-  </div>
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span>最終来店日が</span><input type="date" id="btDate"><span>以前</span><button class="ghost sm" id="btDateClr">日付クリア</button><span class="muted" id="btCount" style="margin-left:auto"></span></div>
-  <div class="list" id="btList" style="max-height:66vh;overflow:auto"></div>
 </div></section>
 
 <section class="view" id="v-casts"><div class="card">
@@ -620,7 +608,7 @@ $('oConfirm').onclick=async()=>{ if(!oCart.length){ toast('メニューを選ん
   $('oConfirm').disabled=true;
   try{ for(const l of oCart){ const p=l.p; const { data:item, error } = await sb.from('bill_items').insert({bill_id:cur.id,product_id:p.id,name:p.name,category_id:p.category_id,qty:l.qty,unit_price:p.price,cast_subtotal_price:p.cast_subtotal_price,back_amount:p.back_amount,back_points:p.back_points,is_service_target:p.is_service_target}).select().single();
       if(error){ toast(error.message); return; } const sp=buildSplits(item.id,l); if(sp.length){ const r=await sb.from('bill_item_splits').insert(sp); if(r.error){ toast(r.error.message); return; } }
-      if(keepFor.has(l)){ const cid=keepFor.get(l); const cu=customers.find(c=>c.id===cid); const kk=(cur.bill_casts||[]).find(c=>c.is_kakari)?.staff_id||cu?.kakari_staff_id||null; for(let k=0;k<l.qty;k++){ const rb=await sb.from('customer_bottles').insert({store_id:store.id,customer_id:cid,product_id:p.id,name:p.name,remaining:10,kakari_staff_id:kk}); if(rb.error){ toast('ボトル登録エラー：'+rb.error.message); break; } } await logOp('ボトル登録（注文から自動）',{customer:cu?.name||null,bottle:p.name,qty:l.qty}); } }
+      if(keepFor.has(l)){ const cid=keepFor.get(l); const cu=customers.find(c=>c.id===cid); const kk=(cur.bill_casts||[]).find(c=>c.is_kakari)?.staff_id||cu?.kakari_staff_id||null; for(let k=0;k<l.qty;k++){ const rb=await sb.from('customer_bottles').insert({store_id:store.id,customer_id:cid,product_id:p.id,name:p.name,remaining:10,kakari_staff_id:kk,keep_name:cu?.name||null}); if(rb.error){ toast('ボトル登録エラー：'+rb.error.message); break; } } await logOp('ボトル登録（注文から自動）',{customer:cu?.name||null,bottle:p.name,qty:l.qty}); } }
     const n=oCart.reduce((a,l)=>a+l.qty,0); oCart=[]; oSel=-1; await openBill(cur.id); renderOrder(); show('v-order'); toast(`${n}点を注文しました`); }
   finally{ $('oConfirm').disabled=false; } };
 $('orderBack').onclick=()=>openBill(cur.id);
@@ -695,40 +683,33 @@ $('navSettings').onclick=()=>{ renderSettings(setCur); show('v-settings'); };
 // ---------- ボトル（全ボトルの一覧・ご来店のないお客様の抽出・期限切れ） ----------
 function ymdJa(d){ const m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${+m[1]}年${+m[2]}月${+m[3]}日`:''; }
 function expLine(b){ return `${b.name}　${b.remaining??0}/10　${ymdJa(b.expired_on)} 期限切れ`; }
+function knLabel(b,cname){ return b.keep_name&&b.keep_name!==cname?`（キープ名：${b.keep_name}）`:''; }
 async function expireBottle(b,cname){ if(!b) return false; if(!await uiConfirm(`${b.name}（残り ${b.remaining??0}/10）を期限切れにしますか？\n残量はこのまま記録されます。`)) return false; const d=businessDate(); const { error } = await sb.from('customer_bottles').update({expired_on:d,updated_at:new Date().toISOString()}).eq('id',b.id); if(error){ toast(error.message.includes('column')?'SQL 017 が未適用です：'+error.message:error.message); return false; } await logOp('ボトル期限切れ',{customer:cname,bottle:b.name,remaining:b.remaining}); b.expired_on=d; toast('期限切れにしました'); return true; }
 async function unexpireBottle(b,cname){ if(!b) return false; if(!await uiConfirm(`${b.name} の期限切れを取り消して、キープ中に戻しますか？`)) return false; const { error } = await sb.from('customer_bottles').update({expired_on:null,updated_at:new Date().toISOString()}).eq('id',b.id); if(error){ toast(error.message); return false; } await logOp('ボトル期限切れを戻す',{customer:cname,bottle:b.name,remaining:b.remaining}); b.expired_on=null; toast('キープ中に戻しました'); return true; }
-let btMode='all', btRows=[], btLast={};
 function btMonths(){ const n=Number(settings?.bottle_keep_months); return n>0?n:6; }
 function btCutoff(){ const [y,m,d]=businessDate().split('-').map(Number); const x=new Date(y,m-1-btMonths(),d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
-function btBase(b){ return btLast[b.customer_id]||b.opened_on||String(b.created_at||'').slice(0,10)||''; }
-async function loadBottles(){ $('btList').innerHTML='<div class="muted">読み込み中…</div>'; const r=await sb.from('customer_bottles').select('*').eq('is_finished',false).order('opened_on',{ascending:true}); if(r.error){ $('btList').innerHTML=`<div class="muted">読み込めません：${esc(r.error.message)}</div>`; btRows=[]; return; } btRows=r.data||[]; btLast={};
-  const ids=[...new Set(btRows.map(b=>b.customer_id))]; for(let i=0;i<ids.length;i+=100){ const part=ids.slice(i,i+100); for(let from=0;;from+=1000){ const v=await sb.from('bill_customers').select('customer_id,bills(business_date,status)').in('customer_id',part).range(from,from+999); if(v.error){ toast(v.error.message); break; } (v.data||[]).forEach(x=>{ const bl=x.bills; if(!bl||bl.status==='void') return; if(!btLast[x.customer_id]||bl.business_date>btLast[x.customer_id]) btLast[x.customer_id]=bl.business_date; }); if((v.data||[]).length<1000) break; } } }
-function renderBottles(){ $('btOldBtn').textContent=`${btMonths()}か月以上ご来店なし`; document.querySelectorAll('#v-bottle [data-bf]').forEach(b=>b.classList.toggle('on',b.dataset.bf===btMode));
-  const q=$('btSearch').value.trim(), dt=$('btDate').value, cut=btCutoff(), today=businessDate(); const cn=id=>customers.find(c=>c.id===id)?.name||'（不明）'; const nm=id=>staff.find(x=>x.id===id)?.display_name||'';
-  let rows=btRows.filter(b=>btMode==='exp'?!!b.expired_on:!b.expired_on); if(btMode==='old') rows=rows.filter(b=>btBase(b)&&btBase(b)<=cut); if(dt&&btMode!=='exp') rows=rows.filter(b=>btBase(b)&&btBase(b)<=dt); if(q) rows=rows.filter(b=>(b.name||'').includes(q)||cn(b.customer_id).includes(q));
-  rows=rows.slice().sort((a,b)=>btMode==='exp'?String(b.expired_on).localeCompare(String(a.expired_on)):btBase(a).localeCompare(btBase(b)));
-  $('btCount').textContent=`${rows.length}本`;
-  $('btList').innerHTML=rows.map(b=>{ const last=btLast[b.customer_id]; const base=btBase(b); const days=base?Math.floor((new Date(today)-new Date(base))/86400000):null; const old=!b.expired_on&&base&&base<=cut;
-    return `<div class="item" style="flex-wrap:wrap;gap:6px"><span class="n" data-go="${b.customer_id}" style="cursor:pointer;flex:1 1 260px">${b.expired_on?esc(expLine(b)):`${esc(b.name)}　${b.remaining??0}/10`}${old?' <span class="badge warnb">'+btMonths()+'か月以上</span>':''}<br><small>${esc(cn(b.customer_id))} 様${b.kakari_staff_id?'　係:'+esc(nm(b.kakari_staff_id)):''}　登録 ${b.opened_on||''}　最終来店 ${last||'なし'}${days!=null&&!b.expired_on?`（${days}日前${last?'':'・登録日から'}）`:''}</small></span>${b.expired_on?`<button class="ghost sm" data-unexp="${b.id}">戻す</button>`:`<button class="ghost sm" data-exp="${b.id}">期限切れ</button>`}</div>`; }).join('')||'<div class="muted">該当なし</div>';
-  $('btList').querySelectorAll('[data-go]').forEach(x=>x.onclick=()=>{ cuSel=x.dataset.go; $('cuSearch').value=''; renderCuList(); renderCuForm(); show('v-cust'); });
-  $('btList').querySelectorAll('[data-exp]').forEach(x=>x.onclick=async()=>{ const b=btRows.find(z=>z.id===x.dataset.exp); if(await expireBottle(b,cn(b.customer_id))) renderBottles(); });
-  $('btList').querySelectorAll('[data-unexp]').forEach(x=>x.onclick=async()=>{ const b=btRows.find(z=>z.id===x.dataset.unexp); if(await unexpireBottle(b,cn(b.customer_id))) renderBottles(); }); }
-$('navBottle').onclick=async()=>{ show('v-bottle'); await loadMasters(); await loadBottles(); renderBottles(); };
-document.querySelectorAll('#v-bottle [data-bf]').forEach(b=>b.onclick=()=>{ btMode=b.dataset.bf; renderBottles(); });
-$('btSearch').oninput=()=>renderBottles(); $('btDate').onchange=()=>renderBottles(); $('btDateClr').onclick=()=>{ $('btDate').value=''; renderBottles(); };
+// 顧客一覧に出す情報：最終来店日・キープ中のボトル本数・キープ名（検索用）
+let cuInfo={last:{},cnt:{},first:{},kn:{}}, cuMode='all';
+async function loadCuInfo(){ const info={last:{},cnt:{},first:{},kn:{}}; const bt=await sb.from('customer_bottles').select('*').eq('is_finished',false); (bt.data||[]).filter(b=>!b.expired_on).forEach(b=>{ const c=b.customer_id; info.cnt[c]=(info.cnt[c]||0)+1; const d=b.opened_on||String(b.created_at||'').slice(0,10); if(d&&(!info.first[c]||d<info.first[c])) info.first[c]=d; if(b.keep_name) (info.kn[c]||(info.kn[c]=[])).push(b.keep_name); });
+  for(let from=0;;from+=1000){ const v=await sb.from('bill_customers').select('customer_id,bills(business_date,status)').range(from,from+999); if(v.error) break; (v.data||[]).forEach(x=>{ const bl=x.bills; if(!bl||bl.status==='void') return; if(!info.last[x.customer_id]||bl.business_date>info.last[x.customer_id]) info.last[x.customer_id]=bl.business_date; }); if((v.data||[]).length<1000) break; } cuInfo=info; }
+function cuBase(id){ return cuInfo.last[id]||cuInfo.first[id]||''; }
 
 // ---------- 顧客（基本情報・キープボトル・来店履歴） ----------
 let cuSel=null;
-$('navCust').onclick=async()=>{ await loadMasters(); renderCuList(); renderCuForm(); show('v-cust'); };
+$('navCust').onclick=async()=>{ show('v-cust'); await loadMasters(); renderCuList(); renderCuForm(); await loadCuInfo(); renderCuList(); };
+document.querySelectorAll('#cuModes [data-cm]').forEach(b=>b.onclick=()=>{ cuMode=b.dataset.cm; renderCuList(); });
 $('cuSearch').oninput=()=>renderCuList();
-function renderCuList(){ const q=$('cuSearch').value.trim(); const list=customers.filter(c=>!q||(c.name||'').includes(q)||(c.company||'').includes(q)||(c.receipt_name||'').includes(q)).slice(0,200);
-  $('cuList').innerHTML=list.map(c=>`<button class="row ${c.id===cuSel?'on':''}" data-id="${c.id}" style="text-align:left;width:100%"><span class="nm">${esc(c.name)}${c.company?`<br><small class="muted">${esc(c.company)}</small>`:''}</span></button>`).join('')||'<div class="muted">該当なし</div>';
+function renderCuList(){ const q=$('cuSearch').value.trim(); const cut=btCutoff(); $('cuOldBtn').textContent=`${btMonths()}か月以上ご来店なし`; document.querySelectorAll('#cuModes [data-cm]').forEach(b=>b.classList.toggle('on',b.dataset.cm===cuMode));
+  let list=customers.filter(c=>!q||(c.name||'').includes(q)||(c.company||'').includes(q)||(c.receipt_name||'').includes(q)||(cuInfo.kn[c.id]||[]).some(k=>k.includes(q)));
+  if(cuMode==='bottle') list=list.filter(c=>cuInfo.cnt[c.id]>0); if(cuMode==='old') list=list.filter(c=>cuInfo.cnt[c.id]>0&&cuBase(c.id)&&cuBase(c.id)<=cut).sort((a,b)=>cuBase(a.id).localeCompare(cuBase(b.id))); list=list.slice(0,200);
+  const md=d=>{ const m=String(d).match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[1]===businessDate().slice(0,4)?'':m[1]+'/'}${+m[2]}/${+m[3]}`:''; };
+  $('cuList').innerHTML=list.map(c=>{ const last=cuInfo.last[c.id], n=cuInfo.cnt[c.id]||0; const old=n>0&&cuBase(c.id)&&cuBase(c.id)<=cut; return `<button class="row ${c.id===cuSel?'on':''}" data-id="${c.id}" style="text-align:left;width:100%"><span class="nm">${esc(c.name)}${c.company?` <small class="muted">${esc(c.company)}</small>`:''}<br><small class="muted" style="${old?'color:#c0392b':''}">最終来店 ${last?md(last):'なし'}${n?`・ボトル${n}本`:''}</small></span></button>`; }).join('')||'<div class="muted">該当なし</div>';
   $('cuList').querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{ cuSel=b.dataset.id; renderCuList(); renderCuForm(); }); }
 $('cuNew').onclick=async()=>{ const name=await uiPrompt('新しいお客様の名前', $('cuSearch').value.trim()); if(!name||!name.trim())return; const { data, error } = await sb.from('customers').insert({store_id:store.id,name:name.trim()}).select().single(); if(error){toast(error.message);return;} await logOp('顧客追加',{name:data.name}); customers.push(data); customers.sort((a,b)=>a.name.localeCompare(b.name,'ja')); cuSel=data.id; $('cuSearch').value=''; renderCuList(); renderCuForm(); };
-const CUF=[['name','お名前'],['company','会社名'],['receipt_name','領収書名'],['kakari_staff_id','係'],['birthday','お誕生日（例 11/24）'],['company_address','会社住所'],['memo','メモ']];
+const CUF=[['name','お名前'],['birthday','お誕生日'],['receipt_name','領収書名'],['kakari_staff_id','係'],['company','会社名'],['company_address','会社住所'],['memo','メモ']];
 function renderCuForm(){ const c=customers.find(x=>x.id===cuSel); if(!c){ $('cuForm').innerHTML='<div class="muted">左の一覧からお客様を選ぶか、「＋新規」で登録してください</div>'; $('cuSide').innerHTML=''; return; }
   const casts=staff.filter(s=>s.kind==='cast');
-  $('cuForm').innerHTML=CUF.map(([k,l])=>k==='kakari_staff_id'?`<label>${l}<select data-k="${k}"><option value="">なし</option>${casts.map(s=>`<option value="${s.id}" ${c[k]===s.id?'selected':''}>${esc(s.display_name)}</option>`).join('')}</select></label>`:k==='memo'?`<label>${l}<textarea data-k="${k}" rows="4" style="width:100%">${esc(c[k]||'')}</textarea></label>`:`<label>${l}<input data-k="${k}" value="${esc(c[k]||'')}"></label>`).join('')+`<div class="bar"><button class="primary" id="cuSave">保存</button><button class="ghost sm" id="cuDel" style="color:var(--muted)">削除</button></div>`;
+  $('cuForm').innerHTML='<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px">'+CUF.map(([k,l])=>k==='kakari_staff_id'?`<label>${l}<select data-k="${k}"><option value="">なし</option>${casts.map(s=>`<option value="${s.id}" ${c[k]===s.id?'selected':''}>${esc(s.display_name)}</option>`).join('')}</select></label>`:k==='memo'?`<label style="grid-column:1/-1">${l}<textarea data-k="${k}" rows="9" style="width:100%;font-size:16px;line-height:1.5">${esc(c[k]||'')}</textarea></label>`:`<label>${l}<input data-k="${k}" value="${esc(c[k]||'')}" ${k==='birthday'?'placeholder="例 11/24"':''} style="width:100%"></label>`).join('')+'</div>'+`<div class="bar"><button class="primary" id="cuSave">保存</button><button class="ghost sm" id="cuDel" style="color:var(--muted)">削除</button></div>`;
   $('cuSave').onclick=async()=>{ const patch={}; $('cuForm').querySelectorAll('[data-k]').forEach(i=>patch[i.dataset.k]=i.value.trim()||null); if(!patch.name){toast('お名前は必須です');return;} if(patch.birthday){ const m=patch.birthday.replace(/[０-９／]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)).match(/^(\d{1,2})[\/月.\-](\d{1,2})日?$/); const dim=[31,29,31,30,31,30,31,31,30,31,30,31]; if(!m||+m[1]<1||+m[1]>12||+m[2]<1||+m[2]>dim[+m[1]-1]){ toast('お誕生日は 11/24 のように入力してください'); return; } patch.birthday=`${+m[1]}/${+m[2]}`; }
     const changed=Object.keys(patch).filter(k=>(c[k]||null)!==patch[k]); if(!changed.length){toast('変更はありません');return;}
     const { error } = await sb.from('customers').update(patch).eq('id',c.id); if(error){ toast(error.message.includes('column')?'SQL 011 が未適用です：'+error.message:error.message); return; }
@@ -745,16 +726,17 @@ async function renderCuSide(c){ $('cuSide').innerHTML='<div class="muted">読み
   if(cuSel!==c.id) return;
   const ym=businessDate().slice(0,7); const mv=visits.filter(b=>b.business_date.startsWith(ym)); const msum=mv.reduce((a,b)=>a+(tot[b.id]||0),0);
   $('cuSide').innerHTML=`<h2>キープボトル</h2>`+(bt.error?`<div class="muted">SQL 011 が未適用です：${esc(bt.error.message)}</div>`:
-    `<div class="list">${open.map(b=>`<div class="item" style="flex-wrap:wrap;gap:6px"><span class="n" style="flex:1 1 100%">${esc(b.name)}<br><small>${b.opened_on||''}${b.kakari_staff_id?'　係:'+esc(nm(b.kakari_staff_id)):''}</small></span><select data-rem="${b.id}">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select><button class="ghost sm" data-fin="${b.id}">飲み切り</button><button class="ghost sm" data-exp="${b.id}">期限切れ</button></div>`).join('')||'<div class="muted">なし</div>'}</div>
+    `<div class="list">${open.map(b=>`<div class="item" style="flex-wrap:wrap;gap:6px"><span class="n" style="flex:1 1 100%">${esc(b.name)}<br><small>${b.opened_on||''}${b.kakari_staff_id?'　係:'+esc(nm(b.kakari_staff_id)):''}</small></span><label style="flex:1 1 100%;display:flex;align-items:center;gap:6px;font-size:13px;margin:0"><span class="muted" style="white-space:nowrap">キープ名</span><input data-kn="${b.id}" value="${esc(b.keep_name||c.name||'')}" style="flex:1 1 0;min-width:0;width:0"></label><select data-rem="${b.id}">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select><button class="ghost sm" data-fin="${b.id}">飲み切り</button><button class="ghost sm" data-exp="${b.id}">期限切れ</button></div>`).join('')||'<div class="muted">なし</div>'}</div>
      <div style="display:flex;gap:6px;margin-top:8px"><select id="cuBtSel" style="flex:1"><option value="">ボトルを選ぶ</option>${keep.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><button class="ghost sm" id="cuBtAdd">＋ボトル</button></div>`+
-     (done.length?`<div class="muted" style="font-size:12px;margin-top:6px">飲み切り済み：${done.slice(0,10).map(b=>esc(b.name)).join('、')}</div>`:'')+(expd.length?`<div style="margin-top:10px;font-size:13px" class="muted">期限切れ</div><div class="list">${expd.map(b=>`<div class="item"><span class="n">${esc(expLine(b))}</span><button class="ghost sm" data-unexp="${b.id}">戻す</button></div>`).join('')}</div>`:''))+
+     (done.length?`<div class="muted" style="font-size:12px;margin-top:6px">飲み切り済み：${done.slice(0,10).map(b=>esc(b.name)).join('、')}</div>`:'')+(expd.length?`<div style="margin-top:10px;font-size:13px" class="muted">期限切れ</div><div class="list">${expd.map(b=>`<div class="item"><span class="n">${esc(expLine(b)+knLabel(b,c.name))}</span><button class="ghost sm" data-unexp="${b.id}">戻す</button></div>`).join('')}</div>`:''))+
     `<h2 style="margin-top:18px">来店履歴</h2><div class="muted" style="font-size:13px;margin-bottom:6px">今月 ${mv.length}回・${yen(msum)}　／　累計 ${visits.length}回</div>
      <div class="list">${visits.slice(0,30).map(b=>`<div class="item"><span class="n">${b.business_date}　${esc(tables.find(t=>t.id===b.table_id)?.name||'')}　${b.guest_count}名${b.status==='open'?' <span class="badge">来店中</span>':''}</span><span class="amt">${tot[b.id]!=null?yen(tot[b.id]):''}</span></div>`).join('')||'<div class="muted">まだありません</div>'}</div>`;
   $('cuSide').querySelectorAll('[data-rem]').forEach(x=>x.onchange=async()=>{ const b=bottles.find(z=>z.id===x.dataset.rem); const { error } = await sb.from('customer_bottles').update({remaining:Number(x.value),updated_at:new Date().toISOString()}).eq('id',b.id); if(error){toast(error.message);return;} await logOp('ボトル残量変更',{customer:c.name,bottle:b.name,before:b.remaining,after:Number(x.value)}); b.remaining=Number(x.value); toast('残量を保存しました'); });
-  $('cuSide').querySelectorAll('[data-fin]').forEach(x=>x.onclick=async()=>{ const b=bottles.find(z=>z.id===x.dataset.fin); if(!await uiConfirm(`${b.name} を飲み切りにしますか？`))return; await sb.from('customer_bottles').update({is_finished:true,remaining:0,updated_at:new Date().toISOString()}).eq('id',b.id); await logOp('ボトル飲み切り',{customer:c.name,bottle:b.name}); renderCuSide(c); });
-  $('cuSide').querySelectorAll('[data-exp]').forEach(x=>x.onclick=async()=>{ const b=bottles.find(z=>z.id===x.dataset.exp); if(await expireBottle(b,c.name)) renderCuSide(c); });
-  $('cuSide').querySelectorAll('[data-unexp]').forEach(x=>x.onclick=async()=>{ const b=bottles.find(z=>z.id===x.dataset.unexp); if(await unexpireBottle(b,c.name)) renderCuSide(c); });
-  if($('cuBtAdd')) $('cuBtAdd').onclick=async()=>{ const p=products.find(z=>z.id===$('cuBtSel').value); if(!p){toast('ボトルを選んでください');return;} const { error } = await sb.from('customer_bottles').insert({store_id:store.id,customer_id:c.id,product_id:p.id,name:p.name,remaining:10,kakari_staff_id:c.kakari_staff_id||null}); if(error){toast(error.message);return;} await logOp('ボトル登録',{customer:c.name,bottle:p.name}); renderCuSide(c); }; }
+  $('cuSide').querySelectorAll('[data-kn]').forEach(x=>x.onchange=async()=>{ const b=bottles.find(z=>z.id===x.dataset.kn); const v=x.value.trim()||c.name; const before=b.keep_name||c.name; if(v===before){ x.value=v; return; } const { error } = await sb.from('customer_bottles').update({keep_name:v,updated_at:new Date().toISOString()}).eq('id',b.id); if(error){ toast(error.message.includes('keep_name')?'SQL 020 が未適用です：'+error.message:error.message); x.value=before; return; } await logOp('ボトルのキープ名変更',{customer:c.name,bottle:b.name,before,after:v}); b.keep_name=v; x.value=v; toast('キープ名を保存しました'); loadCuInfo(); });
+  $('cuSide').querySelectorAll('[data-fin]').forEach(x=>x.onclick=async()=>{ const b=bottles.find(z=>z.id===x.dataset.fin); if(!await uiConfirm(`${b.name} を飲み切りにしますか？`))return; await sb.from('customer_bottles').update({is_finished:true,remaining:0,updated_at:new Date().toISOString()}).eq('id',b.id); await logOp('ボトル飲み切り',{customer:c.name,bottle:b.name}); renderCuSide(c); loadCuInfo().then(renderCuList); });
+  $('cuSide').querySelectorAll('[data-exp]').forEach(x=>x.onclick=async()=>{ const b=bottles.find(z=>z.id===x.dataset.exp); if(await expireBottle(b,c.name)){ renderCuSide(c); loadCuInfo().then(renderCuList); } });
+  $('cuSide').querySelectorAll('[data-unexp]').forEach(x=>x.onclick=async()=>{ const b=bottles.find(z=>z.id===x.dataset.unexp); if(await unexpireBottle(b,c.name)){ renderCuSide(c); loadCuInfo().then(renderCuList); } });
+  if($('cuBtAdd')) $('cuBtAdd').onclick=async()=>{ const p=products.find(z=>z.id===$('cuBtSel').value); if(!p){toast('ボトルを選んでください');return;} const { error } = await sb.from('customer_bottles').insert({store_id:store.id,customer_id:c.id,product_id:p.id,name:p.name,remaining:10,kakari_staff_id:c.kakari_staff_id||null,keep_name:c.name}); if(error){toast(error.message.includes('keep_name')?'SQL 020 が未適用です：'+error.message:error.message);return;} await logOp('ボトル登録',{customer:c.name,bottle:p.name}); renderCuSide(c); loadCuInfo().then(renderCuList); }; }
 // ---------- 閉店作業（入出金の登録 → ボトル残量 → レジ金合わせ → 月間一覧） ----------
 const DENOMS=[[10000,'1万円札'],[5000,'5千円札'],[2000,'2千円札'],[1000,'千円札'],[500,'500円玉'],[100,'100円玉'],[50,'50円玉'],[10,'10円玉'],[5,'5円玉'],[1,'1円玉']];
 let clDate=null, clCounts={}, clDeposit=0, clOpening=0, clMonth=null, clCtx=null;
@@ -787,7 +769,7 @@ async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=
   <div class="list">${moves.map(m=>`<div class="item"><span class="badge ${m.kind==='out'?'gray':''}">${m.kind==='out'?'出金':'入金'}</span><span class="n">${esc(m.memo||'')}</span><span class="amt">${yen(m.amount)}</span>${saved?'':`<button class="ghost sm" data-mvdel="${m.id}">削除</button>`}</div>`).join('')||'<div class="muted">登録なし</div>'}
   <div class="item"><span class="badge gray">出金</span><span class="n">日払い合計 <small>${advRows.length?esc(advRows.map(a=>nm(a.staff_id)+' '+a.amount.toLocaleString()).join('、')):'なし'}（在籍キャストの出勤リストで入力）</small></span><span class="amt">${yen(advSum)}</span></div></div>
   ${H('② ボトル残量（今日ご来店のお客様のキープボトル）')}
-  <div class="list">${bottles.map(b=>`<div class="item"><span class="n">${esc(b.name)}<br><small>${esc(cn(b.customer_id))} 様</small></span><select data-clrem="${b.id}">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select></div>`).join('')||'<div class="muted">該当なし（伝票に「＋お客様」で登録された方のボトルが出ます）</div>'}</div>
+  <div class="list">${bottles.map(b=>`<div class="item"><span class="n">${esc(b.name)}<br><small>${esc(cn(b.customer_id))} 様${esc(knLabel(b,cn(b.customer_id)))}</small></span><select data-clrem="${b.id}">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select></div>`).join('')||'<div class="muted">該当なし（伝票に「＋お客様」で登録された方のボトルが出ます）</div>'}</div>
   ${H('③ レジ金合わせ')}
   <div style="display:grid;grid-template-columns:minmax(260px,1fr) minmax(280px,1fr);gap:18px;align-items:start">
     <div><div style="display:grid;grid-template-columns:1fr 90px 1fr;gap:6px;align-items:center"><b>金種</b><b style="text-align:center">枚数</b><b style="text-align:right">金額</b>${DENOMS.map(([v,n])=>`<span>${n}</span><input type="number" inputmode="numeric" min="0" data-den="${v}" value="${cnt[v]??''}" ${saved?'disabled':''} style="text-align:right"><span class="right" data-denamt="${v}"></span>`).join('')}<b>合計金額</b><span></span><b class="right" id="clCounted"></b></div></div>
