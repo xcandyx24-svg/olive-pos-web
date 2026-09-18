@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.23 -->
+<title>OLIVE 会計</title><!-- v10.24 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -187,7 +187,6 @@
     <button class="pillbtn brown" id="cTabAll">全員</button>
     <button class="pillbtn brown" id="cSort">並べ替え</button>
     <button class="pillbtn brown" id="cNew">新規登録</button>
-    <button class="pillbtn gray" id="cShowInactive">削除表示</button>
     <input id="cSearch" placeholder="キャスト検索" style="flex:1;font-size:18px">
     
   </div>
@@ -365,7 +364,6 @@ $('navCasts').onclick=()=>{ renderCasts(); show('v-casts'); };
 $('cTabToday').onclick=()=>{ cMode='today'; renderCasts(); };
 $('cTabAll').onclick=()=>{ cMode='all'; renderCasts(); };
 $('cSort').onclick=()=>{ cSorting=!cSorting; renderCasts(); };
-$('cShowInactive').onclick=()=>{ cDeleteMode=!cDeleteMode; renderCasts(); };
 $('cSearch').oninput=()=>renderCasts();
 $('cNew').onclick=async()=>{ const { data, error } = await sb.from('staff').insert({store_id:store.id,display_name:'新しいキャスト',kind:'cast',sort_order:(Math.max(0,...staff.map(s=>s.sort_order||0))+1)}).select().single(); if(error){toast(error.message);return;} await logOp('キャスト新規登録',{name:data.display_name},null,true); await loadStaffAll(); cSel=data; cMode='all'; renderCasts(); };
 let staffAll=[];
@@ -377,7 +375,7 @@ async function renderCasts(){ await expireTrials(); await loadStaffAll(); const 
   let adv={}, advX={}, advN={}, tev={}, clDone=false; if(cMode==='today'){ const bd=businessDate(); const [ra,re,rc]=await Promise.all([ sb.from('daily_advances').select('*').eq('business_date',bd), sb.from('attendance_events').select('staff_id,event_type,event_at').eq('business_date',bd).in('event_type',['clock_in','clock_out','douhan']).order('event_at'), sb.from('register_closings').select('id').eq('store_id',store.id).eq('business_date',bd) ]); (ra.data||[]).forEach(a=>{ adv[a.staff_id]=a.amount; advX[a.staff_id]=a.extra||0; advN[a.staff_id]=a.calc_note||''; }); (re.data||[]).forEach(e=>{ const t=tev[e.staff_id]||(tev[e.staff_id]={}); if(e.event_type==='clock_out') t.out=e.event_at; else if(!t.in) t.in=e.event_at; }); clDone=!!(rc.data||[]).length; }
   const tcalc={}; if(cMode==='today'){ for(const s of staffAll.filter(x=>x.is_trial&&present.has(x.id))){ const c=trialCalc(s,tev[s.id]||{},advX[s.id]||0); tcalc[s.id]=c; if(c.ready&&!clDone&&(adv[s.id]!==c.pay||advN[s.id]!==c.note)){ const r=await sb.from('daily_advances').upsert({store_id:store.id,staff_id:s.id,business_date:businessDate(),amount:c.pay,extra:advX[s.id]||0,calc_note:c.note},{onConflict:'staff_id,business_date'}); if(r.error){ toast('日払い保存エラー：'+r.error.message); } else { adv[s.id]=c.pay; await logOp('日払い（体験・自動計算）',{name:s.display_name,amount:c.pay,calc:c.note},null,true); } } } }
   let rows=staffAll.filter(s=>cDeleteMode?true:s.is_active); if(cMode==='today') rows=rows.filter(s=>present.has(s.id)); if(q) rows=rows.filter(s=>(s.display_name+(s.real_name||'')).includes(q));
-  $('cTodayN').textContent=present.size; $('cTabToday').classList.toggle('on',cMode==='today'); $('cTabAll').classList.toggle('on',cMode==='all'); $('cSort').textContent=cSorting?'完了':'並べ替え'; $('cShowInactive').classList.toggle('on',cDeleteMode); $('cShowInactive').textContent=cDeleteMode?'削除終了':'削除表示';
+  $('cTodayN').textContent=present.size; $('cTabToday').classList.toggle('on',cMode==='today'); $('cTabAll').classList.toggle('on',cMode==='all'); $('cSort').textContent=cSorting?'完了':'並べ替え';
   $('cList').innerHTML=rows.map(s=>`<div class="rrow ${s.is_active?'':'inactive'}" data-id="${s.id}">${cSorting?'<span class="hd">≡</span>':''}<span class="nm">${s.kind==='hall'?'★【雇用】':''}${esc(s.display_name)}${s.real_name?' <small class="muted">'+esc(s.real_name)+'</small>':''}${s.is_trial?' <span class="badge warnb">体験</span>':''}${present.has(s.id)?' <span class="badge k">出勤</span>':''}${s.is_active?'':' <span class="badge" style="background:#999">削除済</span>'}</span>${cMode==='today'?(s.is_trial?`<span style="display:flex;align-items:center;gap:8px;flex:1 1 100%;justify-content:flex-end;white-space:nowrap;order:2"><span class="muted" style="font-size:14px">加算</span><input type="number" inputmode="numeric" data-extra="${s.id}" value="${advX[s.id]||''}" placeholder="0" ${clDone?'disabled':''} style="width:100px;font-size:16px;text-align:right"><span class="muted" style="font-size:14px">日払い</span><b style="min-width:96px;text-align:right;font-size:18px">${yen(tcalc[s.id]?.ready?tcalc[s.id].pay:(adv[s.id]||0))}</b></span>`:`<span class="muted" style="font-size:14px">日払い</span><input type="number" class="adv" data-adv="${s.id}" value="${adv[s.id]??''}" placeholder="0" style="width:110px;font-size:18px;text-align:right">`):''}${cDeleteMode?(s.is_active?`<button class="sm" style="background:#c0392b;color:#fff" data-del="${s.id}">削除</button>`:`<button class="sm" data-restore="${s.id}">戻す</button>`):`<button class="primary sm" data-edit="${s.id}">編集</button>`}${cMode==='today'&&s.is_trial?`<div class="muted" style="flex:1 1 100%;font-size:13px;text-align:right;order:3">${esc(tcalc[s.id]?.note||'')}${clDone?'（精算済みのため更新しません）':''}</div>`:''}</div>`).join('')||'<div class="muted">該当なし</div>';
   $('cList').querySelectorAll('.rrow').forEach(r=>{ if(r.querySelector('[data-extra]')) r.style.flexWrap='wrap'; });
   $('cList').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{ cSel=staffAll.find(s=>s.id===b.dataset.edit); renderCastForm(); });
@@ -392,7 +390,8 @@ function renderCastForm(){ const f=$('cForm'); const s=cSel; if(!s){ f.innerHTML
     <label>区分<select data-k="kind"><option value="cast" ${s.kind==='cast'&&!s.is_trial?'selected':''}>キャスト</option><option value="hall" ${s.kind==='hall'?'selected':''}>黒服（雇用）</option><option value="trial" ${s.kind!=='hall'&&s.is_trial?'selected':''}>体験</option></select></label>
     <div id="cTrialBox" style="display:none"><label>体験の給与<select data-k="trial_pay_type"><option value="hourly" ${s.trial_pay_type!=='daily'?'selected':''}>時給</option><option value="daily" ${s.trial_pay_type==='daily'?'selected':''}>日給</option></select></label><label>金額（円）<input type="number" inputmode="numeric" data-k="trial_pay_amount" value="${s.trial_pay_amount||''}"></label><div class="muted" style="font-size:13px">出勤リストで日払いを自動計算します（源泉 ${Number(settings?.trial_withholding_rate??10)}% を引いた全額）</div></div>
     <label class="sw"><input type="checkbox" data-k="is_active" ${s.is_active?'checked':''}>在籍中（外すと一覧・タイムカードから消える）</label>
-    <div class="bar"><button class="primary" id="cSave">保存</button></div>`;
+    <div class="bar"><button class="primary" id="cSave">保存</button><button class="ghost sm" id="cDel" style="color:var(--muted)">削除</button></div>`;
+  $('cDel').onclick=async()=>{ if(!await uiConfirm(`${s.display_name} を削除しますか？（在籍から外します。過去のデータは残ります）`))return; const { error } = await sb.from('staff').update({is_active:false}).eq('id',s.id); if(!error) await logOp('キャスト削除',{name:s.display_name},null,true); toast(error?error.message:'削除しました'); if(!error){ cSel=null; renderCasts(); } };
   const kSel=f.querySelector('[data-k=kind]'); const tb=()=>{ $('cTrialBox').style.display=kSel.value==='trial'?'':'none'; }; kSel.onchange=tb; tb();
   $('cSave').onclick=async()=>{ const kv=kSel.value; const o={display_name:f.querySelector('[data-k=display_name]').value.trim(),real_name:f.querySelector('[data-k=real_name]').value.trim(),kind:kv==='hall'?'hall':'cast',is_trial:kv==='trial',is_active:f.querySelector('[data-k=is_active]').checked}; if(kv==='trial'){ o.trial_pay_type=f.querySelector('[data-k=trial_pay_type]').value; o.trial_pay_amount=parseInt(f.querySelector('[data-k=trial_pay_amount]').value||'0',10)||0; if(o.trial_pay_amount<=0){ toast('体験の時給または日給の金額を入力してください'); return; } }
     const { error } = await sb.from('staff').update(o).eq('id',s.id); if(!error){ const ch=Object.keys(o).filter(k=>(s[k]??'')!==(o[k]??'')); if(ch.length) await logOp('キャスト情報変更',{name:s.display_name,fields:ch.map(k=>`${k}:${s[k]??''}→${o[k]??''}`)},null,true); } toast(error?error.message:'保存しました'); if(!error){ cSel=null; renderCasts(); } }; }
