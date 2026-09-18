@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.30 -->
+<title>OLIVE 会計</title><!-- v10.31 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -289,7 +289,7 @@ let trialSweepDay=null;
 async function expireTrials(){ const bd=businessDate(); if(trialSweepDay===bd||!store) return; try{ const r=await sb.from('staff').select('id,display_name,created_at').eq('is_trial',true).eq('is_active',true); if(r.error) return; const old=(r.data||[]).filter(x=>businessDate(new Date(x.created_at))<bd); const done=[]; for(const x of old){ const u=await sb.from('staff').update({is_active:false}).eq('id',x.id); if(!u.error){ done.push(x.id); await logOp('体験キャストの自動削除',{name:x.display_name,registered:businessDate(new Date(x.created_at))},null,true); } } if(done.length) staff=staff.filter(z=>!done.includes(z.id)); trialSweepDay=bd; }catch(e){ console.warn('expireTrials',e); } }
 
 // ---------- hall ----------
-async function loadHall(){ billFrom='hall';
+async function loadHall(){
   const { data, error } = await sb.from('bills').select('*, bill_casts(staff_id,role,is_kakari), bill_extensions(minutes,unit_price,qty,is_auto), bill_tags(id,kind,returned_at), bill_customers(customer_id)').eq('status','open');
   if (error) { toast(error.message); return; }
   openBills = data||[]; await autoExtend(); await loadOki();
@@ -347,15 +347,15 @@ function renderHall(totals){ const now=new Date(); const cnames=b=>(b.bill_custo
     else { const end=billEnd(b), remain=Math.round((end-now)/60000); el.className='tbl busy'+(remain<10?' over':'');
       const k=(b.bill_casts||[]).find(c=>c.is_kakari); const kn=k?staff.find(s=>s.id===k.staff_id)?.display_name:'';
       el.innerHTML=`<div class="name">${esc(t.name)}${t.vip_set_fee>0?' <span class="badge warnb">VIP</span>':''}</div>${cnames(b)?`<div class="cust">${bdayLines(b).length?'🎂 ':''}${esc(cnames(b))} 様</div>`:''}<div class="row"><span>👤 ${b.guest_count}</span><span>残り ${remain<0?'-':''}${Math.abs(remain).toLocaleString()}分</span></div><div class="pill">${hm(b.set_start)}〜${hm(end)}</div><div class="total">${yen(totals[b.id]?.amount_due)}</div><div class="casts">${kn?'☑ '+esc(kn):''}</div>${(()=>{const n=(b.bill_tags||[]).filter(t=>!t.returned_at).length;return n?`<div class="tags">🏷 お預かり ${n}</div>`:''})()}`;
-      el.onclick=()=>openBill(b.id); }
+      el.onclick=()=>{ billFrom='hall'; openBill(b.id); }; }
     $('tables').appendChild(el); }
   for (const b of okiBills) { const el=document.createElement('div'); const unpaid=(b.payments||[]).filter(p=>p.method==='oki'&&!p.received_at).reduce((a,p)=>a+p.amount,0);
     const k=(b.bill_casts||[]).find(c=>c.is_kakari); const kn=k?staff.find(s=>s.id===k.staff_id)?.display_name:'';
     const ml='置き'; el.className='tbl busy oki'; el.innerHTML=`<div class="name">未入金（${ml}）</div><div class="row"><span>👤 ${b.guest_count} ${esc(cnames(b)||b.memo||'')}</span></div><div class="row"><span>${b.business_date}</span></div><div class="total">${yen(unpaid)}</div><div class="casts">${kn?'☑ '+esc(kn):''}</div>`;
-    el.onclick=()=>openBill(b.id); $('tables').appendChild(el); }
+    el.onclick=()=>{ billFrom='hall'; openBill(b.id); }; $('tables').appendChild(el); }
   updateCastBadge(); }
 async function updateCastBadge(){ const { data } = await sb.from('attendance_events').select('staff_id').eq('business_date',businessDate()).in('event_type',['clock_in','douhan']); const s=new Set((data||[]).map(e=>e.staff_id)); $('bdCasts').textContent=s.size; return s; }
-$('navHall').onclick=()=>{ loadHall(); show('v-hall'); };
+$('navHall').onclick=()=>{ billFrom='hall'; loadHall(); show('v-hall'); };
 $('navOrder').onclick=()=>{ if(cur&&cur.status==='open'){ openOrder(); } else { toast('卓を選んでください'); loadHall(); show('v-hall'); } };
 
 // ---------- 在籍キャスト ----------
@@ -435,7 +435,7 @@ function renderBill(){ const b=cur, t=tables.find(x=>x.id===b.table_id);
   { let bb=$('bBday'); if(!bb){ bb=document.createElement('div'); bb.id='bBday'; $('v-bill').querySelector('.card').prepend(bb); } const ls=b.status==='void'?[]:bdayLines(b); bb.style.cssText=ls.length?'background:#fff3d6;border:2px solid #d4a017;border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:20px;font-weight:700;color:#7a4b00':'display:none'; bb.innerHTML=ls.map(esc).join('<br>'); }
   $('bTable').innerHTML=`<small class="muted" style="font-size:14px;font-weight:400">卓</small> ${esc(t?.name||'')}`; $('bGuests').textContent=b.guest_count; $('bTime').textContent=`${hm(b.set_start)}〜${hm(billEnd(b))}`;
   const mode=modes.find(m=>m.id===b.pricing_mode_id); const T0=b.totals;
-  $('bFlags').innerHTML=(t?.vip_set_fee>0?'<span class="badge warnb">VIP卓</span>':'')+(b.status!=='open'&&!isOki(b)?`<span class="badge gray">${b.status==='void'?'取消済み':'会計済み'}（変更できません）</span>`:'')+(mode&&mode.code!=='normal'?`<span class="badge warnb">${esc(mode.name)}</span>`:'')+(b.service_rate_override!=null?`<span class="badge warnb">サ料 ${b.service_rate_override}%</span>`:'')+((b.bill_tags||[]).filter(t=>!t.returned_at).length?`<span class="badge tag">🏷 お預かり ${(b.bill_tags||[]).filter(t=>!t.returned_at).length}</span>`:'');
+  $('bFlags').innerHTML=(t?.vip_set_fee>0?'<span class="badge warnb">VIP卓</span>':'')+(b.status!=='open'&&!isOki(b)?`<span class="badge gray">${b.status==='void'?'取消済み':'会計済み'}</span>`:'')+(mode&&mode.code!=='normal'?`<span class="badge warnb">${esc(mode.name)}</span>`:'')+(b.service_rate_override!=null?`<span class="badge warnb">サ料 ${b.service_rate_override}%</span>`:'')+((b.bill_tags||[]).filter(t=>!t.returned_at).length?`<span class="badge tag">🏷 お預かり ${(b.bill_tags||[]).filter(t=>!t.returned_at).length}</span>`:'');
   $('bTags').innerHTML=(b.bill_tags||[]).filter(t=>!t.returned_at).map(t=>`<div class="item"><span class="n">🏷 ${TAGK[t.kind]||esc(t.kind)} ${t.tag_no?'#'+esc(t.tag_no):''} <small>${esc(t.memo||'')}</small></span></div>`).join('');
   $('bCust').innerHTML=(b.bill_customers||[]).map(c=>{ const cu=customers.find(x=>x.id===c.customer_id); return `<div class="item"><span class="n">${esc(cu?.name||'')}</span><button class="ghost sm" data-rmcust="${c.customer_id}">×</button></div>`; }).join('')||'<div class="muted">未登録</div>';
   $('bCust').querySelectorAll('[data-rmcust]').forEach(x=>x.onclick=async()=>{ await logOp('お客様を伝票から外す',{customer:customers.find(z=>z.id===x.dataset.rmcust)?.name}); await sb.from('bill_customers').delete().eq('bill_id',b.id).eq('customer_id',x.dataset.rmcust); openBill(b.id); });
