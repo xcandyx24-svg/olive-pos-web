@@ -183,7 +183,7 @@ async function loadStaff(){
   const todayBd = bdOf(new Date());
   for (const s of data) {
     if (s.kakari_only || s.no_timecard) continue; // 係専用（店・ママなど）と「タイムカードを打たない」人は出さない
-    if (s.is_trial && s.created_at && bdOf(new Date(s.created_at)) < todayBd) continue;
+    if (s.is_trial) continue;
     const b = document.createElement('button');
     b.className = 'staff' + (s.kind === 'hall' ? ' hall' : '');
     b.textContent = s.display_name;
