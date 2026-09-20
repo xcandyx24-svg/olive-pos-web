@@ -96,6 +96,10 @@
   .rrow{display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border:1px solid var(--line);border-radius:12px;font-size:20px;user-select:none;-webkit-user-select:none}
   .rrow .nm{flex:1}.rrow .hd{color:#aaa;font-size:24px;padding:0 6px;touch-action:none}.rrow.drag{opacity:.4}.rrow.inactive{opacity:.5}
   .pillbtn{border-radius:999px;padding:12px 22px;font-weight:700}.pillbtn.brown{background:#7a5a2a;color:#fff}.pillbtn.gray{background:#ccc;color:#666}
+#splitModal .box{width:min(980px,96vw);max-height:94vh}
+#splitTable .sp2{width:28px;border:none}
+#splitTable td{padding:4px 6px}
+#splitTable select{padding-top:6px;padding-bottom:6px}
 </style>
 </head>
 <body>
@@ -738,7 +742,7 @@ function openSplit(item){ splitItem=item; const base={back:item.back_amount*item
   const steps=(max,unit,v)=>{ const a=[]; for(let x=0;x<=max;x+=unit) a.push(x); if(max%unit) a.push(max); if(v&&!a.includes(v)) a.push(v); return a.sort((p,q)=>p-q); };
   const sel=(f,sid,max,unit,v,fmt)=>`<select class="n" data-f="${f}" data-s="${sid}" style="min-width:120px">${steps(max,unit,v).map(x=>`<option value="${x}" ${x===(v||0)?'selected':''}>${fmt(x)}</option>`).join('')}</select>`;
   const onBill=new Set(((cur&&cur.bill_casts)||[]).map(c=>c.staff_id)); const rk=s=>cur_[s.id]?0:onBill.has(s.id)?1:(present&&present.has(s.id))?2:3; const rows=staff.filter(s=>s.kind==='cast').map((s,i)=>({s,i})).sort((a,b)=>rk(a.s)-rk(b.s)||a.i-b.i).map(x=>x.s);
-  $('splitTable').innerHTML=`<tr><th></th><th>キャスト</th><th>バック</th>${base.pts?'<th>ポイント</th>':''}</tr>`+rows.map(s=>{ const v=cur_[s.id]; return `<tr><td><input type="checkbox" data-s="${s.id}" ${v?'checked':''}></td><td>${esc(s.display_name)}</td><td>${sel('back',s.id,base.back,1000,v?v.back_amount:0,x=>yen(x))}</td>${base.pts?`<td>${sel('pts',s.id,base.pts,10,v?Number(v.back_points):0,x=>x)}</td>`:''}</tr>`; }).join('');
+  const spHd=`<th></th><th>キャスト</th><th>バック</th>${base.pts?'<th>ポイント</th>':''}`; const spCell=s=>{ if(!s) return `<td colspan="${base.pts?4:3}"></td>`; const v=cur_[s.id]; return `<td><input type="checkbox" data-s="${s.id}" ${v?'checked':''}></td><td>${esc(s.display_name)}</td><td>${sel('back',s.id,base.back,1000,v?v.back_amount:0,x=>yen(x))}</td>${base.pts?`<td>${sel('pts',s.id,base.pts,10,v?Number(v.back_points):0,x=>x)}</td>`:''}`; }; const spHalf=Math.ceil(rows.length/2); $('splitTable').innerHTML=`<tr>${spHd}<th class="sp2"></th>${spHd}</tr>`+rows.slice(0,spHalf).map((s,i)=>`<tr>${spCell(s)}<td class="sp2"></td>${spCell(rows[i+spHalf])}</tr>`).join('');
   $('splitTable').querySelectorAll('select').forEach(x=>x.onchange=()=>{ const sid=x.dataset.s; const any=[...$('splitTable').querySelectorAll(`select[data-s="${sid}"]`)].some(z=>Number(z.value)>0); $('splitTable').querySelector(`input[type=checkbox][data-s="${sid}"]`).checked=any; });
   $('splitModal').dataset.base=JSON.stringify(base); $('splitModal').classList.add('on'); }
 $('splitEven').onclick=()=>{ const base=JSON.parse($('splitModal').dataset.base); const ch=[...$('splitTable').querySelectorAll('input[type=checkbox]:checked')].map(c=>c.dataset.s); if(!ch.length){toast('キャストにチェックを入れてください');return;}
