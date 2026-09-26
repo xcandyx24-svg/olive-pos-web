@@ -885,20 +885,26 @@ async function renderCuSide(c){ $('cuSide').innerHTML='<div class="muted">読み
   $('cuSide').querySelectorAll('[data-exp]').forEach(x=>x.onclick=async()=>{ const b=bottles.find(z=>z.id===x.dataset.exp); if(await expireBottle(b,c.name)){ renderCuSide(c); loadCuInfo().then(renderCuList); } });
   $('cuSide').querySelectorAll('[data-unexp]').forEach(x=>x.onclick=async()=>{ const b=bottles.find(z=>z.id===x.dataset.unexp); if(await unexpireBottle(b,c.name)){ renderCuSide(c); loadCuInfo().then(renderCuList); } });
   if($('cuBtAdd')) $('cuBtAdd').onclick=async()=>{ const p=products.find(z=>z.id===$('cuBtSel').value); if(!p){toast('ボトルを選んでください');return;} const { error } = await sb.from('customer_bottles').insert({store_id:store.id,customer_id:c.id,product_id:p.id,name:p.name,remaining:10,kakari_staff_id:c.kakari_staff_id||null,keep_name:c.name}); if(error){toast(error.message.includes('keep_name')?'SQL 020 が未適用です：'+error.message:error.message);return;} await logOp('ボトル登録',{customer:c.name,bottle:p.name},null,true); renderCuSide(c); loadCuInfo().then(renderCuList); }; }
-// ---------- 閉店作業（入出金の登録 → ボトル残量 → 顧客メモの更新申請の確認（顧客ウェブサイトから届いた分） → レジ金合わせ → 月間一覧） ----------
+// ---------- 閉店作業（入出金の登録 → ボトル残量 → 顧客メモの更新申請の確認（顧客ウェブサイトから届いた分） → 今日出たお酒・ドリンク → レジ金合わせ → 月間一覧） ----------
 const DENOMS=[[10000,'1万円札'],[5000,'5千円札'],[2000,'2千円札'],[1000,'千円札'],[500,'500円玉'],[100,'100円玉'],[50,'50円玉'],[10,'10円玉'],[5,'5円玉'],[1,'1円玉']];
 let clDate=null, clCounts={}, clDeposit=0, clOpening=0, clMonth=null, clCtx=null, clReqAuthor='';
 function clRange(d){ const a=new Date(`${d}T08:00:00`); return [a.toISOString(), new Date(a.getTime()+24*3600*1000).toISOString()]; }
+// v10.43：閉店作業の④ 今日出たお酒・ドリンク（発注用）。取消の伝票・取消した注文は除く。フード・その他（h.c・b.c・立替金など）は出さない
+function clOrderHtml(od){ if(od.error) return `<div class="muted">${esc(od.error.message)}</div>`; const skip=new Set(categories.filter(c=>['フード','その他'].includes(c.name)).map(c=>c.id)); const agg=new Map();
+  (od.data||[]).forEach(i=>{ const cid=i.category_id||products.find(p=>p.id===i.product_id)?.category_id||null; if(skip.has(cid)) return; const k=i.product_id||i.name; const a=agg.get(k)||{name:i.name,cid,qty:0}; a.qty+=Number(i.qty)||0; agg.set(k,a); });
+  const items=[...agg.values()].filter(a=>a.qty>0); if(!items.length) return '<div class="muted">なし</div>';
+  const cats=[...categories.map(c=>c.id),null]; return `<div class="list">${cats.map(cid=>{ const xs=items.filter(a=>(a.cid||null)===cid).sort((a,b)=>b.qty-a.qty); if(!xs.length) return ''; const cn=categories.find(c=>c.id===cid)?.name||'未分類'; return `<div class="item" style="flex-wrap:wrap;gap:4px 14px"><b style="flex:0 0 auto">${esc(cn)}</b>${xs.map(a=>`<span>${esc(a.name)} ×${a.qty}</span>`).join('')}</div>`; }).join('')}</div>`; }
 const clNum=v=>{ const n=parseInt(String(v??'').replace(/[^0-9]/g,''),10); return isNaN(n)?0:n; };
 async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=today; } if(!clMonth) clMonth=clDate.slice(0,7); const d=clDate; const box=$('setList'); box.innerHTML='<div class="muted">読み込み中…</div>'; const [from,to]=clRange(d);
-  const [mv,adv,pay,cls,prev,bc,rq]=await Promise.all([
+  const [mv,adv,pay,cls,prev,bc,rq,od]=await Promise.all([
     sb.from('cash_movements').select('*').eq('store_id',store.id).eq('business_date',d).order('created_at'),
     sb.from('daily_advances').select('staff_id,amount').eq('store_id',store.id).eq('business_date',d),
     sb.from('payments').select('amount,bills!inner(status,store_id)').eq('method','cash').gte('paid_at',from).lt('paid_at',to),
     sb.from('register_closings').select('*').eq('store_id',store.id).eq('business_date',d).maybeSingle(),
     sb.from('register_closings').select('business_date,next_float').eq('store_id',store.id).lt('business_date',d).order('business_date',{ascending:false}).limit(1),
     sb.from('bill_customers').select('customer_id,bills!inner(business_date,status,store_id)').eq('bills.business_date',d),
-    sb.from('customer_note_requests').select('*').eq('store_id',store.id).eq('status','pending').order('created_at') ]);
+    sb.from('customer_note_requests').select('*').eq('store_id',store.id).eq('status','pending').order('created_at'),
+    sb.from('bill_items').select('product_id,name,qty,category_id,bills!inner(business_date,status,store_id)').eq('bills.business_date',d).eq('bills.store_id',store.id).neq('bills.status','void').eq('is_void',false) ]);
   if(setCur!=='closing') return;
   if(mv.error||cls.error){ box.innerHTML=`<div class="muted">SQL 018 が未適用の可能性があります：${esc((mv.error||cls.error).message)}</div>`; return; }
   const moves=mv.data||[]; const outSum=moves.filter(m=>m.kind==='out').reduce((a,m)=>a+m.amount,0), inSum=moves.filter(m=>m.kind==='in').reduce((a,m)=>a+m.amount,0);
@@ -922,7 +928,9 @@ async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=
   <div class="list">${bottles.map(b=>`<div class="item"><span class="n">${esc(b.name)}<br><small>${esc(cn(b.customer_id))} 様${esc(knLabel(b,cn(b.customer_id)))}</small></span><select data-clrem="${b.id}">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select></div>`).join('')||'<div class="muted">該当なし（伝票に「＋お客様」で登録された方のボトルが出ます）</div>'}</div>
   ${H('③ 顧客メモの更新申請')}
   ${rq.error?`<div class="muted">${esc(rq.error.message)}</div>`:`<div class="list">${(rq.data||[]).map(r=>`<div class="item" style="flex-wrap:wrap;gap:6px"><span class="n" style="flex:1 1 100%">${esc(cn(r.customer_id))} 様　<small>${esc(reqMd(r.business_date))}　${esc(nm(r.author_staff_id))}</small><br><span style="white-space:pre-wrap">${esc(r.body)}</span></span><button class="ok sm" data-clrqok="${r.id}">メモに追記</button><button class="ghost sm" data-clrqno="${r.id}">却下</button></div>`).join('')||'<div class="muted">申請なし</div>'}</div>`}
-  ${H('④ レジ金合わせ')}
+  ${H('④ 今日出たお酒・ドリンク（発注用）')}
+  ${clOrderHtml(od)}
+  ${H('⑤ レジ金合わせ')}
   <div style="display:grid;grid-template-columns:minmax(260px,1fr) minmax(280px,1fr);gap:18px;align-items:start">
     <div><div style="display:grid;grid-template-columns:1fr 90px 1fr;gap:6px;align-items:center"><b>金種</b><b style="text-align:center">枚数</b><b style="text-align:right">金額</b>${DENOMS.map(([v,n])=>`<span>${n}</span><input type="number" inputmode="numeric" min="0" data-den="${v}" value="${cnt[v]??''}" ${saved?'disabled':''} style="text-align:right"><span class="right" data-denamt="${v}"></span>`).join('')}<b>合計金額</b><span></span><b class="right" id="clCounted"></b></div></div>
     <div class="totals" style="display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center">
