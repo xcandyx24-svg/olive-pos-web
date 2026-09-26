@@ -911,14 +911,14 @@ async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=
   const advRows=(adv.data||[]).filter(a=>a.amount>0); const advSum=advRows.reduce((a,x)=>a+x.amount,0);
   const cashSales=(pay.data||[]).filter(p=>p.bills&&p.bills.store_id===store.id&&p.bills.status!=='void').reduce((a,p)=>a+(p.amount||0),0);
   const saved=cls.data||null; const prevRow=(prev.data||[])[0]||null; const hasPrev=!!prevRow;
-  clCtx={d,outSum,inSum,advSum,cashSales,saved,hasPrev,prevFloat:prevRow?prevRow.next_float:0};
+  clCtx={d,outSum,inSum,advSum,cashSales,saved,hasPrev,prevFloat:prevRow?prevRow.next_float:0}; const clIdle=!saved&&d<today&&!outSum&&!inSum&&!advSum&&!cashSales; // v10.43：休みなどで動きがない過去の日は「精算済み（変動なし自動繰越）」
   const custIds=[...new Set((bc.data||[]).filter(x=>x.bills&&x.bills.store_id===store.id&&x.bills.status!=='void').map(x=>x.customer_id))];
   let bottles=[]; if(custIds.length){ const bt=await sb.from('customer_bottles').select('*').in('customer_id',custIds).eq('is_finished',false); bottles=(bt.data||[]).filter(b=>!b.expired_on); }
   if(setCur!=='closing') return;
   const nm=id=>staffAll.find(x=>x.id===id)?.display_name||staff.find(x=>x.id===id)?.display_name||''; const cn=id=>customers.find(c=>c.id===id)?.name||'';
   const H=t=>`<h2 style="margin:18px 0 8px">${t}</h2>`;
   const cnt=saved?(saved.counts||{}):clCounts;
-  box.innerHTML=`<div id="clWarn"></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:18px">閉店作業</b><input type="date" id="clDateIn" value="${d}"><span class="badge ${saved?'k':'warnb'}">${saved?'精算済み':'未精算'}</span></div>
+  box.innerHTML=`<div id="clWarn"></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:18px">閉店作業</b><input type="date" id="clDateIn" value="${d}"><span class="badge ${saved||clIdle?'k':'warnb'}">${saved?'精算済み':clIdle?'精算済み（変動なし自動繰越）':'未精算'}</span></div>
   ${H('① 入出金の登録（経費の現金払い・立替など）')}
   ${saved?'<div class="muted" style="margin-bottom:6px">精算済みのため変更できません（直す時は下の「この精算を削除」から）</div>':`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select id="clKind"><option value="out">出金</option><option value="in">入金</option></select><input id="clAmt" type="number" inputmode="numeric" placeholder="金額" style="width:130px;text-align:right"><select id="clMemoSel"><option value="領収書精算">領収書精算</option><option value="支払い">支払い</option><option value="__other">その他</option></select><input id="clMemo" placeholder="内容を入力" style="flex:1;min-width:160px;display:none"><button class="ok sm" id="clAdd">追加</button></div>`}
   <div class="list">${moves.map(m=>`<div class="item"><span class="badge ${m.kind==='out'?'gray':''}">${m.kind==='out'?'出金':'入金'}</span><span class="n">${esc(m.memo||'')}</span><span class="amt">${yen(m.amount)}</span>${saved?'':`<button class="ghost sm" data-mvdel="${m.id}">削除</button>`}</div>`).join('')||'<div class="muted">登録なし</div>'}
@@ -980,7 +980,7 @@ async function clRenderWarn(d,after){ const el=$('clWarn'); if(!el) return; cons
   const md=x=>`${+x.slice(5,7)}/${+x.slice(8,10)}`; el.innerHTML=`<div class="alert">${days.map(x=>`<a href="#" data-clw="${x}" style="color:inherit">${md(x)}</a>`).join('・')} が未精算です</div>`;
   el.querySelectorAll('[data-clw]').forEach(a=>a.onclick=e=>{ e.preventDefault(); clDate=a.dataset.clw; clCounts={}; clDeposit=0; renderClosing(); }); }
 async function clRenderMonth(){ const el=$('clMonthBox'); if(!el) return; const [y,m]=clMonth.split('-').map(Number); const last=new Date(y,m,0).getDate(); const d1=`${clMonth}-01`, dN=`${clMonth}-${String(last).padStart(2,'0')}`; const nx=m===12?`${y+1}-01-01`:`${y}-${String(m+1).padStart(2,'0')}-01`;
-  // v10.43：動きがない日も含めて全日を表示。精算記録がない日は、前日から引き継いだ釣銭・現金売上・入出金（日払い含む）から計算して出す。動きがない日はレジ内現金＝理論値・過不足0円・預金0円、動きがあったのに精算していない日は「未精算」
+  // v10.43：動きがない日も含めて全日を表示。精算記録がない日は、前日から引き継いだ釣銭・現金売上・入出金（日払い含む）から計算して出す。動きがない過去の日はレジ内現金＝理論値・過不足0円・預金0円で「精算済み（変動なし自動繰越）」、動きがあったのに精算していない日は「未精算」
   const [r,pv,mv,adv,pay]=await Promise.all([ sb.from('register_closings').select('*').eq('store_id',store.id).gte('business_date',d1).lte('business_date',dN),
     sb.from('register_closings').select('next_float').eq('store_id',store.id).lt('business_date',d1).order('business_date',{ascending:false}).limit(1),
     sb.from('cash_movements').select('business_date,kind,amount').eq('store_id',store.id).gte('business_date',d1).lte('business_date',dN),
@@ -993,11 +993,11 @@ async function clRenderMonth(){ const el=$('clMonthBox'); if(!el) return; const 
   const W=['日','月','火','水','木','金','土']; const today=businessDate(); const td='style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap"'; const C=v=>`<td ${td}>${v}</td>`;
   let carry=Number((pv.data||[])[0]?.next_float)||0; const rows=[];
   for(let i=1;i<=last;i++){ const dd=`${clMonth}-${String(i).padStart(2,'0')}`; const dl=`${dd.slice(5).replace('-','/')}（${W[new Date(dd+'T00:00:00').getDay()]}）`; const x=byD[dd];
-    if(x){ rows.push(`<tr data-cld="${dd}" style="cursor:pointer">${C(dl)}${C(yen(x.opening_float))}${C(yen(x.cash_sales))}${C(yen(x.cash_in))}${C(yen(x.cash_out))}${C(yen(x.expected))}${C(yen(x.counted))}${C((x.diff>0?'+':'')+yen(x.diff))}${C(yen(x.deposit))}</tr>`); carry=Number(x.next_float??(x.counted-x.deposit))||0; continue; }
-    if(dd>today){ rows.push(`<tr style="color:var(--muted)">${C(dl)}${C('').repeat(8)}</tr>`); continue; }
+    if(x){ rows.push(`<tr data-cld="${dd}" style="cursor:pointer">${C(dl)}${C(yen(x.opening_float))}${C(yen(x.cash_sales))}${C(yen(x.cash_in))}${C(yen(x.cash_out))}${C(yen(x.expected))}${C(yen(x.counted))}${C((x.diff>0?'+':'')+yen(x.diff))}${C(yen(x.deposit))}${C('精算済み')}</tr>`); carry=Number(x.next_float??(x.counted-x.deposit))||0; continue; }
+    if(dd>today){ rows.push(`<tr style="color:var(--muted)">${C(dl)}${C('').repeat(9)}</tr>`); continue; }
     const t=sum[dd]||{sales:0,cin:0,cout:0}; const exp=carry+t.sales+t.cin-t.cout; const idle=!t.sales&&!t.cin&&!t.cout;
-    rows.push(`<tr data-cld="${dd}" style="cursor:pointer;color:var(--muted)">${C(dl)}${C(yen(carry))}${C(yen(t.sales))}${C(yen(t.cin))}${C(yen(t.cout))}${C(yen(exp))}${idle?C(yen(exp))+C(yen(0))+C(yen(0)):`<td ${td}><span style="color:#c0392b">未精算</span></td>`+C('')+C('')}</tr>`); carry=exp; }
-  el.innerHTML=`<table style="border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums"><tr>${['日付','本日釣銭','現金売上','入金合計','出金合計','理論値','レジ内現金','過不足','預金'].map(h=>`<th ${td}>${h}</th>`).join('')}</tr>${rows.join('')}</table>`;
+    rows.push(`<tr data-cld="${dd}" style="cursor:pointer;color:var(--muted)">${C(dl)}${C(yen(carry))}${C(yen(t.sales))}${C(yen(t.cin))}${C(yen(t.cout))}${C(yen(exp))}${idle?C(yen(exp))+C(yen(0))+C(yen(0))+C(dd<today?'精算済み（変動なし自動繰越）':''):C('')+C('')+C('')+`<td ${td}><span style="color:#c0392b">未精算</span></td>`}</tr>`); carry=exp; }
+  el.innerHTML=`<table style="border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums"><tr>${['日付','本日釣銭','現金売上','入金合計','出金合計','理論値','レジ内現金','過不足','預金','状態'].map(h=>`<th ${td}>${h}</th>`).join('')}</tr>${rows.join('')}</table>`;
   el.querySelectorAll('[data-cld]').forEach(t=>t.onclick=()=>{ clDate=t.dataset.cld; clCounts={}; clDeposit=0; renderClosing(); }); }
 function setRows(def){ if(def.single) return [settings]; let r=({tables,categories,products,customers})[def.key]; if(def.key==='products'&&setCatFilter) r=r.filter(p=>p.category_id===setCatFilter); return r; }
 async function renderSettings(key, keepSel){ if(key!==setCur){ setSel=null; setEditMode=false; setCatFilter=null; $('setFilter').value=''; } setCur=key; await loadMasters(); const def=SET.find(s=>s.key===key);
