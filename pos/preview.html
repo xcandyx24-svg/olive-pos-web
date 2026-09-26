@@ -935,7 +935,7 @@ async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=
       <span>翌日釣銭準備金</span><span class="right" id="clNext"></span>
     </div></div>
   <div class="bar" style="margin-top:12px">${saved?`<button class="ghost" id="clDel" style="color:var(--muted)">この精算を削除</button>`:`<button class="primary" id="clSave">精算を保存</button>`}</div>
-  ${H('月間一覧')}<div style="margin-bottom:8px"><input type="month" id="clMonthIn" value="${clMonth}"></div><div id="clMonthBox" style="overflow-x:auto"></div>`;
+  ${H('月間一覧')}<div style="margin-bottom:8px"><input type="month" id="clMonthIn" value="${clMonth}"></div><div id="clMonthBox" style="overflow-x:auto;flex-shrink:0"></div>`;
   $('clDateIn').onchange=e=>{ if(e.target.value){ clDate=e.target.value; clCounts={}; clDeposit=0; renderClosing(); } };
   $('clMonthIn').onchange=e=>{ if(e.target.value){ clMonth=e.target.value; clRenderMonth(); } };
   box.querySelectorAll('[data-den]').forEach(i=>i.oninput=()=>{ clCounts[i.dataset.den]=clNum(i.value); clRecalc(); });
