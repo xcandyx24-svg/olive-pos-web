@@ -896,7 +896,7 @@ function clOrderHtml(od){ if(od.error) return `<div class="muted">${esc(od.error
   const cats=[...categories.map(c=>c.id),null]; return `<div class="list">${cats.map(cid=>{ const xs=items.filter(a=>(a.cid||null)===cid).sort((a,b)=>b.qty-a.qty); if(!xs.length) return ''; const cn=categories.find(c=>c.id===cid)?.name||'未分類'; return `<div class="item" style="flex-wrap:wrap;gap:4px 14px"><b style="flex:0 0 auto">${esc(cn)}</b>${xs.map(a=>`<span>${esc(a.name)} ×${a.qty}</span>`).join('')}</div>`; }).join('')}</div>`; }
 const clNum=v=>{ const n=parseInt(String(v??'').replace(/[^0-9]/g,''),10); return isNaN(n)?0:n; };
 async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=today; } if(!clMonth) clMonth=clDate.slice(0,7); const d=clDate; const box=$('setList'); box.innerHTML='<div class="muted">読み込み中…</div>'; const [from,to]=clRange(d);
-  const [mv,adv,pay,cls,prev,bc,rq,od]=await Promise.all([
+  const [mv,adv,pay,cls,prev,bc,rq,od,lat]=await Promise.all([
     sb.from('cash_movements').select('*').eq('store_id',store.id).eq('business_date',d).order('created_at'),
     sb.from('daily_advances').select('staff_id,amount').eq('store_id',store.id).eq('business_date',d),
     sb.from('payments').select('amount,bills!inner(status,store_id)').eq('method','cash').gte('paid_at',from).lt('paid_at',to),
@@ -904,14 +904,17 @@ async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=
     sb.from('register_closings').select('business_date,next_float').eq('store_id',store.id).lt('business_date',d).order('business_date',{ascending:false}).limit(1),
     sb.from('bill_customers').select('customer_id,bills!inner(business_date,status,store_id)').eq('bills.business_date',d),
     sb.from('customer_note_requests').select('*').eq('store_id',store.id).eq('status','pending').order('created_at'),
-    sb.from('bill_items').select('product_id,name,qty,category_id,bills!inner(business_date,status,store_id)').eq('bills.business_date',d).eq('bills.store_id',store.id).neq('bills.status','void').eq('is_void',false) ]);
+    sb.from('bill_items').select('product_id,name,qty,category_id,bills!inner(business_date,status,store_id)').eq('bills.business_date',d).eq('bills.store_id',store.id).neq('bills.status','void').eq('is_void',false),
+    sb.from('register_closings').select('business_date').eq('store_id',store.id).gt('business_date',d).limit(1) ]);
   if(setCur!=='closing') return;
   if(mv.error||cls.error){ box.innerHTML=`<div class="muted">SQL 018 が未適用の可能性があります：${esc((mv.error||cls.error).message)}</div>`; return; }
   const moves=mv.data||[]; const outSum=moves.filter(m=>m.kind==='out').reduce((a,m)=>a+m.amount,0), inSum=moves.filter(m=>m.kind==='in').reduce((a,m)=>a+m.amount,0);
   const advRows=(adv.data||[]).filter(a=>a.amount>0); const advSum=advRows.reduce((a,x)=>a+x.amount,0);
   const cashSales=(pay.data||[]).filter(p=>p.bills&&p.bills.store_id===store.id&&p.bills.status!=='void').reduce((a,p)=>a+(p.amount||0),0);
   const saved=cls.data||null; const prevRow=(prev.data||[])[0]||null; const hasPrev=!!prevRow;
-  clCtx={d,outSum,inSum,advSum,cashSales,saved,hasPrev,prevFloat:prevRow?prevRow.next_float:0}; const clIdle=!saved&&d<today&&!outSum&&!inSum&&!advSum&&!cashSales; // v10.43：休みなどで動きがない過去の日は「精算済み（変動なし自動繰越）」
+  // v10.43：前回の精算から今日までに未精算の日があれば、その日の現金の動きも本日釣銭に含める（未精算の日のお金はレジに残っているため）。後の日の精算がある日・未来の日は保存できない
+  const gp=(!saved&&prevRow)?await clGap(prevRow.business_date,d):{net:0,days:[]}; if(setCur!=='closing'||clDate!==d) return; const later=(lat.data||[]).length>0, future=d>today;
+  clCtx={d,outSum,inSum,advSum,cashSales,saved,hasPrev,prevFloat:prevRow?prevRow.next_float+gp.net:0}; const clIdle=!saved&&d<today&&!outSum&&!inSum&&!advSum&&!cashSales; // v10.43：休みなどで動きがない過去の日は「精算済み（変動なし自動繰越）」
   const custIds=[...new Set((bc.data||[]).filter(x=>x.bills&&x.bills.store_id===store.id&&x.bills.status!=='void').map(x=>x.customer_id))];
   let bottles=[]; if(custIds.length){ const bt=await sb.from('customer_bottles').select('*').in('customer_id',custIds).eq('is_finished',false); bottles=(bt.data||[]).filter(b=>!b.expired_on); }
   if(setCur!=='closing') return;
@@ -920,7 +923,7 @@ async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=
   const cnt=saved?(saved.counts||{}):clCounts;
   box.innerHTML=`<div id="clWarn"></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:18px">閉店作業</b><input type="date" id="clDateIn" value="${d}"><span class="badge ${saved||clIdle?'k':'warnb'}">${saved?'精算済み':clIdle?'精算済み（変動なし自動繰越）':'未精算'}</span></div>
   ${H('① 入出金の登録（経費の現金払い・立替など）')}
-  ${saved?'<div class="muted" style="margin-bottom:6px">精算済みのため変更できません（直す時は下の「この精算を削除」から）</div>':`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select id="clKind"><option value="out">出金</option><option value="in">入金</option></select><input id="clAmt" type="number" inputmode="numeric" placeholder="金額" style="width:130px;text-align:right"><select id="clMemoSel"><option value="領収書精算">領収書精算</option><option value="支払い">支払い</option><option value="__other">その他</option></select><input id="clMemo" placeholder="内容を入力" style="flex:1;min-width:160px;display:none"><button class="ok sm" id="clAdd">追加</button></div>`}
+  ${saved?'<div class="muted" style="margin-bottom:6px">精算済みのため変更できません</div>':`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select id="clKind"><option value="out">出金</option><option value="in">入金</option></select><input id="clAmt" type="number" inputmode="numeric" placeholder="金額" style="width:130px;text-align:right"><select id="clMemoSel"><option value="領収書精算">領収書精算</option><option value="支払い">支払い</option><option value="__other">その他</option></select><input id="clMemo" placeholder="内容を入力" style="flex:1;min-width:160px;display:none"><button class="ok sm" id="clAdd">追加</button></div>`}
   <div class="list">${moves.map(m=>`<div class="item"><span class="badge ${m.kind==='out'?'gray':''}">${m.kind==='out'?'出金':'入金'}</span><span class="n">${esc(m.memo||'')}</span><span class="amt">${yen(m.amount)}</span>${saved?'':`<button class="ghost sm" data-mvdel="${m.id}">削除</button>`}</div>`).join('')||'<div class="muted">登録なし</div>'}
   <div class="item"><span class="badge gray">出金</span><span class="n">日払い合計 <small>${advRows.length?esc(advRows.map(a=>nm(a.staff_id)+' '+a.amount.toLocaleString()).join('、')):'なし'}（在籍キャストの出勤リストで入力）</small></span><span class="amt">${yen(advSum)}</span></div></div>
   <div class="bar" style="margin-top:10px"><button class="ghost" id="clMail">✉ 領収書をメールで送る</button></div>
@@ -934,7 +937,7 @@ async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=
   <div style="display:grid;grid-template-columns:minmax(260px,1fr) minmax(280px,1fr);gap:18px;align-items:start">
     <div><div style="display:grid;grid-template-columns:1fr 90px 1fr;gap:6px;align-items:center"><b>金種</b><b style="text-align:center">枚数</b><b style="text-align:right">金額</b>${DENOMS.map(([v,n])=>`<span>${n}</span><input type="number" inputmode="numeric" min="0" data-den="${v}" value="${cnt[v]??''}" ${saved?'disabled':''} style="text-align:right"><span class="right" data-denamt="${v}"></span>`).join('')}<b>合計金額</b><span></span><b class="right" id="clCounted"></b></div></div>
     <div class="totals" style="display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center">
-      <span>本日釣銭</span>${saved||hasPrev?`<span class="right" id="clOpenTxt"></span>`:`<input id="clOpenIn" type="number" inputmode="numeric" value="${clOpening||''}" placeholder="初回のみ入力" style="width:150px;text-align:right">`}
+      <span>本日釣銭${gp.days.length?`<br><small class="muted">${gp.days.map(x=>`${+x.slice(5,7)}/${+x.slice(8,10)}`).join('・')} の未精算分 ${gp.net>=0?'+':''}${yen(gp.net)} を含む</small>`:''}</span>${saved||hasPrev?`<span class="right" id="clOpenTxt"></span>`:`<input id="clOpenIn" type="number" inputmode="numeric" value="${clOpening||''}" placeholder="初回のみ入力" style="width:150px;text-align:right">`}
       <span>現金売上 <small class="muted">その日に受け取った現金</small></span><span class="right" id="clSales"></span>
       <span>入金合計</span><span class="right" id="clIn"></span>
       <span>出金合計 <small class="muted">日払いを含む</small></span><span class="right" id="clOut"></span>
@@ -944,7 +947,7 @@ async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=
       <span>預金金額</span>${saved?`<span class="right" id="clDepTxt"></span>`:`<input id="clDepIn" type="number" inputmode="numeric" value="${clDeposit||''}" style="width:150px;text-align:right">`}
       <span>翌日釣銭準備金</span><span class="right" id="clNext"></span>
     </div></div>
-  <div class="bar" style="margin-top:12px">${saved?`<button class="ghost" id="clDel" style="color:var(--muted)">この精算を削除</button>`:`<button class="primary" id="clSave">精算を保存</button>`}</div>
+  <div class="bar" style="margin-top:12px">${saved||future?'':later?'<span class="muted">後の日の精算があるため保存できません</span>':`<button class="primary" id="clSave">精算を保存</button>`}</div>
   ${H('月間一覧')}<div style="margin-bottom:8px"><input type="month" id="clMonthIn" value="${clMonth}"></div><div id="clMonthBox" style="overflow-x:auto;flex-shrink:0"></div>`;
   $('clDateIn').onchange=e=>{ if(e.target.value){ clDate=e.target.value; clCounts={}; clDeposit=0; renderClosing(); } };
   $('clMonthIn').onchange=e=>{ if(e.target.value){ clMonth=e.target.value; clRenderMonth(); } };
@@ -959,10 +962,18 @@ async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=
   box.querySelectorAll('[data-clrqok]').forEach(x=>x.onclick=async()=>{ const q=(rq.data||[]).find(z=>z.id===x.dataset.clrqok); x.disabled=true; if(await reqResolve(q,'applied')) toast('メモに追記しました'); renderClosing(); });
   box.querySelectorAll('[data-clrqno]').forEach(x=>x.onclick=async()=>{ const q=(rq.data||[]).find(z=>z.id===x.dataset.clrqno); if(!await uiConfirm('この申請を却下しますか？')) return; if(await reqResolve(q,'rejected')) toast('却下しました'); renderClosing(); });
   if($('clSave')) $('clSave').onclick=async()=>{ const v=clRecalc(); if(!await uiConfirm(`${d} のレジ精算を保存しますか？\nレジ内現金 ${yen(v.counted)}／過不足 ${v.diff>0?'+':''}${yen(v.diff)}`))return; $('clSave').disabled=true; const r=await sb.from('register_closings').insert({store_id:store.id,business_date:d,counts:clCounts,opening_float:v.opening,cash_sales:cashSales,cash_in:inSum,cash_out:outSum+advSum,expected:v.expected,counted:v.counted,diff:v.diff,deposit:v.deposit,next_float:v.next}); if(r.error){ toast(r.error.message); $('clSave').disabled=false; return; } await logOp('レジ精算を保存',{date:d,expected:v.expected,counted:v.counted,diff:v.diff,deposit:v.deposit,next_float:v.next},null,true); toast('精算を保存しました'); clCounts={}; clDeposit=0; renderClosing(); };
-  if($('clDel')) $('clDel').onclick=async()=>{ if(!await uiConfirm(`${d} の精算記録を削除しますか？\n削除すると未精算に戻ります（操作ログに残ります）。`))return; const r=await sb.from('register_closings').delete().eq('id',saved.id); if(r.error){ toast(r.error.message); return; } await logOp('レジ精算を削除',{date:d,expected:saved.expected,counted:saved.counted,diff:saved.diff,deposit:saved.deposit},null,true); clCounts=saved.counts||{}; clDeposit=saved.deposit||0; clOpening=saved.opening_float||0; toast('削除しました'); renderClosing(); };
   clRecalc(); clRenderMonth(); clRenderWarn(d,prevRow?prevRow.business_date:null); }
 // 領収書メール：端末のメールアプリを開く（写真はメールアプリ側で添付する）
 function clMailUrl(who){ const to=String(settings?.receipt_mail_to||'').trim(); const subject=`【${store?.name||''}】現金払い（名前→${who}）`; const body='📎→書類をスキャン→フィルタ→白黒　で送信'; return `mailto:${encodeURIComponent(to).replace(/%40/g,'@')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; }
+// v10.43：前回の精算の翌日〜前日のうち、未精算の日の現金の動き（現金売上＋入金−出金−日払い）の合計
+async function clGap(after,d){ const [mv,adv,pay,cl]=await Promise.all([ sb.from('cash_movements').select('business_date,kind,amount').eq('store_id',store.id).gt('business_date',after).lt('business_date',d),
+    sb.from('daily_advances').select('business_date,amount').eq('store_id',store.id).gt('business_date',after).lt('business_date',d),
+    sb.from('payments').select('amount,paid_at,bills!inner(status,store_id)').eq('method','cash').gte('paid_at',new Date(`${after}T08:00:00`).toISOString()).lt('paid_at',new Date(`${d}T08:00:00`).toISOString()),
+    sb.from('register_closings').select('business_date').eq('store_id',store.id).gt('business_date',after).lt('business_date',d) ]);
+  const done=new Set((cl.data||[]).map(r=>r.business_date)); const net={}; const add=(k,v)=>{ if(!done.has(k)) net[k]=(net[k]||0)+v; };
+  (mv.data||[]).forEach(r=>add(r.business_date,r.kind==='in'?Number(r.amount):-Number(r.amount))); (adv.data||[]).filter(r=>r.amount>0).forEach(r=>add(r.business_date,-Number(r.amount)));
+  (pay.data||[]).filter(p=>p.bills&&p.bills.store_id===store.id&&p.bills.status!=='void'&&p.amount).forEach(p=>{ const b=businessDate(new Date(p.paid_at)); if(b>after&&b<d) add(b,Number(p.amount)); });
+  const days=Object.keys(net).filter(k=>net[k]).sort(); return {net:days.reduce((s,k)=>s+net[k],0),days}; }
 function clRecalc(){ const c=clCtx; if(!c) return {}; const s=c.saved; const cnt=s?(s.counts||{}):clCounts; let counted=0; DENOMS.forEach(([v])=>{ const a=v*clNum(cnt[v]); counted+=a; const el=document.querySelector(`[data-denamt="${v}"]`); if(el) el.textContent=yen(a); });
   const opening=s?s.opening_float:(c.hasPrev?c.prevFloat:clOpening); const sales=s?s.cash_sales:c.cashSales, cin=s?s.cash_in:c.inSum, cout=s?s.cash_out:(c.outSum+c.advSum); const expected=opening+sales+cin-cout; if(s) counted=s.counted; const diff=counted-expected; const deposit=s?s.deposit:clDeposit; const next=counted-deposit;
   const T=(id,t)=>{ const e=$(id); if(e) e.textContent=t; }; T('clCounted',yen(counted)); T('clOpenTxt',yen(opening)); T('clSales',yen(sales)); T('clIn',yen(cin)); T('clOut',yen(cout)); T('clExp',yen(expected)); T('clCnt2',yen(counted)); T('clDiff',(diff>0?'+':'')+yen(diff)); T('clDepTxt',yen(deposit)); T('clNext',yen(next)); const de=$('clDiff'); if(de) de.style.color=diff===0?'':'#c0392b';
