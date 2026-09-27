@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.51 -->
+<title>OLIVE 会計</title><!-- v10.52 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -872,7 +872,7 @@ function renderCuList(){ const q=$('cuSearch').value.trim(); if(!cuMonthsSel) cu
   $('cuList').innerHTML=list.map(c=>{ const last=cuInfo.last[c.id], n=cuInfo.cnt[c.id]||0; const old=cuMode==='old'&&cuBase(c.id)&&cuBase(c.id)<=cut; return `<button class="row ${c.id===cuSel?'on':''}" data-id="${c.id}" style="text-align:left;width:100%"><span class="nm">${esc(c.name)}${c.company?` <small class="muted">${esc(c.company)}</small>`:''}<br><small class="muted" style="${old?'color:#c0392b':''}">最終来店 ${last?md(last):'なし'}${n?`・ボトル${n}本`:''}</small>${cuInfo.req[c.id]?` <span class="badge warnb">申請 ${cuInfo.req[c.id]}件</span>`:''}</span></button>`; }).join('')||'<div class="muted">該当なし</div>';
   $('cuList').querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{ cuSel=b.dataset.id; renderCuList(); renderCuForm(); }); }
 $('cuNew').onclick=async()=>{ const name=await uiPrompt('新しいお客様の名前', $('cuSearch').value.trim()); if(!name||!name.trim())return; const { data, error } = await sb.from('customers').insert({store_id:store.id,name:name.trim()}).select().single(); if(error){toast(error.message);return;} await logOp('顧客追加',{name:data.name},null,true); customers.push(data); customers.sort((a,b)=>a.name.localeCompare(b.name,'ja')); cuSel=data.id; $('cuSearch').value=''; renderCuList(); renderCuForm(); };
-const CUF=[['name','お名前'],['birthday','お誕生日'],['receipt_name','領収書名'],['kakari_staff_id','係'],['company','会社名'],['company_address','会社住所'],['good_cast_ids','反応の良かったキャスト'],['memo','メモ']]; // v10.50：反応の良かったキャスト（3名まで。退店したキャストも記録として残し「（退店）」と表示、新しくは選べない）
+const CUF=[['name','お名前'],['birthday','お誕生日'],['receipt_name','領収書名'],['kakari_staff_id','係'],['good_cast_ids','反応の良かったキャスト'],['company','会社名'],['company_address','会社住所'],['memo','メモ']]; // v10.50：反応の良かったキャスト（3名まで。退店したキャストも記録として残し「（退店）」と表示、新しくは選べない）
 function cuGoodSel(c,i){ const v=(c.good_cast_ids||[])[i]||''; const act=staffAll.filter(s=>s.is_active&&s.kind==='cast'&&!s.is_trial&&!s.kakari_only); const gone=v&&!act.some(s=>s.id===v)?staffAll.find(s=>s.id===v):null; return `<select data-g="${i}" style="flex:1 1 0;min-width:0;width:0"><option value="">なし</option>${gone?`<option value="${gone.id}" selected disabled>${esc(gone.display_name)}（退店）</option>`:''}${act.map(s=>`<option value="${s.id}" ${v===s.id?'selected':''}>${esc(s.display_name)}</option>`).join('')}</select>`; }
 function renderCuForm(){ const c=customers.find(x=>x.id===cuSel); if(!c){ $('cuForm').innerHTML='<div class="muted">左の一覧からお客様を選ぶか、「＋新規」で登録してください</div>'; $('cuSide').innerHTML=''; return; }
   if(!staffAll.length&&!renderCuForm._ld){ renderCuForm._ld=1; loadStaffAll().then(()=>{ if(cuSel===c.id) renderCuForm(); }); } // v10.50：退店キャストの名前を出すため
