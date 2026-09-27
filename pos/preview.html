@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.50b -->
+<title>OLIVE 会計</title><!-- v10.51 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -485,7 +485,7 @@ async function createBill(t, n, c){ const normal=modes.find(m=>m.code==='normal'
   const ex=await sb.from('bills').select('id').eq('table_id',t.id).eq('status','open').limit(1); if(ex.data?.length){ toast('この卓はすでに伝票があります'); await openBill(ex.data[0].id); return; }
   const { data:b, error } = await sb.from('bills').insert({ store_id:store.id, business_date:businessDate(), table_id:t.id, guest_count:n||1, pricing_mode_id:normal?.id, set_minutes:settings.set_minutes, set_unit_price:settings.set_unit_price }).select().single();
   if (error) { toast(error.message); return; }
-  cur=b; let addedK=false; if (c){ await sb.from('bill_customers').insert({bill_id:b.id,customer_id:c.id}); if(c.kakari_staff_id){ const r=await sb.from('bill_casts').insert({bill_id:b.id,staff_id:c.kakari_staff_id,role:'none',is_kakari:true}); addedK=!r.error; } }
+  cur=b; let addedK=false; if (c){ await sb.from('bill_customers').insert({bill_id:b.id,customer_id:c.id}); if(c.kakari_staff_id&&settings.cust_auto_kakari!==false){ /* v10.51：設定で OFF にできる */ const r=await sb.from('bill_casts').insert({bill_id:b.id,staff_id:c.kakari_staff_id,role:'none',is_kakari:true}); addedK=!r.error; } }
   const hc=settings.auto_hc_product_id&&products.find(p=>p.id===settings.auto_hc_product_id);
   if (hc) await sb.from('bill_items').insert({bill_id:b.id,product_id:hc.id,name:hc.name,category_id:hc.category_id,qty:n||1,unit_price:hc.price,cast_subtotal_price:hc.cast_subtotal_price,back_amount:hc.back_amount,back_points:hc.back_points,is_service_target:hc.is_service_target});
   const bc=settings.auto_bc_product_id&&products.find(p=>p.id===settings.auto_bc_product_id);
@@ -709,7 +709,7 @@ $('custNew').onclick=async()=>{ const name=$('custSearch').value.trim(); if(!nam
   const { data, error } = await sb.from('customers').insert({store_id:store.id,name}).select().single(); if(error){toast(error.message);return;}
   customers.push(data); customers.sort((a,b)=>a.name.localeCompare(b.name,'ja')); attachCust(data.id); };
 async function attachCust(id){ if(custPick){ const c=customers.find(x=>x.id===id); $('custModal').classList.remove('on'); custPick(c); custPick=null; return; } const { error } = await sb.from('bill_customers').insert({bill_id:cur.id,customer_id:id}); if(error&&!error.message.includes('duplicate')) toast(error.message); else if(!error) await logOp('お客様を伝票に追加',{customer:customers.find(x=>x.id===id)?.name});
-  const kc=customers.find(x=>x.id===id)?.kakari_staff_id; if(kc&&!(cur.bill_casts||[]).some(c=>c.staff_id===kc)){ const r=await sb.from('bill_casts').insert({bill_id:cur.id,staff_id:kc,role:'none',is_kakari:true}); if(r.error) toast(r.error.message); else await syncHcBack(); } $('custModal').classList.remove('on'); openBill(cur.id); }
+  const kc=customers.find(x=>x.id===id)?.kakari_staff_id; if(kc&&settings.cust_auto_kakari!==false&&!(cur.bill_casts||[]).some(c=>c.staff_id===kc)){ const r=await sb.from('bill_casts').insert({bill_id:cur.id,staff_id:kc,role:'none',is_kakari:true}); if(r.error) toast(r.error.message); else await syncHcBack(); } $('custModal').classList.remove('on'); openBill(cur.id); }
 
 // ---------- cast modal（本日出勤者・同伴自動判定） ----------
 $('castAddBtn').onclick=async()=>{
@@ -836,7 +836,7 @@ const SET = [
   { key:'categories', name:'カテゴリー', table:'categories', label:r=>r.name, cols:[['name','カテゴリー名','text'],['short_name','略称','text'],['is_visible','表示','bool'],['is_industry_target','同業者モードの対象','bool']], newRow:()=>({store_id:store.id,name:'新しいカテゴリー',is_visible:true,is_industry_target:false}) },
   { key:'products', name:'メニュー', table:'products', label:r=>`${r.name}`, sub:r=>yen(r.price), cols:[['name','メニュー名','text'],['short_name','略称','text'],['category_id','カテゴリー','cat'],['price','販売価格（税抜）','number'],['cast_subtotal_price','小計価格（係小計に入る額）','number'],['back_amount','バック金額','number'],['back_points','バックポイント','number'],['is_service_target','サービス料の対象','bool'],['is_keepable','キープ可','bool'],['in_stock','在庫あり','bool'],['is_visible','表示','bool']], newRow:()=>({store_id:store.id,name:'新メニュー',category_id:categories[0]?.id,price:0,cast_subtotal_price:0,back_amount:0,back_points:0,is_service_target:true,is_keepable:false,in_stock:true,is_visible:true}) },
   { key:'print', name:'印刷設定', local:true, cols:[['print_method','印刷方法','select',[['tmpa','プリンター（TM Print Assistant）'],['browser','ブラウザ印刷（PDF）']]]] },
-  { key:'pos', name:'料金設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number'],['auto_hc_product_id','自動で人数分つけるHC（なし＝付けない）','prod'],['auto_bc_product_id','自動で人数分つけるBC（なし＝付けない）','prod'],['douhan_punch_limit_min','同伴の準備時間の目安（分）：伝票の立ち上げ〜出勤打刻がこれを超えるとタイムカードで本人に警告（0＝警告しない）','number'],['receipt_mail_to','領収書メールの宛先（閉店作業の「領収書をメールで送る」で使うアドレス）','text'],['advance_cap_cast','日払いの上限（キャスト）円','number'],['advance_cap_hall','日払いの上限（黒服）円','number'],['trial_withholding_rate','体験入店の日払いから引く源泉（%）','number'],['douhan_is_kakari','同伴にしたら自動で係にする（ON＝同伴にした人は自動で係にもなる。ほかの係も追加でき、売上は係全員で等分／OFF＝同伴と係は別々）','bool']] },
+  { key:'pos', name:'料金設定', table:'pos_settings', single:true, cols:[['set_minutes','最初のセット時間（分）','number'],['set_unit_price','セット1名単価','number'],['ext_minutes','延長単位（分）','number'],['ext_unit_price','延長1名単価','number'],['service_rate','サービス料率 %','number'],['tax_rate','消費税率 %','number'],['total_round_unit','合計の切り上げ単位','number'],['auto_hc_product_id','自動で人数分つけるHC（なし＝付けない）','prod'],['auto_bc_product_id','自動で人数分つけるBC（なし＝付けない）','prod'],['douhan_punch_limit_min','同伴の準備時間の目安（分）：伝票の立ち上げ〜出勤打刻がこれを超えるとタイムカードで本人に警告（0＝警告しない）','number'],['receipt_mail_to','領収書メールの宛先（閉店作業の「領収書をメールで送る」で使うアドレス）','text'],['advance_cap_cast','日払いの上限（キャスト）円','number'],['advance_cap_hall','日払いの上限（黒服）円','number'],['trial_withholding_rate','体験入店の日払いから引く源泉（%）','number'],['douhan_is_kakari','同伴にしたら自動で係にする（ON＝同伴にした人は自動で係にもなる。ほかの係も追加でき、売上は係全員で等分／OFF＝同伴と係は別々）','bool'],['cust_auto_kakari','お客様を伝票に登録したら、そのお客様の係を自動で追加する','bool']] },
   { key:'bills', name:'伝票一覧', bills:true },
   { key:'closing', name:'閉店作業', closing:true },
   { key:'audit', name:'操作ログ', audit:true },
