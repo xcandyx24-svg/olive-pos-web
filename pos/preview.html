@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.58 -->
+<title>OLIVE 会計</title><!-- v10.59 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -529,8 +529,10 @@ async function todaySum(){ const el=$('tdSum'); el.textContent='…'; const toda
   const vis=(q1.data||[]).filter(b=>b.status!=='void'); const tot={}; await Promise.all([...sales,...open].map(async b=>{ const r=await sb.rpc('calc_bill',{p_bill:b.id}); tot[b.id]=r.data?.amount_due||0; }));
   const s=sales.reduce((a,b)=>a+tot[b.id],0), o=open.reduce((a,b)=>a+tot[b.id],0); if(el.style.display==='none') return;
   el.innerHTML=`売上 <b>${yen(s)}</b>${o?` <small style="opacity:.75">（営業中 ${yen(o)}）</small>`:''}　来店 <b>${vis.length}</b>組 <b>${vis.reduce((a,b)=>a+(b.guest_count||0),0)}</b>名`; }
-$('tdBtn').onclick=()=>{ $('tdBtn').style.display='none'; $('tdSum').style.display=''; todaySum(); };
-$('tdSum').onclick=()=>{ $('tdSum').style.display='none'; $('tdBtn').style.display=''; };
+let tdTimer=null; // v10.59：開いて1分たったら自動で閉じる
+function tdClose(){ clearTimeout(tdTimer); $('tdSum').style.display='none'; $('tdBtn').style.display=''; }
+$('tdBtn').onclick=()=>{ $('tdBtn').style.display='none'; $('tdSum').style.display=''; todaySum(); clearTimeout(tdTimer); tdTimer=setTimeout(tdClose,60000); };
+$('tdSum').onclick=tdClose;
 function renderBill(){ const b=cur, t=tables.find(x=>x.id===b.table_id);
   { let bb=$('bBday'); if(!bb){ bb=document.createElement('div'); bb.id='bBday'; $('v-bill').querySelector('.card').prepend(bb); } const ls=b.status==='void'?[]:bdayLines(b); bb.style.cssText=ls.length?'background:#fff3d6;border:2px solid #d4a017;border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:20px;font-weight:700;color:#7a4b00':'display:none'; bb.innerHTML=ls.map(esc).join('<br>'); }
   $('bTable').innerHTML=`<small class="muted" style="font-size:14px;font-weight:400">卓</small> ${esc(t?.name||'')}`; $('bGuests').textContent=b.guest_count; $('bTime').textContent=`${hm(b.set_start)}〜${hm(billEnd(b))}`;
