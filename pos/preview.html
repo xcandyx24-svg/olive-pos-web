@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.54 -->
+<title>OLIVE 会計</title><!-- v10.55 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -145,7 +145,7 @@
   <div class="cols" style="margin-top:12px">
     <div><div class="list" id="bCust"></div><button class="ghost sm" id="custAddBtn" style="margin-top:6px">＋ お客様</button>
       <div class="list" id="bCasts" style="margin-top:10px"></div><button class="ghost sm" id="castAddBtn" style="margin-top:6px">＋ 係／同伴</button>
-      <div class="list" id="bGood" style="margin-top:10px"></div><select class="ghost sm" id="goodAdd" style="margin-top:6px;width:auto;display:none"></select>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px"><span id="bGood" style="display:contents"></span><select id="goodAdd" style="display:none;width:auto;min-width:0;height:auto;min-height:0;margin:0;font-size:13px;line-height:1.2;padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted);-webkit-appearance:none;appearance:none"></select></div>
       <div class="list" id="bTags" style="margin-top:14px"></div><button class="ghost sm" id="tagBtn" style="margin-top:6px">＋ お預かりタグ</button></div>
     <div><h2>1セット目・延長</h2><div class="list" id="bSet"></div><div class="bar" style="margin-top:6px"><button class="ghost sm" id="extAdd">延長（30分）</button><button class="ghost sm" id="svcBtn">サービス料</button></div></div>
     <div id="bOrders" style="display:contents"><div><h2>ボトル</h2><div class="list" id="bItems"></div></div><div><h2>ドリンク・フード他</h2><div class="list" id="bItems2"></div></div></div>
@@ -509,10 +509,10 @@ function bdayLines(b){ return (b.bill_customers||[]).map(x=>customers.find(c=>c.
 // v10.53：反応◎（お客様の反応が良かったキャスト。1伝票に同じ人は1回。営業中の伝票だけ付け外しできる。SQL 039）
 async function renderGood(b){ const box=$('bGood'), sel=$('goodAdd'); if(!box||!sel) return; const r=await sb.from('good_reactions').select('id,staff_id').eq('bill_id',b.id); if(cur!==b) return; if(r.error){ box.innerHTML=''; sel.style.display='none'; return; } if(!staffAll.length) await loadStaffAll(); if(cur!==b) return;
   const gl=r.data||[]; const nm=id=>staffAll.find(x=>x.id===id)?.display_name||''; const open=b.status==='open';
-  box.innerHTML=gl.map(x=>`<div class="item"><span class="n">${esc(nm(x.staff_id))} <span class="badge">反応◎</span></span>${open?`<div class="btns"><button class="ghost sm" data-rmgood="${x.id}">×</button></div>`:''}</div>`).join('');
+  box.innerHTML=gl.map(x=>`<span style="display:inline-flex;align-items:center;gap:2px;font-size:13px;line-height:1.2;padding:4px ${open?'2px':'10px'} 4px 10px;border:1px solid var(--line);border-radius:999px;background:#fff">${esc(nm(x.staff_id))}<span style="color:var(--gold)">◎</span>${open?`<button data-rmgood="${x.id}" style="border:0;background:none;min-height:0;height:auto;padding:0 6px;margin:0;font-size:13px;color:var(--muted)">×</button>`:''}</span>`).join('');
   box.querySelectorAll('[data-rmgood]').forEach(x=>x.onclick=async()=>{ const g=gl.find(z=>z.id===x.dataset.rmgood); const d=await sb.from('good_reactions').delete().eq('id',x.dataset.rmgood); if(d.error){ toast(d.error.message); return; } await logOp('反応◎を取り消し',{name:nm(g?.staff_id)}); renderGood(cur); });
   const have=new Set(gl.map(x=>x.staff_id)); const cands=staffAll.filter(s=>s.is_active&&s.kind==='cast'&&!s.kakari_only&&!have.has(s.id));
-  sel.style.display=open?'':'none'; sel.innerHTML='<option value="">＋ 反応◎</option>'+cands.map(s=>`<option value="${s.id}">${esc(s.display_name)}</option>`).join('');
+  sel.style.display=open?'':'none'; sel.innerHTML='<option value="">＋反応◎</option>'+cands.map(s=>`<option value="${s.id}">${esc(s.display_name)}</option>`).join('');
   sel.onchange=async()=>{ const id=sel.value; if(!id) return; sel.disabled=true; const ins=await sb.from('good_reactions').insert({store_id:store.id,bill_id:b.id,staff_id:id}); sel.disabled=false; if(ins.error&&!ins.error.message.includes('duplicate')) toast(ins.error.message); else if(!ins.error) await logOp('反応◎',{name:nm(id)}); renderGood(cur); }; }
 function renderBill(){ const b=cur, t=tables.find(x=>x.id===b.table_id);
   { let bb=$('bBday'); if(!bb){ bb=document.createElement('div'); bb.id='bBday'; $('v-bill').querySelector('.card').prepend(bb); } const ls=b.status==='void'?[]:bdayLines(b); bb.style.cssText=ls.length?'background:#fff3d6;border:2px solid #d4a017;border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:20px;font-weight:700;color:#7a4b00':'display:none'; bb.innerHTML=ls.map(esc).join('<br>'); }
