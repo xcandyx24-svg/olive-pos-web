@@ -1012,7 +1012,7 @@ async function clRenderMonth(){ const el=$('clMonthBox'); if(!el) return; const 
     if(dd>today){ rows.push(`<tr style="color:var(--muted)">${C(dl)}${C('').repeat(9)}</tr>`); continue; }
     const t=sum[dd]||{sales:0,cin:0,cout:0}; const exp=carry+t.sales+t.cin-t.cout; const idle=!t.sales&&!t.cin&&!t.cout;
     rows.push(`<tr data-cld="${dd}" style="cursor:pointer;color:var(--muted)">${C(dl)}${C(yen(carry))}${C(yen(t.sales))}${C(yen(t.cin))}${C(yen(t.cout))}${C(yen(exp))}${idle?C(yen(exp))+C(yen(0))+C(yen(0))+CS(dd<today?'精算済み<br>（変動なし自動繰越）':''):C('')+C('')+C('')+CS('<span style="color:#c0392b">未精算</span>')}</tr>`); carry=exp; }
-  el.innerHTML=`<table style="border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums"><tr>${['日付','本日釣銭','現金売上','入金合計','出金合計','理論値','レジ内現金','過不足','預金','状態'].map(h=>`<th ${td}>${h}</th>`).join('')}</tr>${rows.join('')}</table>`;
+  el.innerHTML=`<table style="border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:13px"><tr>${['日付','本日釣銭','現金売上','入金合計','出金合計','理論値','レジ内現金','過不足','預金','状態'].map(h=>`<th ${td}>${h}</th>`).join('')}</tr>${rows.join('')}</table>`;
   el.querySelectorAll('[data-cld]').forEach(t=>t.onclick=()=>{ clDate=t.dataset.cld; clCounts={}; clDeposit=0; renderClosing(); }); }
 function setRows(def){ if(def.single) return [settings]; let r=({tables,categories,products,customers})[def.key]; if(def.key==='products'&&setCatFilter) r=r.filter(p=>p.category_id===setCatFilter); return r; }
 async function renderSettings(key, keepSel){ if(key!==setCur){ setSel=null; setEditMode=false; setCatFilter=null; $('setFilter').value=''; } setCur=key; await loadMasters(); const def=SET.find(s=>s.key===key);
