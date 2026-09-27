@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.53 -->
+<title>OLIVE 会計</title><!-- v10.54 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -143,7 +143,7 @@
     <span id="bFlags" style="margin-left:auto;display:flex;gap:6px"></span>
   </div>
   <div class="cols" style="margin-top:12px">
-    <div><h2>基本構成</h2><div class="list" id="bCust"></div><button class="ghost sm" id="custAddBtn" style="margin-top:6px">＋ お客様</button>
+    <div><div class="list" id="bCust"></div><button class="ghost sm" id="custAddBtn" style="margin-top:6px">＋ お客様</button>
       <div class="list" id="bCasts" style="margin-top:10px"></div><button class="ghost sm" id="castAddBtn" style="margin-top:6px">＋ 係／同伴</button>
       <div class="list" id="bGood" style="margin-top:10px"></div><select class="ghost sm" id="goodAdd" style="margin-top:6px;width:auto;display:none"></select>
       <div class="list" id="bTags" style="margin-top:14px"></div><button class="ghost sm" id="tagBtn" style="margin-top:6px">＋ お預かりタグ</button></div>
@@ -887,8 +887,8 @@ function renderCuList(){ const q=$('cuSearch').value.trim(); if(!cuMonthsSel) cu
 $('cuNew').onclick=async()=>{ const name=await uiPrompt('新しいお客様の名前', $('cuSearch').value.trim()); if(!name||!name.trim())return; const { data, error } = await sb.from('customers').insert({store_id:store.id,name:name.trim()}).select().single(); if(error){toast(error.message);return;} await logOp('顧客追加',{name:data.name},null,true); customers.push(data); customers.sort((a,b)=>a.name.localeCompare(b.name,'ja')); cuSel=data.id; $('cuSearch').value=''; renderCuList(); renderCuForm(); };
 const CUF=[['name','お名前'],['birthday','お誕生日'],['receipt_name','領収書名'],['kakari_staff_id','係'],['good_cast_ids','反応の良かったキャスト'],['company','会社名'],['company_address','会社住所'],['memo','メモ']]; // v10.50：反応の良かったキャスト（3名まで。退店したキャストも記録として残し「（退店）」と表示、新しくは選べない）
 function cuGoodSel(c,i){ const v=(c.good_cast_ids||[])[i]||''; const act=staffAll.filter(s=>s.is_active&&s.kind==='cast'&&!s.is_trial&&!s.kakari_only); const gone=v&&!act.some(s=>s.id===v)?staffAll.find(s=>s.id===v):null; return `<select data-g="${i}" style="flex:1 1 0;min-width:0;width:0"><option value="">なし</option>${gone?`<option value="${gone.id}" selected disabled>${esc(gone.display_name)}（退店）</option>`:''}${act.map(s=>`<option value="${s.id}" ${v===s.id?'selected':''}>${esc(s.display_name)}</option>`).join('')}</select>`; }
-// v10.53：反応の良かったキャスト＝そのお客様の伝票で反応◎が多い上位3名（自動。退店した人も残す）
-async function cuGoodLoad(c){ const e=()=>($('cuGood')&&cuSel===c.id)?$('cuGood'):null; const bc=await sb.from('bill_customers').select('bill_id').eq('customer_id',c.id); if(bc.error){ if(e()) e().textContent='—'; return; } const ids=[...new Set((bc.data||[]).map(x=>x.bill_id))]; let rows=[]; for(let i=0;i<ids.length;i+=100){ const r=await sb.from('good_reactions').select('staff_id').in('bill_id',ids.slice(i,i+100)); if(r.error){ if(e()) e().textContent='—'; return; } rows=rows.concat(r.data||[]); }
+// v10.54：反応の良かったキャスト＝そのお客様の直近30回のご来店（取消の伝票は除く）で反応◎が多い上位3名（自動）
+async function cuGoodLoad(c){ const e=()=>($('cuGood')&&cuSel===c.id)?$('cuGood'):null; const bc=await sb.from('bill_customers').select('bill_id,bills!inner(business_date,opened_at,status)').eq('customer_id',c.id); if(bc.error){ if(e()) e().textContent='—'; return; } const ids=[...new Set((bc.data||[]).filter(x=>x.bills&&x.bills.status!=='void').sort((a,b)=>(b.bills.business_date+b.bills.opened_at).localeCompare(a.bills.business_date+a.bills.opened_at)).map(x=>x.bill_id))].slice(0,30); let rows=[]; for(let i=0;i<ids.length;i+=100){ const r=await sb.from('good_reactions').select('staff_id').in('bill_id',ids.slice(i,i+100)); if(r.error){ if(e()) e().textContent='—'; return; } rows=rows.concat(r.data||[]); }
   const m={}; rows.forEach(x=>m[x.staff_id]=(m[x.staff_id]||0)+1); if(!staffAll.length) await loadStaffAll(); const top=Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,3); if(!e()) return;
   e().innerHTML=top.length?top.map(([id,n])=>{ const s=staffAll.find(x=>x.id===id); return `<span style="margin-right:16px">${esc(s?.display_name||'')}${s&&!s.is_active?'<small class="muted">（退店）</small>':''} <small class="muted">${n}回</small></span>`; }).join(''):'<span class="muted">なし</span>'; }
 function renderCuForm(){ const c=customers.find(x=>x.id===cuSel); if(!c){ $('cuForm').innerHTML='<div class="muted">左の一覧からお客様を選ぶか、「＋新規」で登録してください</div>'; $('cuSide').innerHTML=''; return; }
