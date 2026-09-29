@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.16 -->
+<title>OLIVE 顧客</title><!-- customer v1.17 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -61,6 +61,7 @@
   .bt .ops select{width:auto;flex:1;padding:8px}
   .vis{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #f0eee9;font-size:14px}
   .vis:last-child{border-bottom:none}.vis .amt{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .vyr{border-top:1px solid #f0eee9}.vyr>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;padding:9px 0;font-size:14px;font-weight:600}.vyr>summary::-webkit-details-marker{display:none}.vyr>summary::after{content:'▾';color:var(--muted)}.vyr[open]>summary::after{content:'▴'}.vyr>div{padding-left:12px}
   label.f{display:block;margin-bottom:10px;font-size:13px;color:var(--muted)}label.f input,label.f select,label.f textarea{margin-top:4px;color:var(--ink)}
 
   /* ダイアログ・トースト */
@@ -206,6 +207,8 @@ $('menuBtn').onclick=()=>sheet(`<h3>メニュー</h3><div style="display:flex;fl
 
 // ---------- 日付 ----------
 function bd(){ return boot&&boot.business_date||new Date().toISOString().slice(0,10); }
+// 来店履歴は直近10件をそのまま出し、それより前は年ごとにまとめる（タップで開く）。POSと同じ
+function visYears(list,dt,row){ const head=list.slice(0,10).map(row).join(''), g={}; for(const v of list.slice(10)){ const y=String(dt(v)).slice(0,4); (g[y]=g[y]||[]).push(v); } return head+Object.keys(g).sort().reverse().map(y=>`<details class="vyr"><summary>${y}年　${g[y].length}回</summary>${g[y].map(row).join('')}</details>`).join(''); }
 function md(d){ const m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[1]===bd().slice(0,4)?'':m[1]+'/'}${+m[2]}/${+m[3]}`:''; }
 function cutoff(n){ const [y,m,d]=bd().split('-').map(Number); const x=new Date(y,m-1-n,d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
 function base(c){ return c.last||c.first_bottle||String(c.created_at||'').slice(0,10)||''; }
@@ -264,7 +267,7 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
     <button class="ok" id="reqBtn" style="width:100%;margin-top:12px">＋ 気づきを申請</button></div>
   <div class="card"><h2>来店履歴</h2>
     <div class="muted" style="font-size:13px;margin-bottom:4px">今月 ${cur.month_count}回・${yen(cur.month_sum)}　／　累計 ${cur.visit_total}回</div>
-    ${(cur.visits||[]).map(v=>`<div class="vis"><span>${md(v.date)}　${esc(v.table||'')}　${v.guests}名${v.open?' <span class="badge">来店中</span>':''}${v.oki?' <span class="badge gray">置き</span>':''}</span><span class="amt">${v.amount!=null?yen(v.amount):''}</span></div>`).join('')||'<div class="muted">まだありません</div>'}
+    ${visYears(cur.visits||[],v=>v.date,v=>`<div class="vis"><span>${md(v.date)}　${esc(v.table||'')}　${v.guests}名${v.open?' <span class="badge">来店中</span>':''}${v.oki?' <span class="badge gray">置き</span>':''}</span><span class="amt">${v.amount!=null?yen(v.amount):''}</span></div>`)||'<div class="muted">まだありません</div>'}
     ${cur.visit_total>30?'<div class="muted" style="font-size:12px;margin-top:6px">直近30回を表示しています</div>':''}</div>`;
 
   const D=$('detail'); fitLine(D);
