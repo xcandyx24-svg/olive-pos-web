@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.88 -->
+<title>OLIVE 会計</title><!-- v10.89 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -93,6 +93,7 @@
   .tbl.busy .casts{background:rgba(120,90,30,.35);border-radius:8px;padding:4px 8px;margin-top:auto;color:#222}
   .tbl.busy.over{border-color:var(--warn);box-shadow:0 0 0 2px var(--warn)}
   .tbl.busy.oki{background:linear-gradient(#e8e8e8,#bdbdbd);border-color:#999}
+  /* v10.89：会計後のお預かり返却リマインド（お渡しするまで卓いっぱいに点滅） */.tbl.hand{background:#d9534f;color:#fff;border-color:#8b1e1b;text-align:center;justify-content:center;gap:6px;animation:handBlink 1s steps(1) infinite}.tbl.hand .name{font-size:18px}.tbl.hand .hmsg{font-size:13px;font-weight:700;white-space:nowrap}.tbl.hand .hitem{font-size:22px;font-weight:800;line-height:1.25;overflow-wrap:anywhere}.tbl.hand .hitem small{font-size:14px;font-weight:600}@keyframes handBlink{50%{background:#fff3b0;color:#8b1e1b}}
   .rlist{display:flex;flex-direction:column;gap:8px}
   .rrow{display:flex;align-items:center;gap:12px;padding:10px 16px;min-height:67px;box-sizing:border-box;background:#fff;border:1px solid var(--line);border-radius:12px;font-size:20px;user-select:none;-webkit-user-select:none}
   .rrow .nm{flex:1}.rrow .hd{color:#aaa;font-size:24px;padding:0 6px;touch-action:none}.rrow.drag{opacity:.4}.rrow.inactive{opacity:.5}
@@ -317,7 +318,7 @@ async function expireTrials(){ const bd=businessDate(); if(trialSweepDay===bd||!
 async function loadHall(){
   const { data, error } = await sb.from('bills').select('*, bill_casts(staff_id,role,is_kakari), bill_extensions(minutes,unit_price,qty,is_auto), bill_tags(id,kind,returned_at), bill_customers(customer_id)').eq('status','open');
   if (error) { toast(error.message); return; }
-  openBills = data||[]; await autoExtend(); await loadOki();
+  openBills = data||[]; await autoExtend(); await loadOki(); await loadHand();
   const totals={}; await Promise.all(openBills.map(async b=>{ const r=await sb.rpc('calc_bill',{p_bill:b.id}); totals[b.id]=r.data; }));
   renderHall(totals);
 }
@@ -361,6 +362,16 @@ async function autoExtend(){ const now=new Date(); let added=false;
       if (error) break; b.bill_extensions=[...(b.bill_extensions||[]),{minutes:settings.ext_minutes,unit_price:settings.ext_unit_price,qty:b.guest_count,is_auto:true}]; end=billEnd(b); added=true; } }
   if (added) toast('セット時間を過ぎた卓に延長を追加しました'); }
 let okiBills=[];
+// v10.89：会計済みでまだお返ししていないお預かり品（卓ごと）
+let handTags={};
+async function loadHand(){ const { data, error } = await sb.from('bill_tags').select('id,kind,tag_no,memo,bill_id,bills!inner(table_id,status)').is('returned_at',null).eq('bills.status','closed'); if(error){ console.warn('hand',error.message); return; } handTags={}; for(const t of data||[]){ const k=t.bills?.table_id; if(!k) continue; (handTags[k]=handTags[k]||[]).push(t); } }
+function tagLabel(t){ return `${TAGK[t.kind]||''}${t.tag_no?' #'+esc(t.tag_no):''}${t.memo?` <small>${esc(t.memo)}</small>`:''}`; }
+function openHand(t){ const tg=handTags[t.id]||[]; if(!tg.length) return; const m=document.createElement('div'); m.className='modal on'; m.style.zIndex=60;
+  m.innerHTML=`<div class="box" style="width:360px;text-align:center"><div style="font-size:18px;font-weight:700">${esc(t.name)}　お預かり品</div><div style="margin:14px 0;font-size:22px;font-weight:800;line-height:1.5">${tg.map(x=>'🏷 '+tagLabel(x)).join('<br>')}</div><div class="bar" style="justify-content:flex-end"><button class="ghost" data-h="no">閉じる</button><button class="primary" data-h="ok">お渡ししました</button></div></div>`;
+  document.body.appendChild(m); m.querySelector('[data-h=no]').onclick=()=>m.remove();
+  const ok=m.querySelector('[data-h=ok]'); ok.onclick=async()=>{ ok.disabled=true; const { error } = await sb.from('bill_tags').update({returned_at:new Date().toISOString()}).in('id',tg.map(x=>x.id)); if(error){ toast(error.message); ok.disabled=false; return; }
+    try{ await sb.from('pos_audit_log').insert({store_id:store.id,bill_id:tg[0].bill_id,action:'お預かり返却（会計後）',detail:{table:t.name,items:tg.map(x=>TAGK[x.kind]+(x.tag_no?'#'+x.tag_no:''))},reason:null}); }catch(e){ console.warn('audit',e); }
+    m.remove(); toast('お渡ししました'); loadHall(); }; }
 async function loadOki(){ const { data } = await sb.from('bills').select('id,memo,guest_count,set_start,business_date,bill_casts(staff_id,is_kakari),bill_customers(customer_id),payments(method,amount,received_at)').eq('status','closed').or('method.eq.oki,method.eq.invoice',{foreignTable:'payments'});
   okiBills=(data||[]).filter(b=>(b.payments||[]).some(p=>p.method==='oki'&&p.amount>0&&!p.received_at)); }
 function renderHall(totals){ const now=new Date(); const cnames=b=>(b.bill_customers||[]).map(c=>customers.find(x=>x.id===c.customer_id)?.name).filter(Boolean).join('・');
@@ -368,8 +379,9 @@ function renderHall(totals){ const now=new Date(); const cnames=b=>(b.bill_custo
   $('alerts').innerHTML = al.length ? `<div class="alert">⏰ 残り10分未満：${al.map(b=>esc(tables.find(t=>t.id===b.table_id)?.name||'?')).join('、')}</div>` : '';
   $('bdHall').textContent=openBills.length;
   $('tables').innerHTML='';
-  for (const t of tables.filter(t=>t.is_visible)) { const b=openBills.find(x=>x.table_id===t.id); const el=document.createElement('div');
-    if (!b) { el.className='tbl'; el.innerHTML=`<div class="name">${esc(t.name)}</div><div class="empty">空 席</div>`; el.onclick=()=>openNew(t); }
+  for (const t of tables.filter(t=>t.is_visible)) { const b=openBills.find(x=>x.table_id===t.id); const el=document.createElement('div'); const hd=handTags[t.id]||[];
+    if (hd.length) { el.className='tbl hand'; el.innerHTML=`<div class="name">${esc(t.name)}</div><div class="hmsg">お預かり品をお返しください</div>${hd.map(x=>`<div class="hitem">🏷 ${tagLabel(x)}</div>`).join('')}`; el.onclick=()=>openHand(t); }
+    else if (!b) { el.className='tbl'; el.innerHTML=`<div class="name">${esc(t.name)}</div><div class="empty">空 席</div>`; el.onclick=()=>openNew(t); }
     else { const end=billEnd(b), remain=Math.round((end-now)/60000); el.className='tbl busy'+(remain<10?' over':'');
       const k=(b.bill_casts||[]).find(c=>c.is_kakari); const kn=k?staff.find(s=>s.id===k.staff_id)?.display_name:'';
       el.innerHTML=`<div class="name">${esc(t.name)}</div>${cnames(b)?`<div class="cust">${bdayLines(b).length?'🎂 ':''}${esc(cnames(b))} 様</div>`:''}<div class="row"><span>👤 ${b.guest_count}</span><span>残り ${remain<0?'-':''}${Math.abs(remain).toLocaleString()}分</span></div><div class="pill">${hm(b.set_start)}〜${hm(end)}</div><div class="total">${yen(totals[b.id]?.amount_due)}</div><div class="casts">${kn?'☑ '+esc(kn):''}</div>${(()=>{const n=(b.bill_tags||[]).filter(t=>!t.returned_at).length;return n?`<div class="tags">🏷 お預かり ${n}</div>`:''})()}`;
@@ -917,10 +929,9 @@ function renderPay(){ const b=cur,T=b.totals; $('pTable').textContent=tables.fin
   $('payList').querySelectorAll('[data-pay]').forEach(x=>x.onclick=async()=>{ const p=(cur.payments||[]).find(z=>z.id===x.dataset.pay); if(!p||cur.depPays?.has(p.id))return; if(!await uiConfirm(`${METHOD[p.method]} ${yen(p.amount)} の入金を取り消しますか？`))return; const wasOki=isOki(cur); const r=await sb.from('payments').delete().eq('id',p.id); if(r.error){ toast('取り消せません：'+r.error.message); return; } await logOp('入金取消',{method:METHOD[p.method],amount:p.amount,table:tables.find(t=>t.id===cur.table_id)?.name||null}); await openBill(cur.id); if(await okiSync(wasOki)) return; renderPay(); show('v-pay'); });
   $('payList').querySelectorAll('[data-adj]').forEach(x=>x.onclick=async()=>{ const a=(cur.bill_adjustments||[]).find(z=>z.id===x.dataset.adj); await logOp('値引・値増の削除',{kind:a?.kind,amount:a?.amount,reason:a?.reason}); const wasOki=isOki(cur); await sb.from('bill_adjustments').delete().eq('id',x.dataset.adj); await openBill(cur.id); if(await okiSync(wasOki)) return; renderPay(); show('v-pay'); }); }
 let okiBusy=false; async function closeAsOki(){ if(okiBusy||!cur||cur.status!=='open') return; const un=cur.totals?.unpaid??0; if(un<=0){ toast('未収がないため、置きにする金額がありません'); return; }
-  const tg=(cur.bill_tags||[]).filter(t=>!t.returned_at); if(tg.length&&!await uiConfirm(`⚠ お預かり品が ${tg.length} 点あります（${tg.map(t=>TAGK[t.kind]+(t.tag_no?'#'+t.tag_no:'')).join('、')}）。お返ししましたか？\nOK＝返却済みとして締める`))return;
+  const tg=(cur.bill_tags||[]).filter(t=>!t.returned_at); if(tg.length&&!await uiConfirm(`⚠ お預かり品が ${tg.length} 点あります（${tg.map(t=>TAGK[t.kind]+(t.tag_no?'#'+t.tag_no:'')).join('、')}）。\n会計後、この卓に大きく表示されます。お渡ししたら卓をタップして「お渡ししました」を押してください。`))return;
   if(!await uiConfirm(`未収 ${yen(un)} を「置き」にして会計を終了しますか？`))return; okiBusy=true;
-  try{ if(tg.length) await sb.from('bill_tags').update({returned_at:new Date().toISOString()}).in('id',tg.map(t=>t.id));
-    const r=await sb.from('payments').insert({bill_id:cur.id,method:'oki',amount:un,revenue_date:cur.business_date,received_at:null}); if(r.error){ toast(r.error.message); return; } await logOp('入金',{method:METHOD.oki,amount:un});
+  try{ const r=await sb.from('payments').insert({bill_id:cur.id,method:'oki',amount:un,revenue_date:cur.business_date,received_at:null}); if(r.error){ toast(r.error.message); return; } await logOp('入金',{method:METHOD.oki,amount:un});
     const { error } = await sb.from('bills').update({status:'closed',closed_at:new Date().toISOString(),set_end:billEnd(cur).toISOString()}).eq('id',cur.id); if(error){ toast(error.message); return; }
     await logOp('会計締め（置き）',{total:cur.totals.amount_due,oki:un,payments:[...(cur.payments||[]).filter(p=>p.amount>0).map(p=>`${METHOD[p.method]}:${p.amount}`),`${METHOD.oki}:${un}`]}); toast('置きで会計を終了しました'); payMethod='cash'; loadHall(); show('v-hall'); } finally { okiBusy=false; } }
 async function addAdj(kind){ const v=parseInt($('payAmount').value||'0',10); if(!v){toast('金額を入力してください');return;} if(!await uiConfirm(`${kind==='discount'?'値引':'値増'} ${yen(v)} を入れますか？`))return; const wasOki=isOki(cur); const ra=await sb.from('bill_adjustments').insert({bill_id:cur.id,kind,amount:v,reason:''}); if(ra.error){ toast(ra.error.message); return; } await logOp(kind==='discount'?'値引':'値増',{amount:v}); await openBill(cur.id); if(await okiSync(wasOki)) return; renderPay(); show('v-pay'); }
@@ -932,7 +943,7 @@ $('payAdd').onclick=guard($('payAdd'),async()=>{ const v=parseInt($('payAmount')
   if(error){toast(error.message);return;} await logOp(wasOki?'置きの入金':'入金',{method:METHOD[payMethod],amount:v}); await openBill(cur.id); if(await okiSync(wasOki)) return; renderPay(); show('v-pay'); });
 $('payBack').onclick=()=>openBill(cur.id);
 $('payClose').onclick=guard($('payClose'),async()=>{ if(cur.totals.unpaid>0){toast(`未収 ${yen(cur.totals.unpaid)} があります。請求書か置きで登録してください`);return;}
-  const tg=(cur.bill_tags||[]).filter(t=>!t.returned_at); if(tg.length&&!await uiConfirm(`⚠ お預かり品が ${tg.length} 点あります（${tg.map(t=>TAGK[t.kind]+(t.tag_no?'#'+t.tag_no:'')).join('、')}）。お返ししましたか？\nOK＝返却済みとして締める`))return; if(tg.length) await sb.from('bill_tags').update({returned_at:new Date().toISOString()}).in('id',tg.map(t=>t.id));
+  const tg=(cur.bill_tags||[]).filter(t=>!t.returned_at); if(tg.length&&!await uiConfirm(`⚠ お預かり品が ${tg.length} 点あります（${tg.map(t=>TAGK[t.kind]+(t.tag_no?'#'+t.tag_no:'')).join('、')}）。\n会計後、この卓に大きく表示されます。お渡ししたら卓をタップして「お渡ししました」を押してください。`))return;
   if(!await uiConfirm(`請求額 ${yen(cur.totals.amount_due)} で会計を締めます。\n締めた後は変更できません。`))return;
   const { error } = await sb.from('bills').update({status:'closed',closed_at:new Date().toISOString(),set_end:billEnd(cur).toISOString()}).eq('id',cur.id); if(error){ toast(error.message); return; } await logOp('会計締め',{total:cur.totals.amount_due,payments:(cur.payments||[]).filter(p=>p.amount>0).map(p=>`${METHOD[p.method]}:${p.amount}`)}); toast('会計を締めました'); loadHall(); show('v-hall'); });
 
