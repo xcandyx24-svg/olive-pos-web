@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex,nofollow">
+<title>OLIVE 顧客</title><!-- customer v1.0 -->
+<style>
+  :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:16px}
+  body{padding-bottom:env(safe-area-inset-bottom)}
+  button{font:inherit;cursor:pointer;border:none;border-radius:10px;padding:10px 14px;background:#eee;color:var(--ink)}
+  button.primary{background:var(--blue);color:#fff}button.ok{background:var(--acc);color:#fff}button.danger{background:var(--warn);color:#fff}
+  button.edit{background:var(--edit);color:#fff}
+  button.ghost{background:transparent;border:1px solid var(--line)}button.sm{padding:6px 10px;font-size:14px}
+  button.chip{background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:14px}button.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  button:disabled{opacity:.4}
+  input,select,textarea{font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);width:100%}
+  textarea{line-height:1.5;resize:vertical}
+  .muted{color:var(--muted)}small{font-size:13px}
+  .hide{display:none!important}
+
+  /* ログイン */
+  #vLogin{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  #vLogin .box{width:100%;max-width:360px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px}
+  #vLogin h1{margin:0 0 4px;font-size:22px}#vLogin p{margin:0 0 18px}
+  #vLogin button{width:100%;margin-top:12px;padding:12px}
+  .err{color:var(--warn);font-size:14px;min-height:20px;margin-top:8px}
+
+  /* 共通の上部バー */
+  .top{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);padding:10px 16px;padding-top:calc(10px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px}
+  .top .ttl{font-weight:700;font-size:17px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .editbar{background:var(--edit);color:#fff;font-size:14px;padding:6px 16px;display:flex;align-items:center;gap:8px}
+  .editbar button{margin-left:auto;background:rgba(255,255,255,.2);color:#fff;padding:4px 10px;font-size:13px}
+  .wrap{max-width:720px;margin:0 auto;padding:12px 16px 40px}
+
+  /* 一覧 */
+  .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+  .tools select{width:auto;padding:7px 10px;font-size:14px}
+  .rows{display:flex;flex-direction:column;gap:6px}
+  .row{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .row .nm{font-weight:700}.row .sub{font-size:13px;color:var(--muted);margin-top:2px}
+  .badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--gold);color:#fff;white-space:nowrap;vertical-align:1px;font-weight:400}
+  .badge.gray{background:#9a9a9a}.badge.k{background:var(--ink)}.badge.warnb{background:var(--warn)}
+
+  /* 詳細 */
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  .card h2{margin:0 0 10px;font-size:14px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .card h2 button{margin-left:auto}
+  .kv{display:grid;grid-template-columns:6.5em 1fr;gap:6px 10px;font-size:15px}
+  .kv dt{color:var(--muted);font-size:13px;padding-top:2px}.kv dd{margin:0;overflow-wrap:anywhere}
+  .memo{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;font-size:15px}
+  .req{background:#fff8e6;border:1px solid #f0dca8;border-radius:10px;padding:8px 10px;margin-top:8px;font-size:14px}
+  .req .who{font-size:12px;color:var(--muted)}
+  .bt{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;background:#fafafa}
+  .bt .nm{font-weight:700}.bt .sub{font-size:13px;color:var(--muted);margin:2px 0 8px}
+  .bt .ops{display:flex;gap:6px;align-items:center}
+  .bt .ops select{width:auto;flex:1;padding:8px}
+  .vis{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #f0eee9;font-size:14px}
+  .vis:last-child{border-bottom:none}.vis .amt{font-variant-numeric:tabular-nums;white-space:nowrap}
+  label.f{display:block;margin-bottom:10px;font-size:13px;color:var(--muted)}label.f input,label.f select,label.f textarea{margin-top:4px;color:var(--ink)}
+
+  /* ダイアログ・トースト */
+  .modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.4);display:none;align-items:flex-end;justify-content:center}
+  .modal.on{display:flex}
+  .sheet{background:#fff;width:100%;max-width:560px;border-radius:16px 16px 0 0;padding:18px 16px calc(16px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto}
+  @media (min-width:600px){.modal{align-items:center}.sheet{border-radius:16px}}
+  .sheet h3{margin:0 0 12px;font-size:17px}.sheet .msg{white-space:pre-wrap;margin-bottom:14px;line-height:1.5}
+  .sheet .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}.sheet .btns button{min-width:88px}
+  #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;z-index:60;display:none;max-width:90vw;text-align:center}
+  #toast.on{display:block}
+  .loading{padding:30px 0;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- ログイン -->
+<div id="vLogin" class="hide">
+  <div class="box">
+    <h1>OLIVE 顧客</h1>
+    <p class="muted">パスワードを入力してください</p>
+    <form id="loginForm" autocomplete="off">
+      <input id="pw" type="password" autocomplete="current-password" placeholder="パスワード">
+      <button class="primary" type="submit" id="loginBtn">入る</button>
+      <div class="err" id="loginErr"></div>
+    </form>
+  </div>
+</div>
+
+<!-- 一覧 -->
+<div id="vList" class="hide">
+  <div class="top"><span class="ttl" id="storeName">顧客</span><button class="ghost sm" id="menuBtn">メニュー</button></div>
+  <div class="editbar hide" id="editBar1"><span>編集モード</span><span class="editLeft"></span><button class="editEnd">終了</button></div>
+  <div class="wrap">
+    <input id="q" type="search" placeholder="お名前・会社名・領収書名・キープ名で検索" autocomplete="off">
+    <div class="tools">
+      <button class="chip on" data-mode="all">全員</button>
+      <button class="chip" data-mode="old">ご来店なし</button>
+      <select id="months" class="hide"></select>
+      <button class="ok sm" id="newBtn" style="margin-left:auto">＋新規</button>
+    </div>
+    <div class="muted" id="count" style="font-size:13px;margin-bottom:6px"></div>
+    <div class="rows" id="rows"><div class="loading">読み込み中…</div></div>
+  </div>
+</div>
+
+<!-- 詳細 -->
+<div id="vDetail" class="hide">
+  <div class="top"><button class="ghost sm" id="backBtn">‹ 一覧</button><span class="ttl" id="dName"></span></div>
+  <div class="editbar hide" id="editBar2"><span>編集モード</span><span class="editLeft"></span><button class="editEnd">終了</button></div>
+  <div class="wrap" id="detail"></div>
+</div>
+
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const SUPABASE_URL='https://gjqaxenwvvazhjtziusf.supabase.co', SUPABASE_KEY='sb_publishable_pPfJUvJd6iJeHBNiD7XkWA_2RKF7JYw';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const yen=n=>'¥'+Number(n||0).toLocaleString('ja-JP');
+const LS={ get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v); }catch(e){} } };
+const SS={ get(k){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ v==null?sessionStorage.removeItem(k):sessionStorage.setItem(k,v); }catch(e){} } };
+
+let token=LS.get('olive_cs_token'), editTok=SS.get('olive_cs_edit'), editExp=Number(SS.get('olive_cs_edit_exp')||0);
+let boot=null, custs=[], mode='all', monthsSel=null, curId=null, cur=null;
+
+// ---------- 通信 ----------
+class CsError extends Error{ constructor(code,msg){ super(msg||code); this.code=code; } }
+async function rpc(fn,args){
+  let r; try{ r=await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`,{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY},body:JSON.stringify(args||{})}); }
+  catch(e){ throw new CsError('NET','通信できませんでした。電波の良い所でもう一度お試しください'); }
+  const t=await r.text(); let d=null; try{ d=t?JSON.parse(t):null; }catch(e){}
+  if(!r.ok){ const m=String(d&&d.message||t||''); const c=(m.match(/^(CS_[A-Z]+)/)||[])[1];
+    if(c==='CS_AUTH'){ logoutLocal(); throw new CsError(c,'もう一度パスワードを入力してください'); }
+    if(c==='CS_EDIT'){ endEdit(true); throw new CsError(c,'編集パスワードの有効時間が切れました。もう一度入力してください'); }
+    if(c==='CS_INPUT') throw new CsError(c,m.replace(/^CS_INPUT:/,''));
+    if(c==='CS_CONFLICT') throw new CsError(c,'ほかの人が先にこのお客様を変更しました。最新の内容を読み込み直します');
+    if(c==='CS_NOTFOUND') throw new CsError(c,'見つかりません（削除された可能性があります）');
+    if(c==='CS_LOCKED') throw new CsError(c,'パスワードの間違いが続いたため、15分間止めています');
+    if(c==='CS_NOEDITPW') throw new CsError(c,'編集パスワードがまだ設定されていません');
+    if(/Could not find the function|does not exist/.test(m)) throw new CsError('SQL','準備中です（SQL 043 が未適用）');
+    throw new CsError('ERR',m||('エラー '+r.status)); }
+  return d; }
+
+// ---------- ダイアログ（ブラウザ標準は使わない） ----------
+function sheet(html,onOpen){ return new Promise(res=>{ const m=$('modal'), s=$('sheet'); s.innerHTML=html; m.classList.add('on'); const done=v=>{ m.classList.remove('on'); s.innerHTML=''; res(v); }; onOpen(s,done); }); }
+function uiConfirm(msg,ok='OK',cls='primary'){ return sheet(`<div class="msg">${esc(msg)}</div><div class="btns"><button class="ghost" data-x>キャンセル</button><button class="${cls}" data-ok>${esc(ok)}</button></div>`,(s,done)=>{ s.querySelector('[data-x]').onclick=()=>done(false); s.querySelector('[data-ok]').onclick=()=>done(true); }); }
+function uiAlert(msg){ return sheet(`<div class="msg">${esc(msg)}</div><div class="btns"><button class="primary" data-ok>OK</button></div>`,(s,done)=>{ s.querySelector('[data-ok]').onclick=()=>done(true); }); }
+function uiPrompt(title,val='',opt={}){ return sheet(`<h3>${esc(title)}</h3><input id="pIn" ${opt.pw?'type="password" autocomplete="off"':''} value="${esc(val)}" placeholder="${esc(opt.ph||'')}"><div class="err" id="pErr"></div><div class="btns"><button class="ghost" data-x>キャンセル</button><button class="primary" data-ok>${esc(opt.ok||'OK')}</button></div>`,(s,done)=>{ const i=s.querySelector('#pIn'); setTimeout(()=>i.focus(),50); const go=()=>done(i.value); s.querySelector('[data-x]').onclick=()=>done(null); s.querySelector('[data-ok]').onclick=go; i.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } }; }); }
+let toastT=0; function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),2200); }
+async function fail(e){ if(e&&e.code==='CS_AUTH'){ showLogin(e.message); return; } await uiAlert(e&&e.message||String(e)); }
+
+// ---------- 画面切り替え ----------
+function show(v){ ['vLogin','vList','vDetail'].forEach(x=>$(x).classList.toggle('hide',x!==v)); window.scrollTo(0,0); }
+function showLogin(msg){ show('vLogin'); $('loginErr').textContent=msg||''; $('pw').value=''; }
+function logoutLocal(){ token=null; LS.set('olive_cs_token',null); endEdit(true); boot=null; custs=[]; }
+
+// ---------- ログイン ----------
+$('loginForm').onsubmit=async e=>{ e.preventDefault(); const pw=$('pw').value; if(!pw){ $('loginErr').textContent='パスワードを入力してください'; return; }
+  $('loginBtn').disabled=true; $('loginErr').textContent='';
+  try{ const r=await rpc('cs_login',{p_pw:pw}); if(r&&r.error){ $('loginErr').textContent='パスワードが違います'; return; }
+    token=r.token; LS.set('olive_cs_token',token); $('pw').value=''; await start(); }
+  catch(err){ $('loginErr').textContent=err.message; }
+  finally{ $('loginBtn').disabled=false; } };
+
+async function start(){ if(!token){ showLogin(); return; }
+  try{ boot=await rpc('cs_boot',{p_token:token}); }catch(e){ if(e.code==='CS_AUTH'){ showLogin(); return; } showLogin(e.message); return; }
+  $('storeName').textContent=(boot.store&&boot.store.name||'')+'　顧客'; document.title=(boot.store&&boot.store.name||'OLIVE')+' 顧客';
+  if(!monthsSel) monthsSel=boot.bottle_keep_months||6;
+  show('vList'); paintEdit(); await loadList(); }
+
+// ---------- 編集モード ----------
+function editing(){ return !!editTok&&editExp>Date.now(); }
+function endEdit(silent){ editTok=null; editExp=0; SS.set('olive_cs_edit',null); SS.set('olive_cs_edit_exp',null); paintEdit(); if(!silent&&cur) renderDetail(); }
+let editTimer=0;
+function paintEdit(){ const on=editing(); ['editBar1','editBar2'].forEach(id=>$(id).classList.toggle('hide',!on));
+  const left=on?Math.max(0,Math.ceil((editExp-Date.now())/60000)):0; document.querySelectorAll('.editLeft').forEach(x=>x.textContent=on?`（あと${left}分）`:'');
+  clearTimeout(editTimer); if(on) editTimer=setTimeout(()=>{ if(!editing()){ endEdit(); toast('編集モードを終了しました'); } else paintEdit(); },30000); }
+document.querySelectorAll('.editEnd').forEach(b=>b.onclick=()=>{ endEdit(); toast('編集モードを終了しました'); });
+async function needEdit(){ if(editing()) return true;
+  const pw=await uiPrompt('編集パスワード','',{pw:true,ok:'編集する'}); if(pw==null) return false; if(!pw){ toast('パスワードを入力してください'); return false; }
+  try{ const r=await rpc('cs_edit_login',{p_token:token,p_pw:pw}); if(r&&r.error){ await uiAlert('編集パスワードが違います'); return false; }
+    editTok=r.edit_token; editExp=new Date(r.expires_at).getTime(); SS.set('olive_cs_edit',editTok); SS.set('olive_cs_edit_exp',String(editExp)); paintEdit(); toast('編集モードにしました（30分）'); return true; }
+  catch(e){ await fail(e); return false; } }
+
+$('menuBtn').onclick=()=>sheet(`<h3>メニュー</h3><div style="display:flex;flex-direction:column;gap:8px">${editing()?'<button class="ghost" data-a="end">編集モードを終了</button>':'<button class="edit" data-a="edit">編集パスワードを入力</button>'}<button class="ghost" data-a="reload">最新に更新</button><button class="ghost" data-a="out" style="color:var(--warn)">ログアウト</button></div><div class="btns"><button class="ghost" data-x>閉じる</button></div>`,(s,done)=>{
+  s.querySelector('[data-x]').onclick=()=>done(); s.querySelectorAll('[data-a]').forEach(b=>b.onclick=async()=>{ const a=b.dataset.a; done();
+    if(a==='edit') await needEdit(); else if(a==='end'){ endEdit(); toast('編集モードを終了しました'); } else if(a==='reload') await loadList();
+    else if(a==='out'){ if(!await uiConfirm('ログアウトしますか？\n次に開く時はパスワードが必要です。','ログアウト','danger')) return; try{ await rpc('cs_logout',{p_token:token}); }catch(e){} logoutLocal(); showLogin(); } }); });
+
+// ---------- 日付 ----------
+function bd(){ return boot&&boot.business_date||new Date().toISOString().slice(0,10); }
+function md(d){ const m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[1]===bd().slice(0,4)?'':m[1]+'/'}${+m[2]}/${+m[3]}`:''; }
+function cutoff(n){ const [y,m,d]=bd().split('-').map(Number); const x=new Date(y,m-1-n,d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
+function base(c){ return c.last||c.first_bottle||String(c.created_at||'').slice(0,10)||''; }
+const staffBy=id=>(boot&&boot.staff||[]).find(s=>s.id===id);
+const sname=id=>{ const s=staffBy(id); return s?s.name+(s.active?'':'（退店）'):''; };
+
+// ---------- 一覧 ----------
+async function loadList(){ $('rows').innerHTML='<div class="loading">読み込み中…</div>';
+  try{ custs=await rpc('cs_list',{p_token:token})||[]; custs.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ja')); renderList(); }catch(e){ $('rows').innerHTML=''; await fail(e); } }
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{ mode=b.dataset.mode; renderList(); });
+$('q').oninput=()=>renderList();
+function renderList(){ const q=$('q').value.trim();
+  document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));
+  const ms=$('months'); ms.classList.toggle('hide',mode!=='old'); const opts=[...new Set([1,2,3,6,12,monthsSel])].sort((a,b)=>a-b); ms.innerHTML=opts.map(n=>`<option value="${n}" ${n===monthsSel?'selected':''}>${n}か月以上</option>`).join(''); ms.onchange=()=>{ monthsSel=Number(ms.value); renderList(); };
+  const cut=cutoff(monthsSel);
+  let list=custs.filter(c=>!q||[c.name,c.company,c.receipt_name,...(c.keep_names||[])].some(v=>v&&String(v).includes(q)));
+  if(mode==='old') list=list.filter(c=>base(c)&&base(c)<=cut).sort((a,b)=>base(a).localeCompare(base(b)));
+  $('count').textContent=`${list.length}名`+(mode==='old'?`（最終来店が ${md(cut)} 以前）`:'');
+  const show=list.slice(0,300);
+  $('rows').innerHTML=show.map(c=>`<button class="row" data-id="${c.id}"><div class="nm">${esc(c.name)}${c.company?` <small class="muted" style="font-weight:400">${esc(c.company)}</small>`:''}${c.is_industry?' <span class="badge k">同業</span>':''}${c.req?` <span class="badge warnb">申請 ${c.req}件</span>`:''}</div><div class="sub" style="${mode==='old'?'color:#c0392b':''}">最終来店 ${c.last?md(c.last):'なし'}${c.bottles?`・ボトル${c.bottles}本`:''}${c.kakari_staff_id?`・係 ${esc(sname(c.kakari_staff_id))}`:''}</div></button>`).join('')+(list.length>show.length?`<div class="muted" style="font-size:13px;padding:8px 0">ほか ${list.length-show.length}名（検索で絞り込んでください）</div>`:'')||'<div class="muted" style="padding:20px 0">該当なし</div>';
+  $('rows').querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>openDetail(b.dataset.id)); }
+
+$('newBtn').onclick=async()=>{ const name=await uiPrompt('新しいお客様のお名前',$('q').value.trim(),{ok:'登録'}); if(name==null) return; const nm=name.trim(); if(!nm){ toast('お名前を入力してください'); return; }
+  const same=custs.filter(c=>c.name===nm); if(same.length&&!await uiConfirm(`「${nm}」様はすでに登録されています${same[0].company?`（${same[0].company}）`:''}。\n別の方として新しく登録しますか？`,'新しく登録')) return;
+  try{ const id=await rpc('cs_customer_add',{p_token:token,p_name:nm}); toast('登録しました'); $('q').value=''; await loadList(); openDetail(id); }catch(e){ await fail(e); } };
+
+// ---------- 詳細 ----------
+async function openDetail(id){ curId=id; cur=null; const c=custs.find(x=>x.id===id); $('dName').textContent=c?c.name+' 様':''; $('detail').innerHTML='<div class="loading">読み込み中…</div>'; show('vDetail'); paintEdit();
+  try{ const d=await rpc('cs_detail',{p_token:token,p_id:id}); if(curId!==id) return; cur=d; renderDetail(); }catch(e){ if(curId===id){ $('detail').innerHTML=''; } await fail(e); if(e.code==='CS_NOTFOUND'){ show('vList'); loadList(); } } }
+async function reloadDetail(){ if(!curId) return; try{ const d=await rpc('cs_detail',{p_token:token,p_id:curId}); cur=d; renderDetail(); }catch(e){ await fail(e); } }
+
+function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $('dName').textContent=c.name+' 様';
+  const bts=cur.bottles||[]; const open=bts.filter(b=>!b.is_finished&&!b.expired_on), fin=bts.filter(b=>b.is_finished&&!b.expired_on), exp=bts.filter(b=>b.expired_on);
+  const kakari=c.kakari_staff_id?sname(c.kakari_staff_id):'';
+  const good=(cur.good||[]).map(g=>`<span style="margin-right:14px">${esc(sname(g.staff_id))} <small class="muted">${g.n}回</small></span>`).join('')||'<span class="muted">なし</span>';
+  const reqs=(cur.requests||[]).map(q=>`<div class="req"><div class="who">${md(q.business_date)}　${esc(sname(q.author_staff_id))}　申請中</div><div style="white-space:pre-wrap">${esc(q.body)}</div></div>`).join('');
+  const keep=(boot.keep_products||[]);
+  $('detail').innerHTML=`
+  <div class="card"><h2>基本情報<button class="${ed?'edit':'ghost'} sm" id="editInfo">${ed?'編集する':'編集'}</button></h2>
+    <dl class="kv">
+      <dt>お誕生日</dt><dd>${esc(c.birthday||'—')}</dd>
+      <dt>会社名</dt><dd>${esc(c.company||'—')}${c.is_industry?' <span class="badge k">同業</span>':''}</dd>
+      <dt>領収書名</dt><dd>${esc(c.receipt_name||'—')}</dd>
+      <dt>係</dt><dd>${esc(kakari||'—')}</dd>
+      <dt>会社住所</dt><dd>${esc(c.company_address||'—')}</dd>
+      <dt>反応◎</dt><dd>${good}</dd>
+    </dl></div>
+  <div class="card"><h2>メモ<button class="${ed?'edit':'ghost'} sm" id="editMemo">${ed?'編集する':'編集'}</button></h2>
+    <div class="memo">${c.memo?esc(c.memo):'<span class="muted">なし</span>'}</div>${reqs}
+    <button class="ok" id="reqBtn" style="width:100%;margin-top:12px">＋ 気づきを申請</button></div>
+  <div class="card"><h2>キープボトル ${open.length}本</h2>
+    ${open.map(b=>`<div class="bt"><div class="nm">${esc(b.name)}</div><div class="sub">${md(b.opened_on)}〜${b.kakari_staff_id?'　係 '+esc(sname(b.kakari_staff_id)):''}${b.keep_name&&b.keep_name!==c.name?`　キープ名 ${esc(b.keep_name)}`:''}</div>
+      ${ed?`<div style="display:flex;gap:6px;margin-bottom:8px"><input data-kn="${b.id}" value="${esc(b.keep_name||c.name)}" style="flex:1;padding:8px" aria-label="キープ名"><button class="edit sm" data-knsave="${b.id}">キープ名を保存</button></div>`:''}
+      <div class="ops"><select data-rem="${b.id}">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>残り ${n}/10</option>`).join('')}</select><button class="ghost sm" data-fin="${b.id}">飲み切り</button><button class="ghost sm" data-exp="${b.id}">期限切れ</button></div></div>`).join('')||'<div class="muted" style="margin-bottom:8px">なし</div>'}
+    <div style="display:flex;gap:6px;margin-top:4px"><select id="btSel" style="flex:1"><option value="">ボトルを選ぶ</option>${keep.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><button class="ghost" id="btAdd">＋ボトル</button></div>
+    ${exp.length?`<div style="margin-top:12px;font-size:13px" class="muted">期限切れ</div>${exp.map(b=>`<div class="vis"><span>${esc(b.name)}　${b.remaining??0}/10　${md(b.expired_on)} 期限切れ${b.keep_name&&b.keep_name!==c.name?`（キープ名：${esc(b.keep_name)}）`:''}</span>${ed?`<button class="edit sm" data-unexp="${b.id}">戻す</button>`:''}</div>`).join('')}`:''}
+    ${fin.length?`<div class="muted" style="font-size:13px;margin-top:10px">飲み切り済み：${fin.slice(0,10).map(b=>esc(b.name)).join('、')}</div>`:''}</div>
+  <div class="card"><h2>来店履歴</h2>
+    <div class="muted" style="font-size:13px;margin-bottom:4px">今月 ${cur.month_count}回・${yen(cur.month_sum)}　／　累計 ${cur.visit_total}回</div>
+    ${(cur.visits||[]).map(v=>`<div class="vis"><span>${md(v.date)}　${esc(v.table||'')}　${v.guests}名${v.open?' <span class="badge">来店中</span>':''}${v.oki?' <span class="badge gray">置き</span>':''}</span><span class="amt">${v.amount!=null?yen(v.amount):''}</span></div>`).join('')||'<div class="muted">まだありません</div>'}
+    ${cur.visit_total>30?'<div class="muted" style="font-size:12px;margin-top:6px">直近30回を表示しています</div>':''}</div>`;
+
+  const D=$('detail');
+  $('editInfo').onclick=async()=>{ if(await needEdit()) editForm(false); };
+  $('editMemo').onclick=async()=>{ if(await needEdit()) editForm(true); };
+  $('reqBtn').onclick=()=>reqForm();
+  D.querySelectorAll('[data-rem]').forEach(x=>x.onchange=async()=>{ const b=bts.find(z=>z.id===x.dataset.rem); const v=x.value; x.disabled=true;
+    try{ await rpc('cs_bottle',{p_token:token,p_bottle:b.id,p_action:'remaining',p_value:v}); b.remaining=Number(v); toast(`${b.name} を 残り ${v}/10 にしました`); }catch(e){ x.value=String(b.remaining); await fail(e); } finally{ x.disabled=false; } });
+  D.querySelectorAll('[data-fin]').forEach(x=>x.onclick=async()=>{ const b=bts.find(z=>z.id===x.dataset.fin); if(!await uiConfirm(`${b.name} を飲み切りにしますか？`,'飲み切り')) return; await bottleAct(b,'finish','飲み切りにしました'); });
+  D.querySelectorAll('[data-exp]').forEach(x=>x.onclick=async()=>{ const b=bts.find(z=>z.id===x.dataset.exp); if(!await uiConfirm(`${b.name}（残り ${b.remaining??0}/10）を期限切れにしますか？\n残量はこのまま記録されます。`,'期限切れにする','danger')) return; await bottleAct(b,'expire','期限切れにしました'); });
+  D.querySelectorAll('[data-unexp]').forEach(x=>x.onclick=async()=>{ const b=bts.find(z=>z.id===x.dataset.unexp); if(!await uiConfirm(`${b.name} の期限切れを取り消して、キープ中に戻しますか？`,'戻す')) return; if(!await needEdit()) return; await bottleAct(b,'unexpire','キープ中に戻しました',null,true); });
+  D.querySelectorAll('[data-knsave]').forEach(x=>x.onclick=async()=>{ const b=bts.find(z=>z.id===x.dataset.knsave); const v=D.querySelector(`[data-kn="${b.id}"]`).value.trim(); if((v||c.name)===(b.keep_name||c.name)){ toast('変更はありません'); return; } if(!await needEdit()) return; await bottleAct(b,'keep_name','キープ名を保存しました',v,true); });
+  $('btAdd').onclick=async()=>{ const pid=$('btSel').value; const p=keep.find(z=>z.id===pid); if(!p){ toast('ボトルを選んでください'); return; } if(!await uiConfirm(`${c.name} 様に ${p.name} を登録しますか？`,'登録')) return;
+    try{ await rpc('cs_bottle_add',{p_token:token,p_customer:c.id,p_product:p.id}); toast('ボトルを登録しました'); await reloadDetail(); }catch(e){ await fail(e); } };
+}
+async function bottleAct(b,action,msg,value,withEdit){ try{ await rpc('cs_bottle',{p_token:token,p_bottle:b.id,p_action:action,p_value:value==null?null:String(value),p_edit_token:withEdit?editTok:null}); toast(msg); }catch(e){ await fail(e); } await reloadDetail(); }
+
+// 気づきの申請（書いた人はこのスマホで前回選んだ人を初期表示）
+function reqForm(){ const c=cur.customer; const ppl=(boot.staff||[]).filter(s=>s.active&&!s.trial&&!s.kakari_only); const last=LS.get('olive_cs_author');
+  const opt=g=>ppl.filter(s=>g==='hall'?s.kind==='hall':s.kind!=='hall').map(s=>`<option value="${s.id}" ${s.id===last?'selected':''}>${esc(s.name)}</option>`).join('');
+  return sheet(`<h3>${esc(c.name)} 様　気づきを申請</h3><label class="f">書いた人<select id="rqWho"><option value="">選んでください</option><optgroup label="黒服">${opt('hall')}</optgroup><optgroup label="キャスト">${opt('cast')}</optgroup></select></label><label class="f">気づき<textarea id="rqBody" rows="6" maxlength="1000" placeholder="例）お連れ様は赤ワイン派。次回は…"></textarea></label><div class="muted" style="font-size:12px">申請はメモに直接は入りません。お店で確認してからメモに追記されます。</div><div class="btns"><button class="ghost" data-x>キャンセル</button><button class="ok" data-ok>申請</button></div>`,(s,done)=>{
+    s.querySelector('[data-x]').onclick=()=>done(false);
+    s.querySelector('[data-ok]').onclick=async e=>{ const who=s.querySelector('#rqWho').value, body=s.querySelector('#rqBody').value.trim(); if(!who){ toast('書いた人を選んでください'); return; } if(!body){ toast('気づきを入力してください'); return; }
+      e.target.disabled=true; try{ await rpc('cs_request',{p_token:token,p_customer:c.id,p_author:who,p_body:body}); LS.set('olive_cs_author',who); done(true); toast('申請しました'); await reloadDetail(); }catch(err){ e.target.disabled=false; await fail(err); } }; }); }
+
+// 基本情報・メモの編集（編集パスワードが必要）
+const EF=[['name','お名前'],['birthday','お誕生日'],['company','会社名'],['receipt_name','領収書名'],['kakari_staff_id','係'],['company_address','会社住所']];
+function editForm(memoOnly){ const c=cur.customer; const casts=(boot.staff||[]).filter(s=>s.kind==='cast'&&s.active); const curK=c.kakari_staff_id&&!casts.some(s=>s.id===c.kakari_staff_id)?staffBy(c.kakari_staff_id):null;
+  const fields=memoOnly?'':EF.map(([k,l])=>k==='kakari_staff_id'?`<label class="f">${l}<select data-k="${k}"><option value="">なし</option>${curK?`<option value="${curK.id}" selected>${esc(curK.name)}（退店）</option>`:''}${casts.map(s=>`<option value="${s.id}" ${c[k]===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></label>`
+    :`<label class="f">${l}<input data-k="${k}" value="${esc(c[k]||'')}" ${k==='birthday'?'placeholder="例 11/24" inputmode="numeric"':''}></label>`).join('')+`<label class="f" style="display:flex;align-items:center;gap:8px;color:var(--ink);font-size:15px"><input type="checkbox" data-k="is_industry" ${c.is_industry?'checked':''} style="width:auto;margin:0">同業（会社名に店名を入れる）</label>`;
+  return sheet(`<h3>${esc(c.name)} 様　${memoOnly?'メモを編集':'基本情報を編集'}</h3>${fields}${memoOnly?`<label class="f">メモ<textarea data-k="memo" rows="12">${esc(c.memo||'')}</textarea></label>`:''}<div class="btns"><button class="ghost" data-x>キャンセル</button><button class="edit" data-ok>保存</button></div>`,(s,done)=>{
+    s.querySelector('[data-x]').onclick=()=>done(false);
+    s.querySelector('[data-ok]').onclick=async e=>{ const patch={}, before={};
+      s.querySelectorAll('[data-k]').forEach(i=>{ const k=i.dataset.k; let v=i.type==='checkbox'?i.checked:(k==='memo'?i.value.replace(/\s+$/,''):i.value.trim()); if(v==='') v=null; if(k==='is_industry'){ if(v!==!!c.is_industry){ patch[k]=v; before[k]=!!c.is_industry; } return; } if(v!==(c[k]||null)){ patch[k]=v; before[k]=c[k]??null; } });
+      if('name' in patch&&!patch.name){ toast('お名前は必須です'); return; }
+      if(patch.birthday){ const m=patch.birthday.replace(/[０-９／]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)).match(/^(\d{1,2})[\/月.\-](\d{1,2})日?$/); const dim=[31,29,31,30,31,30,31,31,30,31,30,31]; if(!m||+m[1]<1||+m[1]>12||+m[2]<1||+m[2]>dim[+m[1]-1]){ toast('お誕生日は 11/24 のように入力してください'); return; } patch.birthday=`${+m[1]}/${+m[2]}`; if(patch.birthday===(c.birthday||null)){ delete patch.birthday; delete before.birthday; } }
+      const ind='is_industry' in patch?patch.is_industry:!!c.is_industry; const co='company' in patch?patch.company:c.company; if(ind&&!co){ toast('同業の時は店名を会社名に入力してください'); return; }
+      if(!Object.keys(patch).length){ done(false); toast('変更はありません'); return; }
+      if(!editing()){ done(false); if(!await needEdit()) return; return editForm(memoOnly); }
+      e.target.disabled=true; try{ await rpc('cs_customer_edit',{p_token:token,p_edit_token:editTok,p_id:c.id,p_patch:patch,p_before:before}); done(true); toast('保存しました'); await reloadDetail(); const li=custs.find(x=>x.id===c.id); if(li&&cur){ Object.assign(li,{name:cur.customer.name,company:cur.customer.company,receipt_name:cur.customer.receipt_name,kakari_staff_id:cur.customer.kakari_staff_id,is_industry:cur.customer.is_industry}); } }
+      catch(err){ e.target.disabled=false; if(err.code==='CS_CONFLICT'){ done(false); await uiAlert(err.message); await reloadDetail(); return; } if(err.code==='CS_EDIT'){ done(false); await uiAlert(err.message); return; } await fail(err); } }; }); }
+
+// 戻るボタン（スマホの戻る操作）で一覧へ
+const _open=openDetail; openDetail=async id=>{ try{ history.pushState({d:1},''); }catch(e){} return _open(id); };
+$('backBtn').onclick=()=>{ if(history.state&&history.state.d){ history.back(); return; } curId=null; cur=null; show('vList'); renderList(); loadList(); };
+window.addEventListener('popstate',()=>{ curId=null; cur=null; show('vList'); renderList(); loadList(); });
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ paintEdit(); } });
+
+start();
+</script>
+</body>
+</html>
