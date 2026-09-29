@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.18 -->
+<title>OLIVE 顧客</title><!-- customer v1.19 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -268,7 +268,7 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
   <div class="card"><h2>来店履歴</h2>
     <div class="muted" style="font-size:13px;margin-bottom:4px">今月 ${cur.month_count}回・${yen(cur.month_sum)}　／　累計 ${cur.visit_total}回</div>
     ${visYears(cur.visits||[],v=>v.date,v=>`<div class="vis"><span>${md(v.date)}　${esc(v.table||'')}　${v.guests}名${v.open?' <span class="badge">来店中</span>':''}${v.oki?' <span class="badge gray">置き</span>':''}</span><span class="amt">${v.amount!=null?yen(v.amount):''}</span></div>`)||'<div class="muted">まだありません</div>'}
-    ${cur.visit_total>30?'<div class="muted" style="font-size:12px;margin-top:6px">直近30回を表示しています</div>':''}</div>`;
+    ${(cur.visits||[]).length<cur.visit_total?'<div class="muted" style="font-size:12px;margin-top:6px">直近30回を表示しています</div>':''}</div>`;
 
   const D=$('detail'); fitLine(D);
   $('editInfo').onclick=async()=>{ if(await needEdit()) editForm(false); };
