@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.78 -->
+<title>OLIVE 会計</title><!-- v10.79 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -106,12 +106,12 @@
 #cuSide .item input,#cuSide .item select,#cuBtSel,#cuBtRem{height:30px;box-sizing:border-box;padding-top:0;padding-bottom:0;font-size:13px!important}
 #cuSide .item select{flex:none;width:auto}
 #cuSide .item button.sm,#cuBtAdd{height:30px;box-sizing:border-box;padding:0 8px;font-size:12px}
-/* v10.76〜78：右の列を整理（v10.78＝列の幅を 230px｜1｜1.1 にして右の列を広げ、ボトル欄を3段に＝銘柄＋日付／キープ名＋残量／飲み切り・期限切れ・ボトル移動・削除）。来店履歴は全行同じ形（上＝日付・下＝卓・人数・右＝金額、日付は今年なら M/D）。ボトル1本の欄を6段→4段に（銘柄＋日付／キープ名／残量＋飲み切り／期限切れ・ボトル移動・削除） */
+/* v10.76〜79：右の列を整理（v10.79＝ボトル欄を 銘柄・日付・残量・✕（削除）／キープ名／飲切・期限切・ボトル移動 に。列の幅は 200px｜1｜1.25。v10.78＝列の幅を 230px｜1｜1.1 にして右の列を広げ、ボトル欄を3段に＝銘柄＋日付／キープ名＋残量／飲み切り・期限切れ・ボトル移動・削除）。来店履歴は全行同じ形（上＝日付・下＝卓・人数・右＝金額、日付は今年なら M/D）。ボトル1本の欄を6段→4段に（銘柄＋日付／キープ名／残量＋飲み切り／期限切れ・ボトル移動・削除） */
 #cuSide .item.bt{display:flex;flex-direction:column;align-items:stretch;gap:6px!important}
-#cuSide .bt1{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px}#cuSide .bt1 .n{flex:0 1 auto;overflow-wrap:anywhere}#cuSide .bt1 small{font-size:12px}
-#cuSide .bt2{display:flex;align-items:center;gap:6px;font-size:12px;margin:0}#cuSide .bt2 span{white-space:nowrap}#cuSide .bt2 input{flex:1 1 0;min-width:0;width:0}#cuSide .bt2 select{flex:none;width:auto}
+#cuSide .bt1{display:flex;align-items:center;gap:8px}#cuSide .bt1 .n{flex:1 1 0;min-width:0;overflow-wrap:anywhere;font-size:16px;font-weight:600;line-height:1.35}#cuSide .bt1 .n small{font-size:12px;font-weight:400;margin-left:6px;white-space:nowrap;color:var(--muted)}#cuSide .bt1 select{flex:none;width:auto;padding-left:6px!important;padding-right:2px!important}#cuSide .bt1 button.bx{flex:none;width:30px;padding:0;color:var(--muted);font-size:14px}
+#cuSide .bt2{display:flex;align-items:center;gap:6px;font-size:12px;margin:0}#cuSide .bt2 span{white-space:nowrap}#cuSide .bt2 input{flex:1 1 0;min-width:0;width:0}
 #cuSide .item.hv{padding:6px 10px;font-size:14px;flex-wrap:nowrap!important}#cuSide .item.hv .n{flex:1 1 0;min-width:0;line-height:1.3}#cuSide .item.hv .n small{display:block;font-size:12px}#cuSide .item.hv .amt{min-width:0;white-space:nowrap}
-#cuSide .bt3{display:flex;flex-wrap:wrap;align-items:center;gap:4px}#cuSide .bt3 button.sm{padding:0 5px;white-space:nowrap}
+#cuSide .bt3{display:flex;flex-wrap:wrap;align-items:center;gap:4px}#cuSide .bt3 button.sm{padding:0 8px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -194,8 +194,8 @@
   <div class="bar"><button class="ghost" id="payBack">伝票へ戻る</button><button class="ghost" id="prReceipt">領収書印刷</button><button class="primary" id="payClose">会計を締める</button></div>
 </div></section>
 
-<section class="view" id="v-cust"><div class="card settings" style="grid-template-columns:230px minmax(0,1fr) minmax(0,1.1fr)">
-  <div style="min-width:0"><div style="display:flex;gap:6px;margin-bottom:8px"><input id="cuSearch" placeholder="名前・会社名で検索" style="flex:1 1 0;min-width:0;width:0"><button class="primary sm" id="cuNew" style="white-space:nowrap;flex:none">＋新規</button></div><div id="cuModes" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="chip on" data-cm="all">全員</button><button class="chip" data-cm="old">ご来店なし</button><button class="chip" data-cm="req" id="cuReqChip" style="display:none"></button><select id="cuMonths" style="width:auto;padding:6px 8px"></select></div><div class="lst" id="cuList" style="max-height:70vh;overflow:auto"></div></div>
+<section class="view" id="v-cust"><div class="card settings" style="grid-template-columns:200px minmax(0,1fr) minmax(0,1.25fr)">
+  <div style="min-width:0"><div style="display:flex;gap:6px;margin-bottom:8px"><input id="cuSearch" placeholder="名前・会社名" style="flex:1 1 0;min-width:0;width:0"><button class="primary sm" id="cuNew" style="white-space:nowrap;flex:none">＋新規</button></div><div id="cuModes" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="chip on" data-cm="all">全員</button><button class="chip" data-cm="old">ご来店なし</button><button class="chip" data-cm="req" id="cuReqChip" style="display:none"></button><select id="cuMonths" style="width:auto;padding:6px 8px"></select></div><div class="lst" id="cuList" style="max-height:70vh;overflow:auto"></div></div>
   <div id="cuForm" class="form"></div>
   <div id="cuSide"></div>
 </div></section>
@@ -1017,7 +1017,7 @@ async function renderCuSide(c){ $('cuSide').innerHTML='<div class="muted">読み
   if(cuSel!==c.id) return;
   const ym=businessDate().slice(0,7); const mv=visits.filter(b=>b.business_date.startsWith(ym)); /* v10.70：金額は全額入金済みの伝票だけ。置きは全額入金した日の月に入れる */ const revM=b=>{ const ds=(b.payments||[]).map(p=>p.revenue_date).filter(Boolean).sort(); return (ds.length?ds[ds.length-1]:b.business_date).slice(0,7); }; const msum=visits.filter(b=>b.status==='closed'&&!isOki(b)&&revM(b)===ym).reduce((a,b)=>a+(tot[b.id]||0),0);
   $('cuSide').innerHTML=`<h2>キープボトル</h2>`+(bt.error?`<div class="muted">SQL 011 が未適用です：${esc(bt.error.message)}</div>`:
-    `<div class="list">${open.map(b=>`<div class="item bt"><div class="bt1"><span class="n">${esc(b.name)}</span><small class="muted">${sDate(b.opened_on)}〜</small></div><div class="bt2"><span class="muted">キープ名</span><input data-kn="${b.id}" value="${esc(b.keep_name||c.name||'')}" aria-label="キープ名"><select data-rem="${b.id}" aria-label="残量">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select></div><div class="bt3"><button class="ghost sm" data-fin="${b.id}">飲み切り</button><button class="ghost sm" data-exp="${b.id}">期限切れ</button><button class="ghost sm" data-mv="${b.id}">ボトル移動</button><button class="ghost sm" data-btdel="${b.id}" style="color:var(--muted);margin-left:auto">削除</button></div></div>`).join('')||'<div class="muted">なし</div>'}</div>
+    `<div class="list">${open.map(b=>`<div class="item bt"><div class="bt1"><span class="n">${esc(b.name)}<small>${sDate(b.opened_on)}〜</small></span><select data-rem="${b.id}" aria-label="残量">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select><button class="ghost sm bx" data-btdel="${b.id}" aria-label="削除">✕</button></div><div class="bt2"><span class="muted">キープ名</span><input data-kn="${b.id}" value="${esc(b.keep_name||c.name||'')}" aria-label="キープ名"></div><div class="bt3"><button class="ghost sm" data-fin="${b.id}">飲切</button><button class="ghost sm" data-exp="${b.id}">期限切</button><button class="ghost sm" data-mv="${b.id}">ボトル移動</button></div></div>`).join('')||'<div class="muted">なし</div>'}</div>
      <div style="border-top:1px dashed var(--line);margin-top:10px;padding-top:8px"><div class="muted" style="font-size:12px;margin-bottom:4px">新しくボトルを登録</div><div style="display:flex;gap:6px;align-items:center"><select id="cuBtSel" style="flex:1 1 0;min-width:0;width:0;font-size:14px;padding-left:6px;padding-right:4px"><option value="">銘柄</option>${keep.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}<option value="__free">＋ リストに無い銘柄</option></select><select id="cuBtRem" style="flex:none;width:auto;font-size:14px;padding-left:4px;padding-right:2px" aria-label="残量">${[10,9,8,7,6,5,4,3,2,1].map(n=>`<option value="${n}">${n}/10</option>`).join('')}</select><button class="primary sm" id="cuBtAdd" style="flex:none;padding-left:8px;padding-right:8px">登録</button></div></div>`+
      (done.length?`<div class="muted" style="font-size:12px;margin-top:6px">飲み切り済み：${done.slice(0,10).map(b=>esc(b.name)).join('、')}</div>`:'')+(expd.length?`<div style="margin-top:10px;font-size:13px" class="muted">${expd.some(b=>b.moved)?'期限切れ・ボトル移動':'期限切れ'}</div><div class="list">${expd.map(b=>`<div class="item"><span class="n">${esc(expLine(b)+knLabel(b,c.name))}</span><button class="ghost sm" data-unexp="${b.id}">戻す</button></div>`).join('')}</div>`:''))+
     `<h2 style="margin-top:18px">来店履歴</h2><div class="muted" style="font-size:13px;margin-bottom:6px">今月 ${mv.length}回・${yen(msum)}<br>累計 ${visits.length}回</div>
