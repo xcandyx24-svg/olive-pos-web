@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.91 -->
+<title>OLIVE 会計</title><!-- v10.92 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -981,8 +981,8 @@ function cuBase(id){ return cuInfo.last[id]||cuInfo.first[id]||String(customers.
 let cuMonthsSel=null;
 
 // ---------- 顧客（基本情報・キープボトル・来店履歴） ----------
-// v10.91：来店履歴は直近10件をそのまま出し、それより前は年ごとにまとめる（タップで開く）。顧客サイトと同じ
-function visYears(list,dt,row){ const head=list.slice(0,10).map(row).join(''), g={}; for(const v of list.slice(10)){ const y=String(dt(v)).slice(0,4); (g[y]=g[y]||[]).push(v); } return head+Object.keys(g).sort().reverse().map(y=>`<details class="vyr"><summary>${y}年　${g[y].length}回</summary>${g[y].map(row).join('')}</details>`).join(''); }
+// v10.91：来店履歴は今年の分はそのまま出し、去年より前は年ごとにまとめる（タップで開く）。顧客サイトと同じ
+function visYears(list,dt,row){ const cy=businessDate().slice(0,4), g={}; const head=list.filter(v=>String(dt(v)).slice(0,4)===cy).map(row).join(''); for(const v of list){ const y=String(dt(v)).slice(0,4); if(y===cy) continue; (g[y]=g[y]||[]).push(v); } return head+Object.keys(g).sort().reverse().map(y=>`<details class="vyr"><summary>${y}年　${g[y].length}回</summary>${g[y].map(row).join('')}</details>`).join(''); }
 let cuSel=null;
 $('navCust').onclick=async()=>{ show('v-cust'); await loadMasters(); renderCuList(); renderCuForm(); await loadCuInfo(); renderCuList(); };
 document.querySelectorAll('#cuModes [data-cm]').forEach(b=>b.onclick=()=>{ cuMode=b.dataset.cm; renderCuList(); });
