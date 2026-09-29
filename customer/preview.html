@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.6 -->
+<title>OLIVE 顧客</title><!-- customer v1.7 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -245,8 +245,8 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
   <div class="card"><h2>キープボトル ${open.length}本</h2>
     ${open.map(b=>`<div class="bt"><div class="nm">${esc(b.name)}</div><div class="sub">${md(b.opened_on)}〜${b.kakari_staff_id?'　係 '+esc(sname(b.kakari_staff_id)):''}${b.keep_name&&b.keep_name!==c.name?`　キープ名 ${esc(b.keep_name)}`:''}</div>
       ${ed?`<div style="display:flex;gap:6px;margin-bottom:8px"><input data-kn="${b.id}" value="${esc(b.keep_name||c.name)}" style="flex:1;padding:8px" aria-label="キープ名"><button class="edit sm" data-knsave="${b.id}">キープ名を保存</button></div>`:''}
-      <div class="ops"><select data-rem="${b.id}">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>残り ${n}/10</option>`).join('')}</select><button class="ghost sm" data-fin="${b.id}">飲み切り</button><button class="ghost sm" data-exp="${b.id}">期限切れ</button></div></div>`).join('')||'<div class="muted" style="margin-bottom:8px">なし</div>'}
-    <div style="border-top:1px dashed var(--line);margin-top:10px;padding-top:10px"><div class="muted" style="font-size:13px;margin-bottom:6px">新しくボトルを登録</div><div style="display:flex;gap:6px;align-items:center"><select id="btSel" style="flex:1;min-width:0;padding:10px 6px"><option value="">銘柄を選ぶ</option>${keep.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}<option value="__free">＋ リストに無い銘柄</option></select><select id="btRem" style="width:auto;flex:none;padding:10px 6px" aria-label="残量">${[10,9,8,7,6,5,4,3,2,1].map(n=>`<option value="${n}">残り ${n}/10</option>`).join('')}</select><button class="ok" id="btAdd" style="flex:none">登録</button></div></div>
+      <div class="ops"><select data-rem="${b.id}">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select><button class="ghost sm" data-fin="${b.id}">飲み切り</button><button class="ghost sm" data-exp="${b.id}">期限切れ</button></div></div>`).join('')||'<div class="muted" style="margin-bottom:8px">なし</div>'}
+    <div style="border-top:1px dashed var(--line);margin-top:10px;padding-top:10px"><div class="muted" style="font-size:13px;margin-bottom:6px">新しくボトルを登録</div><div style="display:flex;gap:6px;align-items:center"><select id="btSel" style="flex:1;min-width:0;padding:10px 6px"><option value="">銘柄を選ぶ</option>${keep.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}<option value="__free">＋ リストに無い銘柄</option></select><select id="btRem" style="width:auto;flex:none;padding:10px 6px" aria-label="残量">${[10,9,8,7,6,5,4,3,2,1].map(n=>`<option value="${n}">${n}/10</option>`).join('')}</select><button class="ok" id="btAdd" style="flex:none">登録</button></div></div>
     ${exp.length?`<div style="margin-top:12px;font-size:13px" class="muted">期限切れ</div>${exp.map(b=>`<div class="vis"><span>${esc(b.name)}　${b.remaining??0}/10　${md(b.expired_on)} 期限切れ${b.keep_name&&b.keep_name!==c.name?`（キープ名：${esc(b.keep_name)}）`:''}</span>${ed?`<button class="edit sm" data-unexp="${b.id}">戻す</button>`:''}</div>`).join('')}`:''}
     ${fin.length?`<div class="muted" style="font-size:13px;margin-top:10px">飲み切り済み：${fin.slice(0,10).map(b=>esc(b.name)).join('、')}</div>`:''}</div>
   <div class="card"><h2>メモ<button class="${ed?'edit':'ghost'} sm" id="editMemo">${ed?'編集する':'編集'}</button></h2>
