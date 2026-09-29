@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.4 -->
+<title>OLIVE 顧客</title><!-- customer v1.5 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -50,12 +50,13 @@
   .card h2{margin:0 0 10px;font-size:14px;color:var(--muted);display:flex;align-items:center;gap:8px}
   .card h2 button{margin-left:auto}
   .kv{display:grid;grid-template-columns:6.5em 1fr;gap:6px 10px;font-size:15px}
+  .kv.info{margin:0}.kv.info dd:first-of-type{padding-right:84px}
   .kv dt{color:var(--muted);font-size:13px;padding-top:2px}.kv dd{margin:0;overflow-wrap:anywhere}
   .memo{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;font-size:15px}
   .req{background:#fff8e6;border:1px solid #f0dca8;border-radius:10px;padding:8px 10px;margin-top:8px;font-size:14px}
   .req .who{font-size:12px;color:var(--muted)}
   .bt{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;background:#fafafa}
-  .bt .nm{font-weight:700}.bt .sub{font-size:13px;color:var(--muted);margin:2px 0 8px}
+  .bt .nm{font-weight:700;font-size:16px}.bt .sub{font-size:13px;color:var(--muted);margin:2px 0 8px}
   .bt .ops{display:flex;gap:6px;align-items:center}
   .bt .ops select{width:auto;flex:1;padding:8px}
   .vis{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #f0eee9;font-size:14px}
@@ -232,8 +233,8 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
   const reqs=(cur.requests||[]).map(q=>`<div class="req"><div class="who">${md(q.business_date)}　${esc(sname(q.author_staff_id))}　申請中</div><div style="white-space:pre-wrap">${esc(q.body)}</div></div>`).join('');
   const keep=(boot.keep_products||[]);
   $('detail').innerHTML=`
-  <div class="card"><h2>基本情報<button class="${ed?'edit':'ghost'} sm" id="editInfo">${ed?'編集する':'編集'}</button></h2>
-    <dl class="kv">
+  <div class="card" style="position:relative"><button class="${ed?'edit':'ghost'} sm" id="editInfo" style="position:absolute;top:10px;right:10px">${ed?'編集する':'編集'}</button>
+    <dl class="kv info">
       <dt>お誕生日</dt><dd>${esc(c.birthday||'—')}</dd>
       <dt>会社名</dt><dd>${esc(c.company||'—')}${c.is_industry?' <span class="badge k">同業</span>':''}</dd>
       <dt>領収書名</dt><dd>${esc(c.receipt_name||'—')}</dd>
@@ -245,7 +246,7 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
     ${open.map(b=>`<div class="bt"><div class="nm">${esc(b.name)}</div><div class="sub">${md(b.opened_on)}〜${b.kakari_staff_id?'　係 '+esc(sname(b.kakari_staff_id)):''}${b.keep_name&&b.keep_name!==c.name?`　キープ名 ${esc(b.keep_name)}`:''}</div>
       ${ed?`<div style="display:flex;gap:6px;margin-bottom:8px"><input data-kn="${b.id}" value="${esc(b.keep_name||c.name)}" style="flex:1;padding:8px" aria-label="キープ名"><button class="edit sm" data-knsave="${b.id}">キープ名を保存</button></div>`:''}
       <div class="ops"><select data-rem="${b.id}">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>残り ${n}/10</option>`).join('')}</select><button class="ghost sm" data-fin="${b.id}">飲み切り</button><button class="ghost sm" data-exp="${b.id}">期限切れ</button></div></div>`).join('')||'<div class="muted" style="margin-bottom:8px">なし</div>'}
-    <div style="border-top:1px dashed var(--line);margin-top:10px;padding-top:10px"><div class="muted" style="font-size:13px;margin-bottom:6px">新しくボトルを登録</div><select id="btSel"><option value="">ボトルを選ぶ</option>${keep.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><div id="btAddRow" class="hide" style="margin-top:8px"><div style="display:flex;gap:6px;align-items:center"><span class="muted" style="font-size:13px;white-space:nowrap">今の残量</span><select id="btRem" style="flex:1;width:auto">${[10,9,8,7,6,5,4,3,2,1].map(n=>`<option value="${n}">${n}/10</option>`).join('')}</select><button class="ok" id="btAdd">登録</button></div></div></div>
+    <div style="border-top:1px dashed var(--line);margin-top:10px;padding-top:10px"><div class="muted" style="font-size:13px;margin-bottom:6px">新しくボトルを登録</div><div style="display:flex;gap:6px;align-items:center"><select id="btSel" style="flex:1;min-width:0"><option value="">銘柄を選ぶ</option>${keep.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><select id="btRem" style="width:auto;flex:none" aria-label="残量">${[10,9,8,7,6,5,4,3,2,1].map(n=>`<option value="${n}">残り ${n}/10</option>`).join('')}</select><button class="ok" id="btAdd" style="flex:none">登録</button></div></div>
     ${exp.length?`<div style="margin-top:12px;font-size:13px" class="muted">期限切れ</div>${exp.map(b=>`<div class="vis"><span>${esc(b.name)}　${b.remaining??0}/10　${md(b.expired_on)} 期限切れ${b.keep_name&&b.keep_name!==c.name?`（キープ名：${esc(b.keep_name)}）`:''}</span>${ed?`<button class="edit sm" data-unexp="${b.id}">戻す</button>`:''}</div>`).join('')}`:''}
     ${fin.length?`<div class="muted" style="font-size:13px;margin-top:10px">飲み切り済み：${fin.slice(0,10).map(b=>esc(b.name)).join('、')}</div>`:''}</div>
   <div class="card"><h2>メモ<button class="${ed?'edit':'ghost'} sm" id="editMemo">${ed?'編集する':'編集'}</button></h2>
@@ -266,7 +267,6 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
   D.querySelectorAll('[data-exp]').forEach(x=>x.onclick=async()=>{ const b=bts.find(z=>z.id===x.dataset.exp); if(!await uiConfirm(`${b.name}（残り ${b.remaining??0}/10）を期限切れにしますか？\n残量はこのまま記録されます。`,'期限切れにする','danger')) return; await bottleAct(b,'expire','期限切れにしました'); });
   D.querySelectorAll('[data-unexp]').forEach(x=>x.onclick=async()=>{ const b=bts.find(z=>z.id===x.dataset.unexp); if(!await uiConfirm(`${b.name} の期限切れを取り消して、キープ中に戻しますか？`,'戻す')) return; if(!await needEdit()) return; await bottleAct(b,'unexpire','キープ中に戻しました',null,true); });
   D.querySelectorAll('[data-knsave]').forEach(x=>x.onclick=async()=>{ const b=bts.find(z=>z.id===x.dataset.knsave); const v=D.querySelector(`[data-kn="${b.id}"]`).value.trim(); if((v||c.name)===(b.keep_name||c.name)){ toast('変更はありません'); return; } if(!await needEdit()) return; await bottleAct(b,'keep_name','キープ名を保存しました',v,true); });
-  $('btSel').onchange=()=>{ const p=keep.find(z=>z.id===$('btSel').value); $('btAddRow').classList.toggle('hide',!p); $('btRem').value='10'; };
   $('btAdd').onclick=async()=>{ const pid=$('btSel').value; const p=keep.find(z=>z.id===pid); if(!p){ toast('ボトルを選んでください'); return; } const rem=Number($('btRem').value); if(!await uiConfirm(`${c.name} 様に ${p.name}（残り ${rem}/10）を登録しますか？`,'登録')) return;
     try{ const bid=await rpc('cs_bottle_add',{p_token:token,p_customer:c.id,p_product:p.id}); if(rem!==10) await rpc('cs_bottle',{p_token:token,p_bottle:bid,p_action:'remaining',p_value:String(rem)}); toast('ボトルを登録しました'); await reloadDetail(); }catch(e){ await fail(e); await reloadDetail(); } };
 }
@@ -285,7 +285,7 @@ const EF=[['name','お名前'],['birthday','お誕生日'],['company','会社名
 function editForm(memoOnly){ const c=cur.customer; const casts=(boot.staff||[]).filter(s=>s.kind==='cast'&&s.active); const curK=c.kakari_staff_id&&!casts.some(s=>s.id===c.kakari_staff_id)?staffBy(c.kakari_staff_id):null;
   const fields=memoOnly?'':EF.map(([k,l])=>k==='kakari_staff_id'?`<label class="f">${l}<select data-k="${k}"><option value="">なし</option>${curK?`<option value="${curK.id}" selected>${esc(curK.name)}（退店）</option>`:''}${casts.map(s=>`<option value="${s.id}" ${c[k]===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></label>`
     :`<label class="f">${l}<input data-k="${k}" value="${esc(c[k]||'')}" ${k==='birthday'?'placeholder="例 11/24" inputmode="numeric"':''}></label>`).join('')+`<label class="f" style="display:flex;align-items:center;gap:8px;color:var(--ink);font-size:15px"><input type="checkbox" data-k="is_industry" ${c.is_industry?'checked':''} style="width:auto;margin:0">同業（会社名に店名を入れる）</label>`;
-  return sheet(`<h3>${esc(c.name)} 様　${memoOnly?'メモを編集':'基本情報を編集'}</h3>${fields}${memoOnly?`<label class="f">メモ<textarea data-k="memo" rows="12">${esc(c.memo||'')}</textarea></label>`:''}<div class="btns"><button class="ghost" data-x>キャンセル</button><button class="edit" data-ok>保存</button></div>`,(s,done)=>{
+  return sheet(`<h3>${esc(c.name)} 様　${memoOnly?'メモを編集':'お客様の情報を編集'}</h3>${fields}${memoOnly?`<label class="f">メモ<textarea data-k="memo" rows="12">${esc(c.memo||'')}</textarea></label>`:''}<div class="btns"><button class="ghost" data-x>キャンセル</button><button class="edit" data-ok>保存</button></div>`,(s,done)=>{
     s.querySelector('[data-x]').onclick=()=>done(false);
     s.querySelector('[data-ok]').onclick=async e=>{ const patch={}, before={};
       s.querySelectorAll('[data-k]').forEach(i=>{ const k=i.dataset.k; let v=i.type==='checkbox'?i.checked:(k==='memo'?i.value.replace(/\s+$/,''):i.value.trim()); if(v==='') v=null; if(k==='is_industry'){ if(v!==!!c.is_industry){ patch[k]=v; before[k]=!!c.is_industry; } return; } if(v!==(c[k]||null)){ patch[k]=v; before[k]=c[k]??null; } });
