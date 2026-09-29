@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.70 -->
+<title>OLIVE 会計</title><!-- v10.71 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -801,10 +801,11 @@ async function attachCust(id){ if(custPick){ const c=customers.find(x=>x.id===id
 
 // ---------- cast modal（本日出勤者・同伴自動判定） ----------
 $('castAddBtn').onclick=async()=>{
-  const { data } = await sb.from('attendance_events').select('staff_id,event_type,event_at').eq('business_date',businessDate()).in('event_type',['clock_in','douhan']);
-  const present={}; (data||[]).forEach(e=>{ present[e.staff_id]=present[e.staff_id]||{}; present[e.staff_id][e.event_type]=e.event_at; });
-    const list=staff.filter(s=>s.kind==='cast'&&present[s.id]);
-  const others=staff.filter(s=>s.kind==='cast'&&!present[s.id]);
+  const { data } = await sb.from('attendance_events').select('staff_id,event_type,event_at').eq('business_date',businessDate()).in('event_type',['clock_in','douhan','clock_out']);
+  const present={}, gone=new Set(); (data||[]).forEach(e=>{ if(e.event_type==='clock_out'){ gone.add(e.staff_id); return; } present[e.staff_id]=present[e.staff_id]||{}; present[e.staff_id][e.event_type]=e.event_at; });
+  // v10.71：退勤済みの人は「出勤中」に出さず、「出勤していないキャストから選ぶ」に入れる
+    const list=staff.filter(s=>s.kind==='cast'&&present[s.id]&&!gone.has(s.id));
+  const others=staff.filter(s=>s.kind==='cast'&&(!present[s.id]||gone.has(s.id)));
   $('castList').innerHTML=list.map(s=>`<button class="chip" data-id="${s.id}" data-role="none">${esc(s.display_name)}</button>`).join('')||'<span class="muted">本日の出勤打刻がまだありません</span>';
   $('castListAll').innerHTML=others.map(s=>`<button class="chip" data-id="${s.id}" data-role="none">${esc(s.display_name)}</button>`).join('')||'<span class="muted">なし</span>';
   $('castListAll').classList.add('hidden'); $('castMoreBtn').textContent='出勤していないキャストから選ぶ ▾';
