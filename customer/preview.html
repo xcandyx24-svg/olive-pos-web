@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.10 -->
+<title>OLIVE 顧客</title><!-- customer v1.11 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -80,6 +80,8 @@
 .bt .b2{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px}.bt .b2 .kn{flex:1 1 170px;min-width:0;display:flex;align-items:center;gap:6px}.bt .b2 .kn span{white-space:nowrap}.bt .b2 .kn input{flex:1 1 0;min-width:0;width:0}.bt .b3{display:flex;gap:6px;flex:none;margin-left:auto}.bt .b3 button{white-space:nowrap}
 .bt .b1 select{flex:none;width:auto;padding-left:8px;padding-right:4px}
 .bt .b1 select,.bt .b2 input,.bt .b3 button{height:36px;box-sizing:border-box;padding-top:0;padding-bottom:0}.bt .b2 input{padding-left:8px;padding-right:8px;font-size:15px}
+/* v1.11：期限切れ・ボトル移動の行は1行に収まるまで文字を小さくする（fitLine） */
+.vis .fit1{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #btSel,#btRem,#btAdd{height:40px;box-sizing:border-box;padding-top:0;padding-bottom:0}
 </style>
 </head>
@@ -254,7 +256,7 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
     ${open.map(b=>`<div class="bt"><div class="b1"><span class="nm">${esc(b.name)}<small>${md(b.opened_on)}〜</small></span><select data-rem="${b.id}" aria-label="残量">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select></div>
       <div class="b2"><div class="kn"><span class="muted">キープ名</span><input data-kn="${b.id}" value="${esc(b.keep_name||c.name)}" aria-label="キープ名"></div><div class="b3"><button class="ghost sm" data-fin="${b.id}">飲切</button><button class="ghost sm" data-exp="${b.id}">期限切</button><button class="ghost sm" data-mv="${b.id}">ボトル移動</button></div></div></div>`).join('')||'<div class="muted" style="margin-bottom:8px">なし</div>'}
     <div style="border-top:1px dashed var(--line);margin-top:10px;padding-top:10px"><div class="muted" style="font-size:13px;margin-bottom:6px">新しくボトルを登録</div><div style="display:flex;gap:6px;align-items:center"><select id="btSel" style="flex:1;min-width:0;padding:10px 6px"><option value="">銘柄を選ぶ</option>${keep.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}<option value="__free">＋ リストに無い銘柄</option></select><select id="btRem" style="width:auto;flex:none;padding:10px 6px" aria-label="残量">${[10,9,8,7,6,5,4,3,2,1].map(n=>`<option value="${n}">${n}/10</option>`).join('')}</select><button class="ok" id="btAdd" style="flex:none">登録</button></div></div>
-    ${exp.length?`<div style="margin-top:12px;font-size:13px" class="muted">${exp.some(b=>b.moved)?'期限切れ・ボトル移動':'期限切れ'}</div>${exp.map(b=>`<div class="vis"><span>${esc(b.name)}　${b.remaining??0}/10　${md(b.expired_on)} ${b.moved?'ボトル移動':'期限切れ'}${b.keep_name&&b.keep_name!==c.name?`（キープ名：${esc(b.keep_name)}）`:''}</span>${ed?`<button class="edit sm" data-unexp="${b.id}">戻す</button>`:''}</div>`).join('')}`:''}
+    ${exp.length?`<div style="margin-top:12px;font-size:13px" class="muted">${exp.some(b=>b.moved)?'期限切れ・ボトル移動':'期限切れ'}</div>${exp.map(b=>`<div class="vis"><span class="fit1">${esc(b.name)}　${b.remaining??0}/10　${md(b.expired_on)} ${b.moved?'ボトル移動':'期限切れ'}${b.keep_name&&b.keep_name!==c.name?`（キープ名：${esc(b.keep_name)}）`:''}</span>${ed?`<button class="edit sm" data-unexp="${b.id}">戻す</button>`:''}</div>`).join('')}`:''}
     ${fin.length?`<div class="muted" style="font-size:13px;margin-top:10px">飲み切り済み：${fin.slice(0,10).map(b=>esc(b.name)).join('、')}</div>`:''}</div>
   <div class="card"><h2>メモ<button class="${ed?'edit':'ghost'} sm" id="editMemo">${ed?'編集する':'編集'}</button></h2>
     <div class="memo">${c.memo?esc(c.memo):'<span class="muted">なし</span>'}</div>${reqs}
@@ -264,7 +266,7 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
     ${(cur.visits||[]).map(v=>`<div class="vis"><span>${md(v.date)}　${esc(v.table||'')}　${v.guests}名${v.open?' <span class="badge">来店中</span>':''}${v.oki?' <span class="badge gray">置き</span>':''}</span><span class="amt">${v.amount!=null?yen(v.amount):''}</span></div>`).join('')||'<div class="muted">まだありません</div>'}
     ${cur.visit_total>30?'<div class="muted" style="font-size:12px;margin-top:6px">直近30回を表示しています</div>':''}</div>`;
 
-  const D=$('detail');
+  const D=$('detail'); fitLine(D);
   $('editInfo').onclick=async()=>{ if(await needEdit()) editForm(false); };
   $('editMemo').onclick=async()=>{ if(await needEdit()) editForm(true); };
   $('reqBtn').onclick=()=>reqForm();
@@ -286,6 +288,8 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
     if(freeName){ try{ await rpc('cs_bottle_add_named',{p_token:token,p_customer:c.id,p_name:freeName,p_remaining:rem}); toast('ボトルを登録しました'); await reloadDetail(); }catch(e){ if(e.code==='SQL') await uiAlert('準備中です（SQL 044 が未実行）'); else { await fail(e); await reloadDetail(); } } return; }
     try{ const bid=await rpc('cs_bottle_add',{p_token:token,p_customer:c.id,p_product:p.id}); if(rem!==10) await rpc('cs_bottle',{p_token:token,p_bottle:bid,p_action:'remaining',p_value:String(rem)}); toast('ボトルを登録しました'); await reloadDetail(); }catch(e){ await fail(e); await reloadDetail(); } };
 }
+function fitLine(root){ (root||document).querySelectorAll('.fit1').forEach(e=>{ e.style.fontSize=''; let s=parseFloat(getComputedStyle(e).fontSize)||14; while(e.scrollWidth>e.clientWidth+1&&s>9){ s-=0.5; e.style.fontSize=s+'px'; } }); }
+window.addEventListener('resize',()=>fitLine());
 async function bottleAct(b,action,msg,value,withEdit){ try{ await rpc('cs_bottle',{p_token:token,p_bottle:b.id,p_action:action,p_value:value==null?null:String(value),p_edit_token:withEdit?editTok:null}); toast(msg); }catch(e){ await fail(e); } await reloadDetail(); }
 
 // 気づきの申請（書いた人はこのスマホで前回選んだ人を初期表示）
