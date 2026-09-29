@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.14 -->
+<title>OLIVE 顧客</title><!-- customer v1.15 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -289,7 +289,7 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
     if(freeName){ try{ await rpc('cs_bottle_add_named',{p_token:token,p_customer:c.id,p_name:freeName,p_remaining:rem}); toast('ボトルを登録しました'); await reloadDetail(); }catch(e){ if(e.code==='SQL') await uiAlert('準備中です（SQL 044 が未実行）'); else { await fail(e); await reloadDetail(); } } return; }
     try{ const bid=await rpc('cs_bottle_add',{p_token:token,p_customer:c.id,p_product:p.id}); if(rem!==10) await rpc('cs_bottle',{p_token:token,p_bottle:bid,p_action:'remaining',p_value:String(rem)}); toast('ボトルを登録しました'); await reloadDetail(); }catch(e){ await fail(e); await reloadDetail(); } };
 }
-function fitLine(root){ (root||document).querySelectorAll('.fit1').forEach(e=>{ e.style.fontSize=''; let s=parseFloat(getComputedStyle(e).fontSize)||14; while(e.scrollWidth>e.clientWidth+1&&s>9){ s-=0.5; e.style.fontSize=s+'px'; } }); }
+function fitLine(root){ (root||document).querySelectorAll('.fit1').forEach(e=>{ if(e.dataset.fs==null) e.dataset.fs=e.style.fontSize||''; e.style.fontSize=e.dataset.fs; let s=parseFloat(getComputedStyle(e).fontSize)||14; while(e.scrollWidth>e.clientWidth+1&&s>9){ s-=0.5; e.style.fontSize=s+'px'; } }); }
 window.addEventListener('resize',()=>fitLine());
 async function bottleAct(b,action,msg,value,withEdit){ try{ await rpc('cs_bottle',{p_token:token,p_bottle:b.id,p_action:action,p_value:value==null?null:String(value),p_edit_token:withEdit?editTok:null}); toast(msg); }catch(e){ await fail(e); } await reloadDetail(); }
 
