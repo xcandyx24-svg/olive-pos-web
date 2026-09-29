@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.0 -->
+<title>OLIVE 顧客</title><!-- customer v1.1 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -97,8 +97,8 @@
     <input id="q" type="search" placeholder="お名前・会社名・領収書名・キープ名で検索" autocomplete="off">
     <div class="tools">
       <button class="chip on" data-mode="all">全員</button>
+      <select id="months" aria-label="期間"></select>
       <button class="chip" data-mode="old">ご来店なし</button>
-      <select id="months" class="hide"></select>
       <button class="ok sm" id="newBtn" style="margin-left:auto">＋新規</button>
     </div>
     <div class="muted" id="count" style="font-size:13px;margin-bottom:6px"></div>
@@ -207,7 +207,7 @@ document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{ mode=b.datas
 $('q').oninput=()=>renderList();
 function renderList(){ const q=$('q').value.trim();
   document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));
-  const ms=$('months'); ms.classList.toggle('hide',mode!=='old'); const opts=[...new Set([1,2,3,6,12,monthsSel])].sort((a,b)=>a-b); ms.innerHTML=opts.map(n=>`<option value="${n}" ${n===monthsSel?'selected':''}>${n}か月以上</option>`).join(''); ms.onchange=()=>{ monthsSel=Number(ms.value); renderList(); };
+  const ms=$('months'); const opts=[...new Set([1,2,3,6,12,monthsSel])].sort((a,b)=>a-b); ms.innerHTML=opts.map(n=>`<option value="${n}" ${n===monthsSel?'selected':''}>${n}か月以上</option>`).join(''); ms.onchange=()=>{ monthsSel=Number(ms.value); mode='old'; renderList(); };
   const cut=cutoff(monthsSel);
   let list=custs.filter(c=>!q||[c.name,c.company,c.receipt_name,...(c.keep_names||[])].some(v=>v&&String(v).includes(q)));
   if(mode==='old') list=list.filter(c=>base(c)&&base(c)<=cut).sort((a,b)=>base(a).localeCompare(base(b)));
@@ -272,9 +272,9 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
 async function bottleAct(b,action,msg,value,withEdit){ try{ await rpc('cs_bottle',{p_token:token,p_bottle:b.id,p_action:action,p_value:value==null?null:String(value),p_edit_token:withEdit?editTok:null}); toast(msg); }catch(e){ await fail(e); } await reloadDetail(); }
 
 // 気づきの申請（書いた人はこのスマホで前回選んだ人を初期表示）
-function reqForm(){ const c=cur.customer; const ppl=(boot.staff||[]).filter(s=>s.active&&!s.trial&&!s.kakari_only); const last=LS.get('olive_cs_author');
-  const opt=g=>ppl.filter(s=>g==='hall'?s.kind==='hall':s.kind!=='hall').map(s=>`<option value="${s.id}" ${s.id===last?'selected':''}>${esc(s.name)}</option>`).join('');
-  return sheet(`<h3>${esc(c.name)} 様　気づきを申請</h3><label class="f">書いた人<select id="rqWho"><option value="">選んでください</option><optgroup label="黒服">${opt('hall')}</optgroup><optgroup label="キャスト">${opt('cast')}</optgroup></select></label><label class="f">気づき<textarea id="rqBody" rows="6" maxlength="1000" placeholder="例）お連れ様は赤ワイン派。次回は…"></textarea></label><div class="muted" style="font-size:12px">申請はメモに直接は入りません。お店で確認してからメモに追記されます。</div><div class="btns"><button class="ghost" data-x>キャンセル</button><button class="ok" data-ok>申請</button></div>`,(s,done)=>{
+function reqForm(){ const c=cur.customer; const ppl=(boot.staff||[]).filter(s=>s.active&&s.kind==='hall'); /* 顧客サイトは黒服だけが使う */ const last=LS.get('olive_cs_author');
+  const opt=()=>ppl.map(s=>`<option value="${s.id}" ${s.id===last?'selected':''}>${esc(s.name)}</option>`).join('');
+  return sheet(`<h3>${esc(c.name)} 様　気づきを申請</h3><label class="f">書いた人<select id="rqWho"><option value="">選んでください</option>${opt()}</select></label><label class="f">気づき<textarea id="rqBody" rows="6" maxlength="1000" placeholder="例）お連れ様は赤ワイン派。次回は…"></textarea></label><div class="muted" style="font-size:12px">申請はメモに直接は入りません。お店で確認してからメモに追記されます。</div><div class="btns"><button class="ghost" data-x>キャンセル</button><button class="ok" data-ok>申請</button></div>`,(s,done)=>{
     s.querySelector('[data-x]').onclick=()=>done(false);
     s.querySelector('[data-ok]').onclick=async e=>{ const who=s.querySelector('#rqWho').value, body=s.querySelector('#rqBody').value.trim(); if(!who){ toast('書いた人を選んでください'); return; } if(!body){ toast('気づきを入力してください'); return; }
       e.target.disabled=true; try{ await rpc('cs_request',{p_token:token,p_customer:c.id,p_author:who,p_body:body}); LS.set('olive_cs_author',who); done(true); toast('申請しました'); await reloadDetail(); }catch(err){ e.target.disabled=false; await fail(err); } }; }); }
