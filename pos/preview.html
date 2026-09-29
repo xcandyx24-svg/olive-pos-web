@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.83 -->
+<title>OLIVE 会計</title><!-- v10.84 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -952,7 +952,7 @@ $('navSettings').onclick=()=>{ renderSettings(setCur); show('v-settings'); };
 // ---------- ボトル（全ボトルの一覧・ご来店のないお客様の抽出・期限切れ） ----------
 function ymdJa(d){ const m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${+m[1]}年${+m[2]}月${+m[3]}日`:''; }
 function sDate(d){ if(!d) return ''; const [y,m,dd]=String(d).slice(0,10).split('-'); return (y==String(new Date().getFullYear())?'':y+'/')+Number(m)+'/'+Number(dd); }
-function expLine(b){ return `${b.name}　${b.remaining??0}/10　${ymdJa(b.expired_on)} ${b.moved?'ボトル移動':'期限切れ'}`; }
+function expLine(b){ return `${b.name}　${b.remaining??0}/10　${(d=>d?d.slice(0,10).split('-').map(Number).join('/'):'')(b.expired_on)} ${b.moved?'ボトル移動':'期限切れ'}`; } /* v10.84：日付は 2026/9/29 の形 */
 function knLabel(b,cname){ return b.keep_name&&b.keep_name!==cname?`（キープ名：${b.keep_name}）`:''; }
 async function expireBottle(b,cname){ if(!b) return false; if(!await uiConfirm(`${b.name}（残り ${b.remaining??0}/10）を期限切れにしますか？\n残量はこのまま記録されます。`)) return false; const d=businessDate(); const { error } = await sb.from('customer_bottles').update({expired_on:d,updated_at:new Date().toISOString()}).eq('id',b.id); if(error){ toast(error.message.includes('column')?'SQL 017 が未適用です：'+error.message:error.message); return false; } await logOp('ボトル期限切れ',{customer:cname,bottle:b.name,remaining:b.remaining},null,true); b.expired_on=d; toast('期限切れにしました'); return true; }
 // v10.75：ボトル移動（移動先は記録しない。日付と残量を残してキープから外す。SQL 045）
