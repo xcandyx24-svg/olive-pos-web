@@ -26,6 +26,12 @@
   .types{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
   .type{height:64px;border:none;border-radius:32px;color:#fff;font-size:22px;font-weight:700;opacity:.45;transition:opacity .15s,transform .1s}
   .type.on{opacity:1;transform:scale(1.04);box-shadow:0 6px 18px rgba(0,0,0,.2)}
+  /* 2026-09-27：未選択の時はボタンをはっきりした色で見せて「先にここを押す」と分かるようにする。選んだら他を薄く、名前は選んだ色の枠になる */
+  .types:not(.picked) .type{opacity:1;animation:invite 1.8s ease-in-out infinite}
+  @keyframes invite{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+  .types.picked .type:not(.on){opacity:.3}
+  .grid:not(.locked) .staff{border:2px solid var(--sel,var(--line));color:var(--sel,var(--ink))}
+  .grid.locked .staff{color:#b5b5b5}
   .type.douhan{background:var(--douhan)} .type.after{background:var(--after)}
   .type.in{background:var(--in)} .type.out{background:var(--out)}
 
@@ -113,9 +119,9 @@
   </div>
 
   <div class="types">
-    <button class="type after"  data-type="after">アフター</button>
     <button class="type in"     data-type="clock_in">出勤</button>
     <button class="type out"    data-type="clock_out">退勤</button>
+    <button class="type after"  data-type="after">アフター</button>
   </div>
 
   <div class="guide" id="guide">まず上のボタンを選んでください</div>
@@ -196,6 +202,8 @@ async function loadStaff(){
 function setType(t){
   currentType = t;
   document.querySelectorAll('.type').forEach(x => x.classList.toggle('on', x.dataset.type === t));
+  document.querySelector('.types').classList.toggle('picked', !!t);
+  document.getElementById('grid').style.setProperty('--sel', t==='clock_in'?'var(--in)':t==='clock_out'?'var(--out)':t==='after'?'var(--after)':'var(--line)');
   const g = document.getElementById('guide');
   g.classList.remove('warn');
   document.getElementById('grid').classList.toggle('locked', !t);
@@ -206,7 +214,7 @@ document.querySelectorAll('.type').forEach(b => { b.onclick = () => setType(b.da
 function onStaffTap(staff){
   if (!currentType) {
     const g = document.getElementById('guide');
-    g.textContent = '⚠️ 先に「アフター / 出勤 / 退勤」を選んでください';
+    g.textContent = '⚠️ 先に「出勤 / 退勤 / アフター」を選んでください';
     g.classList.remove('warn'); void g.offsetWidth; g.classList.add('warn');
     return;
   }
