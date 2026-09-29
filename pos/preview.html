@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.79 -->
+<title>OLIVE 会計</title><!-- v10.80 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -106,10 +106,11 @@
 #cuSide .item input,#cuSide .item select,#cuBtSel,#cuBtRem{height:30px;box-sizing:border-box;padding-top:0;padding-bottom:0;font-size:13px!important}
 #cuSide .item select{flex:none;width:auto}
 #cuSide .item button.sm,#cuBtAdd{height:30px;box-sizing:border-box;padding:0 8px;font-size:12px}
-/* v10.76〜79：右の列を整理（v10.79＝ボトル欄を 銘柄・日付・残量・✕（削除）／キープ名／飲切・期限切・ボトル移動 に。列の幅は 200px｜1｜1.25。v10.78＝列の幅を 230px｜1｜1.1 にして右の列を広げ、ボトル欄を3段に＝銘柄＋日付／キープ名＋残量／飲み切り・期限切れ・ボトル移動・削除）。来店履歴は全行同じ形（上＝日付・下＝卓・人数・右＝金額、日付は今年なら M/D）。ボトル1本の欄を6段→4段に（銘柄＋日付／キープ名／残量＋飲み切り／期限切れ・ボトル移動・削除） */
+/* v10.76〜80：右の列を整理（v10.80＝顧客一覧の期間（○か月〜）を常に表示し［全員］と［ご来店なし］の間に。左の列 230px。v10.79＝ボトル欄を 銘柄・日付・残量・✕（削除）／キープ名／飲切・期限切・ボトル移動 に。列の幅は 200px｜1｜1.25。v10.78＝列の幅を 230px｜1｜1.1 にして右の列を広げ、ボトル欄を3段に＝銘柄＋日付／キープ名＋残量／飲み切り・期限切れ・ボトル移動・削除）。来店履歴は全行同じ形（上＝日付・下＝卓・人数・右＝金額、日付は今年なら M/D）。ボトル1本の欄を6段→4段に（銘柄＋日付／キープ名／残量＋飲み切り／期限切れ・ボトル移動・削除） */
 #cuSide .item.bt{display:flex;flex-direction:column;align-items:stretch;gap:6px!important}
 #cuSide .bt1{display:flex;align-items:center;gap:8px}#cuSide .bt1 .n{flex:1 1 0;min-width:0;overflow-wrap:anywhere;font-size:16px;font-weight:600;line-height:1.35}#cuSide .bt1 .n small{font-size:12px;font-weight:400;margin-left:6px;white-space:nowrap;color:var(--muted)}#cuSide .bt1 select{flex:none;width:auto;padding-left:6px!important;padding-right:2px!important}#cuSide .bt1 button.bx{flex:none;width:30px;padding:0;color:var(--muted);font-size:14px}
 #cuSide .bt2{display:flex;align-items:center;gap:6px;font-size:12px;margin:0}#cuSide .bt2 span{white-space:nowrap}#cuSide .bt2 input{flex:1 1 0;min-width:0;width:0}
+#cuModes{gap:4px!important}#cuModes .chip,#cuMonths{height:36px;box-sizing:border-box;font-size:14px;white-space:nowrap;padding:0 8px}#cuMonths{width:auto;padding:0 0 0 6px}
 #cuSide .item.hv{padding:6px 10px;font-size:14px;flex-wrap:nowrap!important}#cuSide .item.hv .n{flex:1 1 0;min-width:0;line-height:1.3}#cuSide .item.hv .n small{display:block;font-size:12px}#cuSide .item.hv .amt{min-width:0;white-space:nowrap}
 #cuSide .bt3{display:flex;flex-wrap:wrap;align-items:center;gap:4px}#cuSide .bt3 button.sm{padding:0 8px;white-space:nowrap}
 </style>
@@ -194,8 +195,8 @@
   <div class="bar"><button class="ghost" id="payBack">伝票へ戻る</button><button class="ghost" id="prReceipt">領収書印刷</button><button class="primary" id="payClose">会計を締める</button></div>
 </div></section>
 
-<section class="view" id="v-cust"><div class="card settings" style="grid-template-columns:200px minmax(0,1fr) minmax(0,1.25fr)">
-  <div style="min-width:0"><div style="display:flex;gap:6px;margin-bottom:8px"><input id="cuSearch" placeholder="名前・会社名" style="flex:1 1 0;min-width:0;width:0"><button class="primary sm" id="cuNew" style="white-space:nowrap;flex:none">＋新規</button></div><div id="cuModes" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="chip on" data-cm="all">全員</button><button class="chip" data-cm="old">ご来店なし</button><button class="chip" data-cm="req" id="cuReqChip" style="display:none"></button><select id="cuMonths" style="width:auto;padding:6px 8px"></select></div><div class="lst" id="cuList" style="max-height:70vh;overflow:auto"></div></div>
+<section class="view" id="v-cust"><div class="card settings" style="grid-template-columns:230px minmax(0,1fr) minmax(0,1.25fr)">
+  <div style="min-width:0"><div style="display:flex;gap:6px;margin-bottom:8px"><input id="cuSearch" placeholder="名前・会社名" style="flex:1 1 0;min-width:0;width:0"><button class="primary sm" id="cuNew" style="white-space:nowrap;flex:none">＋新規</button></div><div id="cuModes" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="chip on" data-cm="all">全員</button><select id="cuMonths" aria-label="期間"></select><button class="chip" data-cm="old">ご来店なし</button><button class="chip" data-cm="req" id="cuReqChip" style="display:none"></button></div><div class="lst" id="cuList" style="max-height:70vh;overflow:auto"></div></div>
   <div id="cuForm" class="form"></div>
   <div id="cuSide"></div>
 </div></section>
@@ -968,7 +969,7 @@ let cuSel=null;
 $('navCust').onclick=async()=>{ show('v-cust'); await loadMasters(); renderCuList(); renderCuForm(); await loadCuInfo(); renderCuList(); };
 document.querySelectorAll('#cuModes [data-cm]').forEach(b=>b.onclick=()=>{ cuMode=b.dataset.cm; renderCuList(); });
 $('cuSearch').oninput=()=>renderCuList();
-function renderCuList(){ const q=$('cuSearch').value.trim(); if(!cuMonthsSel) cuMonthsSel=btMonths(); const ms=$('cuMonths'); ms.style.display=cuMode==='old'?'':'none'; const opts=[...new Set([1,2,3,6,12,cuMonthsSel])].sort((a,b)=>a-b); ms.innerHTML=opts.map(n=>`<option value="${n}" ${n===cuMonthsSel?'selected':''}>${n}か月以上</option>`).join(''); ms.onchange=()=>{ cuMonthsSel=Number(ms.value); cuMode='old'; renderCuList(); }; const cut=btCutoff(cuMonthsSel); const reqN=Object.values(cuInfo.req||{}).reduce((a,n)=>a+n,0); if(cuMode==='req'&&!reqN) cuMode='all'; $('cuReqChip').style.display=reqN?'':'none'; $('cuReqChip').textContent=`申請 ${reqN}件`; document.querySelectorAll('#cuModes [data-cm]').forEach(b=>b.classList.toggle('on',b.dataset.cm===cuMode));
+function renderCuList(){ const q=$('cuSearch').value.trim(); if(!cuMonthsSel) cuMonthsSel=btMonths(); const ms=$('cuMonths'); const opts=[...new Set([1,2,3,6,12,cuMonthsSel])].sort((a,b)=>a-b); ms.innerHTML=opts.map(n=>`<option value="${n}" ${n===cuMonthsSel?'selected':''}>${n}か月〜</option>`).join(''); ms.onchange=()=>{ cuMonthsSel=Number(ms.value); cuMode='old'; renderCuList(); }; const cut=btCutoff(cuMonthsSel); const reqN=Object.values(cuInfo.req||{}).reduce((a,n)=>a+n,0); if(cuMode==='req'&&!reqN) cuMode='all'; $('cuReqChip').style.display=reqN?'':'none'; $('cuReqChip').textContent=`申請 ${reqN}件`; document.querySelectorAll('#cuModes [data-cm]').forEach(b=>b.classList.toggle('on',b.dataset.cm===cuMode));
   let list=customers.filter(c=>!q||(c.name||'').includes(q)||(c.company||'').includes(q)||(c.receipt_name||'').includes(q)||(cuInfo.kn[c.id]||[]).some(k=>k.includes(q)));
   if(cuMode==='req') list=list.filter(c=>cuInfo.req[c.id]);
   if(cuMode==='old') list=list.filter(c=>cuBase(c.id)&&cuBase(c.id)<=cut).sort((a,b)=>cuBase(a.id).localeCompare(cuBase(b.id))); list=list.slice(0,200);
