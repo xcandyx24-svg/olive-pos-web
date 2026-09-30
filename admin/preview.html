@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.07 -->
+<title>OLIVE 管理</title><!-- admin v0.08 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -245,7 +245,7 @@ const md=x=>`${+x.slice(5,7)}/${+x.slice(8,10)}`;
 const WJ=['日','月','火','水','木','金','土'];
 let regDate=null, regMonth=null, regTab='day';
 const regHead=()=>`<h1>レジ精算 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="row" style="margin-bottom:14px"><span class="seg">${[['month','月次'],['day','日次']].map(([v,n])=>`<button data-rt="${v}" class="${regTab===v?'on':''}">${n}</button>`).join('')}</span></div>`;
-function regTabs(){ $('main').querySelectorAll('[data-rt]').forEach(b=>b.onclick=()=>{ regTab=b.dataset.rt; PAGES.register(); }); }
+function regTabs(){ $('main').querySelectorAll('[data-rt]').forEach(b=>b.onclick=()=>{ if(b.dataset.rt==='month'&&regTab==='day'&&regDate) regMonth=regDate.slice(0,7); /* v0.08：日次で見ている日の月を開く */ regTab=b.dataset.rt; PAGES.register(); }); }
 PAGES.register=()=>regTab==='month'?regMonthPage():regDayPage();
 // 期間（from〈含まない〉〜to〈含まない〉）の日ごとの 現金売上・入金・出金（日払い含む）
 async function regMoves(fromEx,toEx){
@@ -304,11 +304,10 @@ async function regDayPage(){
       <span>預金金額</span><span class="num">${V(deposit)}</span>
       <span>翌日釣銭準備金</span><span class="num">${V(next)}</span>
     </div></div></div>
-  <div class="row"><button class="ghost" id="regMonthGo">${+d.slice(5,7)}月の月次を見る</button></div>`; regTabs();
+`; regTabs();
   const goD=x=>{ regDate=x; PAGES.register(); };
   $('regDateIn').onchange=e=>{ if(e.target.value) goD(e.target.value); };
   $('regPrev').onclick=()=>goD(dayAdd(d,-1)); $('regNext').onclick=()=>goD(dayAdd(d,1));
-  $('regMonthGo').onclick=()=>{ regMonth=d.slice(0,7); regTab='month'; PAGES.register(); };
   // 前回の精算の翌日〜前日で、動きがあったのに精算していない日（直近31日）
   const lo=dayAdd(d,-32), from=prevRow&&prevRow.business_date>lo?prevRow.business_date:lo;
   const [g,cl]=await Promise.all([regMoves(from,d), sb.from('register_closings').select('business_date').eq('store_id',st).gt('business_date',from).lt('business_date',d)]);
