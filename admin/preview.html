@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.01 -->
+<title>OLIVE 管理</title><!-- admin v0.02 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -52,6 +52,7 @@
   .seg button.on{background:var(--ink);color:#fff}
   .badge{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--gold);color:#fff}.badge.gray{background:#999}
   .pwbox{font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;letter-spacing:.05em}
+  .pwv{font-family:ui-monospace,Menlo,monospace;font-size:17px;font-weight:700;letter-spacing:.05em;white-space:nowrap}
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
   .modal .box{background:#fff;border-radius:16px;padding:18px;width:min(520px,100%);max-height:88vh;overflow:auto;display:flex;flex-direction:column;gap:10px}
   .modal .bar{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
@@ -196,8 +197,8 @@ const CS_KIND={view:'顧客サイト（見る用）',edit:'顧客サイト（編
 function showNewPasswords(d){ return new Promise(res=>{
   const rows=[...(d.devices||[]).map(x=>`<tr><td>${esc(x.label||'端末')}<br><small class="muted">${esc(x.email||'')}</small></td><td class="pwbox">${esc(x.pw)}</td></tr>`),
               ...(d.cs||[]).map(x=>`<tr><td>${esc(CS_KIND[x.kind]||x.kind)}</td><td class="pwbox">${esc(x.pw)}</td></tr>`)].join('');
-  const m=modal(`<h2 style="margin:0">新しいパスワード</h2><div class="alertbar" style="border-radius:10px">この画面を閉じると、もう一度は見られません。メモしてから閉じてください</div><table class="t">${rows||'<tr><td class="muted">変えるものがありませんでした</td></tr>'}</table><div class="bar"><button class="primary" data-k="ok">メモしたので閉じる</button></div>`);
-  m.querySelector('[data-k=ok]').onclick=async()=>{ if(!await uiConfirm('本当に閉じますか？ もう一度は見られません','閉じる')) return; m.remove(); res(); }; }); }
+  const m=modal(`<h2 style="margin:0">新しいパスワード</h2><div class="muted" style="font-size:14px">このパスワードは、あとからでも「パスワード」の画面で見られます（オーナーだけ）</div><table class="t">${rows||'<tr><td class="muted">変えるものがありませんでした</td></tr>'}</table><div class="bar"><button class="primary" data-k="ok">閉じる</button></div>`);
+  m.querySelector('[data-k=ok]').onclick=()=>{ m.remove(); res(); }; }); }
 
 // ---------- メニュー ----------
 function renderNav(){
@@ -298,23 +299,26 @@ PAGES.pw=async()=>{
   const r=await sb.rpc('admin_credentials',{p_store:storeId}); if(page!=='pw') return;
   if(r.error){ $('main').lastElementChild.outerHTML=`<div class="card err">${esc(r.error.message)}</div>`; return; }
   const d=r.data||{};
-  const row=(label,sub,key,changed)=>`<tr><td>${label}${sub?`<br><small class="muted">${sub}</small>`:''}</td><td class="muted" style="font-size:13px">${changed?'最後に変えた日 '+esc(fmtDT(changed)):''}</td><td style="text-align:right"><button class="ghost sm" data-pw="${esc(key)}">変える</button></td></tr>`;
+  const pwCell=pw=>pw?`<span class="pwv" data-pwv="${esc(pw)}">••••••••</span> <button class="ghost sm" data-show>見る</button>`:'<small class="muted">管理サイトで変えると、ここに出ます</small>';
+  const row=(label,sub,key,pw)=>`<tr><td>${label}${sub?`<br><small class="muted">${sub}</small>`:''}</td><td>${pwCell(pw)}</td><td style="text-align:right"><button class="ghost sm" data-pw="${esc(key)}" data-label="${esc(label.replace(/<[^>]*>/g,''))}">変える</button></td></tr>`;
   $('main').lastElementChild.outerHTML=`
   <div class="card"><h2>全部まとめて新しくする</h2><div class="muted" style="font-size:14px;margin-bottom:10px">POS・タイムカードの端末と顧客サイトのパスワードを、自動で作った新しいものに一度に変えます。黒服が辞めた時に使ってください</div><button class="danger" id="rotAll">全部のパスワードを新しくする</button></div>
-  <div class="card"><h2>1つずつ変える</h2><table class="t">
-    ${(d.devices||[]).map(x=>row(`POS・タイムカード：${esc(x.label||'端末')}`,'',`dev:${x.user_id}`,x.pw_changed_at)).join('')||'<tr><td class="muted">POS・タイムカードの端末がありません</td></tr>'}
-    ${(d.cs||[]).map(x=>row(esc(CS_KIND[x.kind]||x.kind),'',`cs:${x.kind}`,x.updated_at)).join('')}
-    ${(d.accounts||[]).map(x=>row(`管理サイト：${esc(x.login_id)}`,esc(x.name)+(x.is_active?'':'（止めている）'),`acc:${x.id}`,null)).join('')}
+  <div class="card"><h2>今のパスワード</h2><div class="muted" style="font-size:14px;margin-bottom:6px">「変える」で、好きなパスワードを入れて変えられます（自動で作ることもできます）</div><table class="t">
+    <tr><th>どこの</th><th>パスワード</th><th></th></tr>
+    ${(d.devices||[]).map(x=>row(`POS・タイムカード：${esc(x.label||'端末')}`,`ログイン用メール ${esc(x.email||'')}`,`dev:${x.user_id}`,x.pw)).join('')||'<tr><td class="muted" colspan="3">POS・タイムカードの端末がありません</td></tr>'}
+    ${(d.cs||[]).map(x=>row(esc(CS_KIND[x.kind]||x.kind),'',`cs:${x.kind}`,x.pw)).join('')}
+    ${(d.accounts||[]).map(x=>row(`管理サイト：${esc(x.login_id)}`,esc(x.name)+(x.is_owner&&x.name!=='オーナー'?'（オーナー）':'')+(x.is_active?'':'（止めている）'),x.is_owner&&x.login_id===me.login_id?'own:':`acc:${x.id}`,x.pw)).join('')}
   </table></div>`;
+  $('main').querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{ const v=b.previousElementSibling; const on=b.textContent==='見る'; v.textContent=on?v.dataset.pwv:'••••••••'; b.textContent=on?'隠す':'見る'; });
   $('rotAll').onclick=guard($('rotAll'),()=>rotateAll());
-  $('main').querySelectorAll('[data-pw]').forEach(b=>b.onclick=()=>changeOne(b.dataset.pw,b.closest('tr').cells[0].innerText.split('\n')[0]));
+  $('main').querySelectorAll('[data-pw]').forEach(b=>b.onclick=()=>{ if(b.dataset.pw==='own:'){ $('myPw1').focus(); window.scrollTo(0,0); return; } changeOne(b.dataset.pw,b.dataset.label); });
 };
 function bindOwn(){ $('mySave').onclick=guard($('mySave'),async()=>{
   const a=$('myPw1').value, b=$('myPw2').value;
   if(a.length<8){ await uiAlert('パスワードは8文字以上にしてください'); return; }
   if(a!==b){ await uiAlert('2つのパスワードが違います'); return; }
-  const r=await sb.auth.updateUser({password:a}); if(r.error){ await uiAlert('変えられませんでした：'+r.error.message); return; }
-  await sb.rpc('admin_after_own_pw'); $('myPw1').value=''; $('myPw2').value=''; toast('パスワードを変えました'); }); }
+  const r=await rpc('admin_set_own_pw',{p_pw:a}); if(!r.ok) return;
+  $('myPw1').value=''; $('myPw2').value=''; toast('パスワードを変えました'); if(page==='pw'&&me.is_owner) PAGES.pw(); }); }
 async function changeOne(key,label){
   const [kind,id]=[key.slice(0,key.indexOf(':')),key.slice(key.indexOf(':')+1)];
   const m=modal(`<h2 style="margin:0">パスワードを変える</h2><div>${esc(label)}</div>
@@ -329,7 +333,7 @@ async function changeOne(key,label){
     const r= kind==='dev'?await rpc('admin_set_device_pw',{p_user:id,p_pw:pw})
            : kind==='cs'?await rpc('admin_set_cs_pw',{p_store:storeId,p_kind:id,p_pw:pw})
            : await rpc('admin_set_account_pw',{p_id:id,p_pw:pw});
-    if(!r.ok) return; m.remove(); await uiAlert(`変えました\n\n${label}\n新しいパスワード：${pw}`); PAGES.pw(); });
+    if(!r.ok) return; m.remove(); toast('変えました'); PAGES.pw(); });
 }
 
 start();
