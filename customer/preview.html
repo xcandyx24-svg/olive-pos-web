@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.24 -->
+<title>OLIVE 顧客</title><!-- customer v1.25 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -217,7 +217,7 @@ const sname=id=>{ const s=staffBy(id); return s?s.name+(s.active?'':'（退店�
 
 // ---------- 一覧 ----------
 async function loadList(){ $('rows').innerHTML='<div class="loading">読み込み中…</div>';
-  try{ custs=await rpc('cs_list',{p_token:token})||[]; custs.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ja')); renderList(); }catch(e){ $('rows').innerHTML=''; await fail(e); } }
+  try{ custs=await rpc('cs_list',{p_token:token})||[]; custs.sort((a,b)=>jaCmp(a.name,b.name)||String(a.id).localeCompare(String(b.id))); /* v1.25：POS と同じ並び */ renderList(); }catch(e){ $('rows').innerHTML=''; await fail(e); } }
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{ mode=b.dataset.mode; renderList(); });
 $('q').oninput=()=>renderList();
 function renderList(){ const q=$('q').value.trim();
@@ -236,14 +236,16 @@ $('newBtn').onclick=async()=>{ const name=await uiPrompt('新しいお客様の�
   try{ const id=await rpc('cs_customer_add',{p_token:token,p_name:nm}); toast('登録しました'); $('q').value=''; await loadList(); openDetail(id); }catch(e){ await fail(e); } };
 
 // ---------- 詳細 ----------
+/* v1.25：並び順を POS とそろえる（名前・卓名は日本語順、数字は数の順） */
+function jaCmp(a,b){ return (jaCmp.c||(jaCmp.c=new Intl.Collator('ja',{numeric:true}))).compare(String(a??''),String(b??'')); }
 async function openDetail(id){ curId=id; cur=null; const c=custs.find(x=>x.id===id); $('dName').textContent=c?c.name+' 様':''; $('detail').innerHTML='<div class="loading">読み込み中…</div>'; show('vDetail'); paintEdit();
   try{ const d=await rpc('cs_detail',{p_token:token,p_id:id}); if(curId!==id) return; cur=d; renderDetail(); }catch(e){ if(curId===id){ $('detail').innerHTML=''; } await fail(e); if(e.code==='CS_NOTFOUND'){ show('vList'); loadList(); } } }
 async function reloadDetail(){ if(!curId) return; try{ const d=await rpc('cs_detail',{p_token:token,p_id:curId}); cur=d; renderDetail(); }catch(e){ await fail(e); } }
 
 function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $('dName').textContent=c.name+' 様';
-  const bts=cur.bottles||[]; const open=bts.filter(b=>!b.is_finished&&!b.expired_on), fin=bts.filter(b=>b.is_finished&&!b.expired_on), exp=bts.filter(b=>b.expired_on);
+  const bts=(cur.bottles||[]).slice().sort((a,b)=>String(b.opened_on||'').localeCompare(String(a.opened_on||''))||String(a.id).localeCompare(String(b.id))); /* v1.25：開けた日の新しい順（POS と同じ） */ const open=bts.filter(b=>!b.is_finished&&!b.expired_on), fin=bts.filter(b=>b.is_finished&&!b.expired_on), exp=bts.filter(b=>b.expired_on);
   const kakari=c.kakari_staff_id?sname(c.kakari_staff_id):'';
-  const good=(cur.good||[]).map(g=>`<span style="margin-right:14px">${esc(sname(g.staff_id))} <small class="muted">${g.n}回</small></span>`).join('')||'<span class="muted">なし</span>';
+  const good=(cur.good||[]).slice().sort((a,b)=>b.n-a.n||jaCmp(sname(a.staff_id),sname(b.staff_id))).map(g=>`<span style="margin-right:14px;white-space:nowrap;display:inline-block">${esc(sname(g.staff_id))} <small class="muted">${g.n}回</small></span>`).join('')||'<span class="muted">なし</span>';
   const reqs=(cur.requests||[]).map(q=>`<div class="req"><div class="who">${md(q.business_date)}　${esc(sname(q.author_staff_id))}　申請中</div><div style="white-space:pre-wrap">${esc(q.body)}</div></div>`).join('');
   const keep=(boot.keep_products||[]);
   $('detail').innerHTML=`
@@ -267,7 +269,7 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
     <button class="ok" id="reqBtn" style="width:100%;margin-top:12px">＋ 気づきを申請</button></div>
   <div class="card"><h2>来店履歴</h2>
     <div class="muted" style="font-size:13px;margin-bottom:4px">今月 ${cur.month_count}回・${yen(cur.month_sum)}　／　累計 ${cur.visit_total}回</div>
-    ${visYears(cur.visits||[],v=>v.date,v=>`<div class="vis"><span>${md(v.date)}　${esc(v.table||'')}　${v.guests}名${v.open?' <span class="badge">来店中</span>':''}${v.oki?' <span class="badge gray">置き</span>':''}</span><span class="amt">${v.amount!=null?yen(v.amount):''}</span></div>`)||'<div class="muted">まだありません</div>'}
+    ${visYears((cur.visits||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||jaCmp(a.table,b.table)||(a.guests-b.guests)),v=>v.date,v=>`<div class="vis"><span>${md(v.date)}　${esc(v.table||'')}　${v.guests}名${v.open?' <span class="badge">来店中</span>':''}${v.oki?' <span class="badge gray">置き</span>':''}</span><span class="amt">${v.amount!=null?yen(v.amount):''}</span></div>`)||'<div class="muted">まだありません</div>'}
     ${(cur.visits||[]).length<cur.visit_total?'<div class="muted" style="font-size:12px;margin-top:6px">直近30回を表示しています</div>':''}</div>`;
 
   const D=$('detail'); fitLine(D);
@@ -325,7 +327,12 @@ function editForm(memoOnly){ const c=cur.customer; const casts=(boot.staff||[]).
 const _open=openDetail; openDetail=async id=>{ try{ history.pushState({d:1},''); }catch(e){} return _open(id); };
 $('backBtn').onclick=()=>{ if(history.state&&history.state.d){ history.back(); return; } curId=null; cur=null; show('vList'); renderList(); loadList(); };
 window.addEventListener('popstate',()=>{ curId=null; cur=null; show('vList'); renderList(); loadList(); });
-document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ paintEdit(); } });
+/* v1.25：ほかの端末（POS など）での変更を出す。画面に戻った時と、詳細を開いている間は1分ごとに読み直す。入力中・確認の画面が出ている間は読み直さない。失敗しても知らせない */
+async function csRefresh(listToo){ if(!token||document.visibilityState!=='visible'||$('modal').classList.contains('on')) return; const a=document.activeElement; if(a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)&&a.id!=='q') return;
+  try{ if(!$('vDetail').classList.contains('hide')&&curId){ const id=curId; const d=await rpc('cs_detail',{p_token:token,p_id:id}); if(curId!==id||$('modal').classList.contains('on')) return; if(JSON.stringify(d)!==JSON.stringify(cur)){ cur=d; renderDetail(); } }
+    else if(listToo&&!$('vList').classList.contains('hide')){ const l=await rpc('cs_list',{p_token:token})||[]; if($('vList').classList.contains('hide')) return; l.sort((a,b)=>jaCmp(a.name,b.name)||String(a.id).localeCompare(String(b.id))); if(JSON.stringify(l)!==JSON.stringify(custs)){ custs=l; renderList(); } } }catch(e){} }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ paintEdit(); csRefresh(true); } });
+setInterval(()=>csRefresh(false),60000);
 
 start();
 </script>
