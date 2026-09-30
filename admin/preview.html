@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.02 -->
+<title>OLIVE 管理</title><!-- admin v0.03 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -294,23 +294,23 @@ PAGES.pw=async()=>{
   const own=`<div class="card"><h2>自分のパスワード（ID：${esc(me.login_id)}）</h2>
     <div class="grid2"><label>新しいパスワード（8文字以上）<input id="myPw1" type="password" autocomplete="new-password"></label><label>もう一度<input id="myPw2" type="password" autocomplete="new-password"></label><div><button class="primary" id="mySave" style="width:100%">変える</button></div></div>
     <div class="muted" style="font-size:14px;margin-top:8px">変えると、ほかの端末でこのIDでログインしている分はログアウトされます</div></div>`;
-  if(!me.is_owner){ $('main').innerHTML=`<h1>パスワード</h1>${own}`; bindOwn(); return; }
   $('main').innerHTML=`<h1>パスワード <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>${own}<div class="card muted">読み込み中…</div>`; bindOwn();
   const r=await sb.rpc('admin_credentials',{p_store:storeId}); if(page!=='pw') return;
   if(r.error){ $('main').lastElementChild.outerHTML=`<div class="card err">${esc(r.error.message)}</div>`; return; }
   const d=r.data||{};
   const pwCell=pw=>pw?`<span class="pwv" data-pwv="${esc(pw)}">••••••••</span> <button class="ghost sm" data-show>見る</button>`:'<small class="muted">管理サイトで変えると、ここに出ます</small>';
-  const row=(label,sub,key,pw)=>`<tr><td>${label}${sub?`<br><small class="muted">${sub}</small>`:''}</td><td>${pwCell(pw)}</td><td style="text-align:right"><button class="ghost sm" data-pw="${esc(key)}" data-label="${esc(label.replace(/<[^>]*>/g,''))}">変える</button></td></tr>`;
-  $('main').lastElementChild.outerHTML=`
-  <div class="card"><h2>全部まとめて新しくする</h2><div class="muted" style="font-size:14px;margin-bottom:10px">POS・タイムカードの端末と顧客サイトのパスワードを、自動で作った新しいものに一度に変えます。黒服が辞めた時に使ってください</div><button class="danger" id="rotAll">全部のパスワードを新しくする</button></div>
-  <div class="card"><h2>今のパスワード</h2><div class="muted" style="font-size:14px;margin-bottom:6px">「変える」で、好きなパスワードを入れて変えられます（自動で作ることもできます）</div><table class="t">
+  const O=me.is_owner;
+  const row=(label,sub,key,pw)=>`<tr><td>${label}${sub?`<br><small class="muted">${sub}</small>`:''}</td><td>${pwCell(pw)}</td><td style="text-align:right">${O?`<button class="ghost sm" data-pw="${esc(key)}" data-label="${esc(label.replace(/<[^>]*>/g,''))}">変える</button>`:''}</td></tr>`;
+  $('main').lastElementChild.outerHTML=(O?`
+  <div class="card"><h2>全部まとめて新しくする</h2><div class="muted" style="font-size:14px;margin-bottom:10px">POS・タイムカードの端末と顧客サイトのパスワードを、自動で作った新しいものに一度に変えます。黒服が辞めた時に使ってください</div><button class="danger" id="rotAll">全部のパスワードを新しくする</button></div>`:'')+`
+  <div class="card"><h2>今のパスワード</h2><div class="muted" style="font-size:14px;margin-bottom:6px">${O?'「変える」で、好きなパスワードを入れて変えられます（自動で作ることもできます）':'変えるのはオーナーだけです'}</div><table class="t">
     <tr><th>どこの</th><th>パスワード</th><th></th></tr>
     ${(d.devices||[]).map(x=>row(`POS・タイムカード：${esc(x.label||'端末')}`,`ログイン用メール ${esc(x.email||'')}`,`dev:${x.user_id}`,x.pw)).join('')||'<tr><td class="muted" colspan="3">POS・タイムカードの端末がありません</td></tr>'}
     ${(d.cs||[]).map(x=>row(esc(CS_KIND[x.kind]||x.kind),'',`cs:${x.kind}`,x.pw)).join('')}
     ${(d.accounts||[]).map(x=>row(`管理サイト：${esc(x.login_id)}`,esc(x.name)+(x.is_owner&&x.name!=='オーナー'?'（オーナー）':'')+(x.is_active?'':'（止めている）'),x.is_owner&&x.login_id===me.login_id?'own:':`acc:${x.id}`,x.pw)).join('')}
   </table></div>`;
   $('main').querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{ const v=b.previousElementSibling; const on=b.textContent==='見る'; v.textContent=on?v.dataset.pwv:'••••••••'; b.textContent=on?'隠す':'見る'; });
-  $('rotAll').onclick=guard($('rotAll'),()=>rotateAll());
+  if(O) $('rotAll').onclick=guard($('rotAll'),()=>rotateAll());
   $('main').querySelectorAll('[data-pw]').forEach(b=>b.onclick=()=>{ if(b.dataset.pw==='own:'){ $('myPw1').focus(); window.scrollTo(0,0); return; } changeOne(b.dataset.pw,b.dataset.label); });
 };
 function bindOwn(){ $('mySave').onclick=guard($('mySave'),async()=>{
