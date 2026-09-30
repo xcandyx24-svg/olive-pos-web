@@ -12,4 +12,5 @@
 - 返事の最後に毎回このリンクを付ける
   POS preview：https://xcandyx24-svg.github.io/olive-pos-web/pos/preview.html
   顧客サイト preview：https://xcandyx24-svg.github.io/olive-pos-web/customer/preview.html
+  タイムカード：https://xcandyx24-svg.github.io/olive-pos-web/timecard/
 - 会話が重くなったら、言われる前に引き継ぎ文を出す

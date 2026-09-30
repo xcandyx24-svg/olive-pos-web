@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>OLIVE 管理</title><!-- admin v0.04 -->
+<style>
+  :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:16px}
+  button{font:inherit;cursor:pointer;border:none;border-radius:10px;padding:0 16px;height:var(--h);background:#eee;color:var(--ink);white-space:nowrap}
+  button.primary{background:var(--blue);color:#fff}button.ok{background:var(--acc);color:#fff}button.danger{background:var(--warn);color:#fff}
+  button.ghost{background:transparent;border:1px solid var(--line)}button.sm{height:34px;padding:0 10px;font-size:14px}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  input,select{font:inherit;font-size:16px;height:var(--h);padding:0 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);width:100%;min-width:0}
+  label{display:block;font-size:13px;color:var(--muted)}label>input,label>select{margin-top:4px;color:var(--ink)}
+  .muted{color:var(--muted)}small{font-size:13px}.hide{display:none!important}
+  .err{color:var(--warn);font-size:14px;min-height:20px;margin-top:8px}
+
+  /* ログイン */
+  #vLogin{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  #vLogin .box{width:100%;max-width:360px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:10px}
+  #vLogin h1{margin:0;font-size:22px}
+
+  /* 画面の枠 */
+  #vApp{min-height:100vh;display:flex;flex-direction:column}
+  .top{position:sticky;top:0;z-index:20;background:#3a3a3a;color:#fff;display:flex;align-items:center;gap:10px;padding:8px 16px;padding-top:calc(8px + env(safe-area-inset-top))}
+  .top .ttl{font-weight:700;font-size:17px;white-space:nowrap}
+  .top select{width:auto;max-width:220px;height:36px;background:#fff}
+  .top .who{margin-left:auto;font-size:13px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .top button{height:36px;background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;font-size:14px;padding:0 12px}
+  #menuBtn{display:none}
+  .alertbar{background:#fde8e8;color:#9b1c1c;padding:10px 16px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .alertbar button{height:36px;font-size:14px}
+  .body{flex:1;display:flex;min-height:0}
+  nav{width:230px;flex:none;background:#fff;border-right:1px solid var(--line);padding:10px 0;overflow:auto}
+  nav .grp{font-size:12px;color:var(--muted);padding:12px 18px 4px}
+  nav a{display:flex;align-items:center;gap:6px;padding:9px 18px;color:var(--ink);text-decoration:none;font-size:15px;cursor:pointer}
+  nav a:hover{background:#f3f2ee}nav a.on{background:var(--ink);color:#fff}
+  nav a .tag{margin-left:auto;font-size:11px;color:var(--muted);white-space:nowrap;flex:none}nav a.on .tag{color:#ccc}
+  main{flex:1;min-width:0;padding:18px 22px 60px;overflow:auto}
+  main h1{font-size:22px;margin:0 0 14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+  .card h2{font-size:16px;margin:0 0 10px}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;align-items:end}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  table.t{width:100%;border-collapse:collapse}table.t td,table.t th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;font-size:15px;vertical-align:middle}
+  table.t th{font-size:13px;color:var(--muted);font-weight:400}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{border-radius:0;background:#fff;height:36px;font-size:14px;padding:0 12px;border-right:1px solid var(--line)}.seg button:last-child{border-right:none}
+  .seg button.on{background:var(--ink);color:#fff}
+  .badge{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--gold);color:#fff}.badge.gray{background:#999}
+  .pwbox{font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;letter-spacing:.05em}
+  .pwv{font-family:ui-monospace,Menlo,monospace;font-size:17px;font-weight:700;letter-spacing:.05em;white-space:nowrap}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+  .modal .box{background:#fff;border-radius:16px;padding:18px;width:min(520px,100%);max-height:88vh;overflow:auto;display:flex;flex-direction:column;gap:10px}
+  .modal .bar{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#333;color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}#toast.on{opacity:1}
+  @media (max-width:820px){
+    #menuBtn{display:inline-block}
+    nav{position:fixed;top:52px;bottom:0;left:0;z-index:15;transform:translateX(-100%);transition:transform .2s;box-shadow:2px 0 12px rgba(0,0,0,.15)}
+    nav.open{transform:none}
+    main{padding:14px 16px 60px}
+    .top .who{display:none}
+    table.perm tr.pr{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:8px 0;border-bottom:1px solid var(--line)}
+    table.perm tr.pr td{border:none;padding:0 6px;text-align:left!important}
+    table.perm .seg{display:flex}table.perm .seg button{flex:1}
+  }
+</style>
+</head>
+<body>
+<div id="vLogin" class="hide"><form class="box" id="loginForm" autocomplete="on">
+  <h1>OLIVE 管理</h1>
+  <input id="lid" placeholder="ID" autocomplete="username" autocapitalize="off" spellcheck="false">
+  <input id="lpw" type="password" placeholder="パスワード" autocomplete="current-password">
+  <button class="primary" type="submit">ログイン</button>
+  <div class="err" id="loginErr"></div>
+</form></div>
+
+<div id="vApp" class="hide">
+  <div class="top">
+    <button id="menuBtn">☰</button>
+    <span class="ttl">OLIVE 管理</span>
+    <select id="storeSel"></select><span id="storeName" style="font-weight:700"></span>
+    <span class="who" id="who"></span>
+    <button id="logoutBtn">ログアウト</button>
+  </div>
+  <div id="alertBar"></div>
+  <div class="body">
+    <nav id="nav"></nav>
+    <main id="main"></main>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
+<script>
+const SUPABASE_URL='https://gjqaxenwvvazhjtziusf.supabase.co', SUPABASE_KEY='sb_publishable_pPfJUvJd6iJeHBNiD7XkWA_2RKF7JYw';
+// POS・タイムカードと同じサイト上にあるので、ログイン情報は別の場所にしまう（POSのログインを横取りしない）
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{storageKey:'olive-admin-auth'}});
+const EMAIL_DOMAIN='@admin.olive.local';
+const $=id=>document.getElementById(id);
+const esc=t=>String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(toast.h); toast.h=setTimeout(()=>t.classList.remove('on'),2000); }
+function guard(btn,fn){ return async(...a)=>{ if(btn.disabled) return; btn.disabled=true; try{ await fn(...a); } finally{ btn.disabled=false; } }; }
+function modal(html){ const m=document.createElement('div'); m.className='modal'; m.innerHTML=`<div class="box">${html}</div>`; document.body.appendChild(m); return m; }
+function uiAlert(msg){ return new Promise(res=>{ const m=modal(`<div style="white-space:pre-wrap">${esc(msg)}</div><div class="bar"><button class="primary" data-k="ok">OK</button></div>`); m.querySelector('[data-k=ok]').onclick=()=>{ m.remove(); res(); }; }); }
+function uiConfirm(msg,okLabel='OK',cls='primary'){ return new Promise(res=>{ const m=modal(`<div style="white-space:pre-wrap">${esc(msg)}</div><div class="bar"><button class="ghost" data-k="no">キャンセル</button><button class="${cls}" data-k="ok">${esc(okLabel)}</button></div>`); m.querySelector('[data-k=no]').onclick=()=>{ m.remove(); res(false); }; m.querySelector('[data-k=ok]').onclick=()=>{ m.remove(); res(true); }; }); }
+async function rpc(fn,args){ const r=await sb.rpc(fn,args||{}); if(r.error){ await uiAlert(r.error.message); return {ok:false}; } return {ok:true,data:r.data}; }
+function genPw(n=10){ const c='abcdefghjkmnpqrstuvwxyz23456789'; const a=crypto.getRandomValues(new Uint8Array(n)); return [...a].map(x=>c[x%c.length]).join(''); }
+const fmtDT=t=>t?new Date(t).toLocaleString('ja-JP',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+
+// ---------- 画面の一覧（オーナー以外に見せるかは店舗ごとに設定） ----------
+const SCREENS=[
+  {grp:'集計'},
+  {k:'summary',n:'まとめ'},
+  {k:'pl_month',n:'収支・月次'},
+  {k:'pl_day',n:'収支・日次'},
+  {k:'cast_sales',n:'売上集計（キャスト）'},
+  {k:'register',n:'レジ精算'},
+  {k:'register_month',n:'月間レジ精算一覧'},
+  {k:'nippo',n:'日報登録'},
+  {k:'cust',n:'お客様分析'},
+  {grp:'設定'},
+  {k:'set_cast',n:'キャスト管理（給与条件）'},
+  {k:'set_pay',n:'給与項目'},
+  {k:'set_cash',n:'入出金項目'},
+  {k:'set_store',n:'店舗設定'},
+  {k:'set_names',n:'名称変更'},
+  {k:'set_pos',n:'POS設定'},
+  {grp:'履歴'},
+  {k:'hist_memo',n:'メモ一覧'},
+  {k:'hist_cash',n:'入出金履歴'},
+  {k:'hist_print',n:'印刷履歴'},
+  {k:'hist_del',n:'削除履歴'},
+];
+const OWNER_SCREENS=[{grp:'オーナー'},{k:'o_perms',n:'表示設定'},{k:'o_ids',n:'管理サイトのID'}];
+const PERM_LABEL={none:'見られない',view:'見るだけ',edit:'変えられる'};
+
+let me=null, storeId=null, page=null;
+const stores=()=>me?.stores||[];
+const curStore=()=>stores().find(s=>s.id===storeId);
+const stSet=()=>me?.settings?.[storeId]||{perms:{},nippo_days:3};
+function perm(k){ if(me?.is_owner) return 'edit'; return stSet().perms?.[k]||'none'; }
+
+// ---------- ログイン ----------
+$('loginForm').onsubmit=async e=>{ e.preventDefault(); $('loginErr').textContent='';
+  const id=$('lid').value.trim().toLowerCase(), pw=$('lpw').value;
+  if(!id||!pw){ $('loginErr').textContent='IDとパスワードを入れてください'; return; }
+  const btn=e.submitter; if(btn) btn.disabled=true;
+  try{ const { error }=await sb.auth.signInWithPassword({email:id+EMAIL_DOMAIN,password:pw});
+    if(error){ $('loginErr').textContent='IDかパスワードが違います'; return; }
+    $('lpw').value=''; await start(); } finally{ if(btn) btn.disabled=false; } };
+$('logoutBtn').onclick=async()=>{ if(!await uiConfirm('ログアウトしますか？')) return; await sb.auth.signOut(); location.reload(); };
+$('menuBtn').onclick=()=>$('nav').classList.toggle('open');
+function showLogin(msg){ $('vApp').classList.add('hide'); $('vLogin').classList.remove('hide'); $('loginErr').textContent=msg||''; }
+
+async function loadMe(){ const r=await sb.rpc('admin_me'); if(r.error||!r.data) return null; return r.data; }
+async function start(){
+  const { data:{ session } }=await sb.auth.getSession(); if(!session){ showLogin(); return; }
+  me=await loadMe();
+  if(!me){ await sb.auth.signOut(); showLogin('このIDでは管理サイトに入れません（止められたか、パスワードが変わりました）'); return; }
+  const saved=(()=>{ try{ return localStorage.getItem('olive_admin_store'); }catch(e){ return null; } })();
+  storeId=me.is_owner ? (stores().some(s=>s.id===saved)?saved:stores()[0]?.id) : me.store_id;
+  $('vLogin').classList.add('hide'); $('vApp').classList.remove('hide');
+  $('who').textContent=`${me.name||me.login_id}（ID：${me.login_id}）`;
+  renderStoreSel(); renderAll();
+  clearInterval(start.t); start.t=setInterval(refreshMe,60000);
+}
+// 1分ごとに読み直す（止められた・パスワードが変わった時はログアウト。警告も最新にする）
+async function refreshMe(){ const m=await loadMe(); if(!m){ await sb.auth.signOut(); showLogin('ログインが切れました。もう一度ログインしてください'); return; } me=m; renderAlert(); }
+function renderStoreSel(){
+  if(me.is_owner){ $('storeSel').classList.remove('hide'); $('storeName').classList.add('hide');
+    $('storeSel').innerHTML=stores().map(s=>`<option value="${s.id}" ${s.id===storeId?'selected':''}>${esc(s.name)}</option>`).join('');
+    $('storeSel').onchange=()=>{ storeId=$('storeSel').value; try{ localStorage.setItem('olive_admin_store',storeId); }catch(e){} renderAll(); };
+  } else { $('storeSel').classList.add('hide'); $('storeName').classList.remove('hide'); $('storeName').textContent=curStore()?.name||''; }
+}
+function renderAll(){ renderAlert(); renderNav(); const ok=page&&visible(page); go(ok?page:firstPage()); }
+function visible(k){ if(k==='pw') return true; if(OWNER_SCREENS.some(s=>s.k===k)) return me.is_owner; return perm(k)!=='none'; }
+function firstPage(){ return SCREENS.find(s=>s.k&&visible(s.k))?.k||'pw'; }
+
+// ---------- 黒服を削除した時の警告 ----------
+function renderAlert(){
+  const s=stSet(), box=$('alertBar');
+  if(!s.pw_alert){ box.innerHTML=''; return; }
+  box.innerHTML=`<div class="alertbar"><span>⚠ 黒服（${esc(s.pw_alert_note||'')}）が削除されました。POS・タイムカード・顧客サイトのパスワードを変えてください</span><button class="danger" id="rotBtn">全部のパスワードを新しくする</button></div>`;
+  $('rotBtn').onclick=guard($('rotBtn'),()=>rotateAll());
+}
+async function rotateAll(){
+  const st=curStore();
+  if(!await uiConfirm(`${st?.name||''} のパスワードを全部新しくします。\n\n・POS・タイムカードの端末\n・顧客サイト\n\n今ログインしている端末は全部ログアウトされます。営業中は注意してください。`,'新しくする','danger')) return;
+  const r=await rpc('admin_rotate_store',{p_store:storeId}); if(!r.ok) return;
+  await showNewPasswords(r.data); me=await loadMe()||me; renderAll();
+}
+const CS_KIND={view:'顧客サイト（見る用）',edit:'顧客サイト（編集用）'};
+function showNewPasswords(d){ return new Promise(res=>{
+  const rows=[...(d.devices||[]).map(x=>`<tr><td>${esc(x.label||'端末')}<br><small class="muted">${esc(x.email||'')}</small></td><td class="pwbox">${esc(x.pw)}</td></tr>`),
+              ...(d.cs||[]).map(x=>`<tr><td>${esc(CS_KIND[x.kind]||x.kind)}</td><td class="pwbox">${esc(x.pw)}</td></tr>`)].join('');
+  const m=modal(`<h2 style="margin:0">新しいパスワード</h2><div class="muted" style="font-size:14px">このパスワードは、あとからでも「パスワード」の画面で見られます</div><table class="t">${rows||'<tr><td class="muted">変えるものがありませんでした</td></tr>'}</table><div class="bar"><button class="primary" data-k="ok">閉じる</button></div>`);
+  m.querySelector('[data-k=ok]').onclick=()=>{ m.remove(); res(); }; }); }
+
+// ---------- メニュー ----------
+function renderNav(){
+  const items=[...SCREENS,...(me.is_owner?OWNER_SCREENS:[]),{grp:'アカウント'},{k:'pw',n:'パスワード'}];
+  let html='', pendingGrp=null;
+  for(const s of items){
+    if(s.grp){ pendingGrp=s.grp; continue; }
+    if(!visible(s.k)) continue;
+    if(pendingGrp){ html+=`<div class="grp">${esc(pendingGrp)}</div>`; pendingGrp=null; }
+    const p=perm(s.k), tag=(!me.is_owner&&SCREENS.some(x=>x.k===s.k)&&p==='view')?'<span class="tag">見るだけ</span>':'';
+    html+=`<a data-go="${s.k}" class="${s.k===page?'on':''}">${esc(s.n)}${tag}</a>`;
+  }
+  $('nav').innerHTML=html;
+  $('nav').querySelectorAll('[data-go]').forEach(a=>a.onclick=()=>{ $('nav').classList.remove('open'); go(a.dataset.go); });
+}
+function go(k){ page=k; $('nav').querySelectorAll('[data-go]').forEach(a=>a.classList.toggle('on',a.dataset.go===k));
+  const f=PAGES[k]||pagePending; f(k); $('main').scrollTop=0; window.scrollTo(0,0); }
+const nameOf=k=>[...SCREENS,...OWNER_SCREENS].find(s=>s.k===k)?.n||'';
+
+// ---------- まだ作っていない画面 ----------
+function pagePending(k){ $('main').innerHTML=`<h1>${esc(nameOf(k))}</h1><div class="card muted">この画面はこれから作ります</div>`; }
+
+const PAGES={};
+
+// ---------- 表示設定（オーナー） ----------
+PAGES.o_perms=()=>{
+  const s=stSet(); const perms={...(s.perms||{})};
+  const rows=SCREENS.map(x=>x.grp?`<tr><th colspan="2" style="padding-top:14px;color:var(--ink);font-weight:700">${esc(x.grp)}</th></tr>`
+    :`<tr class="pr"><td>${esc(x.n)}</td><td style="text-align:right"><span class="seg" data-pk="${x.k}">${['none','view','edit'].map(v=>`<button data-v="${v}" class="${(perms[x.k]||'none')===v?'on':''}">${PERM_LABEL[v]}</button>`).join('')}</span></td></tr>`).join('');
+  $('main').innerHTML=`<h1>表示設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>
+  <div class="card"><h2>オーナー以外の人が使える画面</h2><div class="muted" style="font-size:14px;margin-bottom:8px">この店舗のオーナー以外の人、全員に同じ設定が使われます。オーナーはいつでも全部の画面を使えます</div>
+  <table class="t perm">${rows}</table></div>
+  <div class="card"><h2>日報のさかのぼり</h2><div class="row"><span>オーナー以外は、今日から</span><input id="ndays" type="number" inputmode="numeric" min="0" max="366" value="${Number(s.nippo_days??3)}" style="width:100px;text-align:right"><span>日前まで見られる</span></div>
+  <div class="muted" style="font-size:14px;margin-top:6px">例：3 にすると、今日・昨日・2日前・3日前まで。0 にすると今日だけ</div></div>
+  <div class="row"><button class="primary" id="permSave">保存</button></div>`;
+  $('main').querySelectorAll('.seg').forEach(g=>g.querySelectorAll('button').forEach(b=>b.onclick=()=>{ perms[g.dataset.pk]=b.dataset.v; g.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); }));
+  $('permSave').onclick=guard($('permSave'),async()=>{
+    const n=Number($('ndays').value); if(!Number.isInteger(n)||n<0||n>366){ await uiAlert('日数は0〜366の数字にしてください'); return; }
+    const clean={}; SCREENS.forEach(x=>{ if(x.k&&perms[x.k]&&perms[x.k]!=='none') clean[x.k]=perms[x.k]; });
+    const r=await rpc('admin_save_store_settings',{p_store:storeId,p_perms:clean,p_nippo_days:n}); if(!r.ok) return;
+    me=await loadMe()||me; toast('保存しました'); renderNav(); });
+};
+
+// ---------- 管理サイトのID（オーナー） ----------
+PAGES.o_ids=async()=>{
+  $('main').innerHTML=`<h1>管理サイトのID</h1><div class="card muted">読み込み中…</div>`;
+  const [ra,rh]=await Promise.all([sb.rpc('admin_accounts_list'),sb.rpc('admin_hall_staff',{p_store:storeId})]);
+  if(page!=='o_ids') return;
+  if(ra.error||rh.error){ $('main').innerHTML=`<h1>管理サイトのID</h1><div class="card err">${esc((ra.error||rh.error).message)}</div>`; return; }
+  const halls=rh.data||[], sName=id=>stores().find(s=>s.id===id)?.name||'';
+  const list=(ra.data||[]).filter(a=>a.is_owner||a.store_id===storeId);
+  $('main').innerHTML=`<h1>管理サイトのID <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>
+  <div class="card"><h2>IDの一覧</h2><table class="t"><tr><th>ID</th><th>名前</th><th>店舗</th><th>黒服</th><th>状態</th><th></th></tr>
+  ${list.map(a=>`<tr><td><b>${esc(a.login_id)}</b></td><td>${esc(a.name)}</td><td>${a.is_owner?'全店舗':esc(sName(a.store_id))}</td><td>${esc(a.staff_name||'—')}</td>
+    <td>${a.is_owner?'<span class="badge">オーナー</span>':a.is_active?'使える':'<span class="badge gray">止めている</span>'}</td>
+    <td style="text-align:right">${a.is_owner?'':`<button class="ghost sm" data-ed="${a.id}">変更</button>`}</td></tr>`).join('')}
+  </table></div>
+  <div class="card"><h2>IDを作る</h2>
+    <div class="grid2">
+      <label>ID（半角の小文字・数字 3〜20文字）<input id="nId" autocapitalize="off" spellcheck="false"></label>
+      <label>名前<input id="nName"></label>
+      <label>黒服と結びつける<select id="nStaff"><option value="">結びつけない</option>${halls.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('')}</select></label>
+      <label>最初のパスワード（8文字以上）<input id="nPw" autocapitalize="off" spellcheck="false"></label>
+    </div>
+    <div class="row" style="margin-top:10px"><button class="ghost" id="nGen">パスワードを自動で作る</button><button class="primary" id="nSave">作る</button></div>
+    <div class="muted" style="font-size:14px;margin-top:8px">黒服と結びつけると、POSでその黒服を削除した時に、このIDも自動で使えなくなります。店舗は上で選んでいる「${esc(curStore()?.name||'')}」になります</div>
+  </div>`;
+  $('nGen').onclick=()=>{ $('nPw').value=genPw(10); };
+  $('nSave').onclick=guard($('nSave'),async()=>{
+    const id=$('nId').value.trim().toLowerCase(), pw=$('nPw').value;
+    if(!/^[a-z0-9_-]{3,20}$/.test(id)){ await uiAlert('IDは半角の小文字・数字で3〜20文字にしてください'); return; }
+    if(pw.length<8){ await uiAlert('パスワードは8文字以上にしてください'); return; }
+    const r=await rpc('admin_account_create',{p_login:id,p_pw:pw,p_name:$('nName').value.trim(),p_store:storeId,p_staff:$('nStaff').value||null}); if(!r.ok) return;
+    await uiAlert(`IDを作りました\n\nID：${id}\nパスワード：${pw}\n\n本人に伝えてください`); PAGES.o_ids(); });
+  $('main').querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>editAccount(list.find(a=>a.id===b.dataset.ed),halls));
+};
+async function editAccount(a,halls){ if(!a) return;
+  const m=modal(`<h2 style="margin:0">IDの変更：${esc(a.login_id)}</h2>
+    <label>名前<input data-k="name" value="${esc(a.name)}"></label>
+    <label>黒服と結びつける<select data-k="staff"><option value="">結びつけない</option>${halls.map(h=>`<option value="${h.id}" ${h.id===a.staff_id?'selected':''}>${esc(h.name)}</option>`).join('')}${a.staff_id&&!halls.some(h=>h.id===a.staff_id)?`<option value="${a.staff_id}" selected>${esc(a.staff_name||'（削除済みの黒服）')}</option>`:''}</select></label>
+    <label>状態<select data-k="active"><option value="1" ${a.is_active?'selected':''}>使える</option><option value="0" ${a.is_active?'':'selected'}>止める（ログインできなくする）</option></select></label>
+    <div class="bar"><button class="ghost" data-k="no">キャンセル</button><button class="primary" data-k="ok">保存</button></div>`);
+  const q=k=>m.querySelector(`[data-k=${k}]`);
+  q('no').onclick=()=>m.remove();
+  q('ok').onclick=guard(q('ok'),async()=>{ const act=q('active').value==='1';
+    if(a.is_active&&!act&&!await uiConfirm(`「${a.login_id}」を止めます。今ログインしていてもすぐに使えなくなります`,'止める','danger')) return;
+    const r=await rpc('admin_account_update',{p_id:a.id,p_name:q('name').value.trim(),p_staff:q('staff').value||null,p_active:act}); if(!r.ok) return;
+    m.remove(); toast('保存しました'); PAGES.o_ids(); });
+}
+
+// ---------- パスワード ----------
+PAGES.pw=async()=>{
+  const own=`<div class="card"><h2>自分のパスワード（ID：${esc(me.login_id)}）</h2>
+    <div class="grid2"><label>新しいパスワード（8文字以上）<input id="myPw1" type="password" autocomplete="new-password"></label><label>もう一度<input id="myPw2" type="password" autocomplete="new-password"></label><div><button class="primary" id="mySave" style="width:100%">変える</button></div></div>
+    <div class="muted" style="font-size:14px;margin-top:8px">変えると、ほかの端末でこのIDでログインしている分はログアウトされます</div></div>`;
+  $('main').innerHTML=`<h1>パスワード <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>${own}<div class="card muted">読み込み中…</div>`; bindOwn();
+  const r=await sb.rpc('admin_credentials',{p_store:storeId}); if(page!=='pw') return;
+  if(r.error){ $('main').lastElementChild.outerHTML=`<div class="card err">${esc(r.error.message)}</div>`; return; }
+  const d=r.data||{};
+  const pwCell=pw=>pw?`<span class="pwv" data-pwv="${esc(pw)}">••••••••</span> <button class="ghost sm" data-show>見る</button>`:'<small class="muted">管理サイトで変えると、ここに出ます</small>';
+  const O=true; // v0.04：オーナー以外も自分の店舗のパスワードを変えられる（SQL 047）
+  const row=(label,sub,key,pw)=>`<tr><td>${label}${sub?`<br><small class="muted">${sub}</small>`:''}</td><td>${pwCell(pw)}</td><td style="text-align:right">${O?`<button class="ghost sm" data-pw="${esc(key)}" data-label="${esc(label.replace(/<[^>]*>/g,''))}">変える</button>`:''}</td></tr>`;
+  $('main').lastElementChild.outerHTML=(O?`
+  <div class="card"><h2>全部まとめて新しくする</h2><div class="muted" style="font-size:14px;margin-bottom:10px">POS・タイムカードの端末と顧客サイトのパスワードを、自動で作った新しいものに一度に変えます。黒服が辞めた時に使ってください</div><button class="danger" id="rotAll">全部のパスワードを新しくする</button></div>`:'')+`
+  <div class="card"><h2>今のパスワード</h2><div class="muted" style="font-size:14px;margin-bottom:6px">「変える」で、好きなパスワードを入れて変えられます（自動で作ることもできます）</div><table class="t">
+    <tr><th>どこの</th><th>パスワード</th><th></th></tr>
+    ${(d.devices||[]).map(x=>row(`POS・タイムカード：${esc(x.label||'端末')}`,`ログイン用メール ${esc(x.email||'')}`,`dev:${x.user_id}`,x.pw)).join('')||'<tr><td class="muted" colspan="3">POS・タイムカードの端末がありません</td></tr>'}
+    ${(d.cs||[]).map(x=>row(esc(CS_KIND[x.kind]||x.kind),'',`cs:${x.kind}`,x.pw)).join('')}
+    ${(d.accounts||[]).map(x=>row(`管理サイト：${esc(x.login_id)}`,esc(x.name)+(x.is_owner&&x.name!=='オーナー'?'（オーナー）':'')+(x.is_active?'':'（止めている）'),x.login_id===me.login_id?'own:':`acc:${x.id}`,x.pw)).join('')}
+  </table></div>`;
+  $('main').querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{ const v=b.previousElementSibling; const on=b.textContent==='見る'; v.textContent=on?v.dataset.pwv:'••••••••'; b.textContent=on?'隠す':'見る'; });
+  if(O) $('rotAll').onclick=guard($('rotAll'),()=>rotateAll());
+  $('main').querySelectorAll('[data-pw]').forEach(b=>b.onclick=()=>{ if(b.dataset.pw==='own:'){ $('myPw1').focus(); window.scrollTo(0,0); return; } changeOne(b.dataset.pw,b.dataset.label); });
+};
+function bindOwn(){ $('mySave').onclick=guard($('mySave'),async()=>{
+  const a=$('myPw1').value, b=$('myPw2').value;
+  if(a.length<8){ await uiAlert('パスワードは8文字以上にしてください'); return; }
+  if(a!==b){ await uiAlert('2つのパスワードが違います'); return; }
+  const r=await rpc('admin_set_own_pw',{p_pw:a}); if(!r.ok) return;
+  $('myPw1').value=''; $('myPw2').value=''; toast('パスワードを変えました'); if(page==='pw') PAGES.pw(); }); }
+async function changeOne(key,label){
+  const [kind,id]=[key.slice(0,key.indexOf(':')),key.slice(key.indexOf(':')+1)];
+  const m=modal(`<h2 style="margin:0">パスワードを変える</h2><div>${esc(label)}</div>
+    <label>新しいパスワード（8文字以上）<input data-k="pw" autocapitalize="off" spellcheck="false"></label>
+    <div class="muted" style="font-size:14px">${kind==='acc'?'このIDでログインしている分はログアウトされます':'この端末・サイトでログインしている分は全部ログアウトされます'}</div>
+    <div class="bar"><button class="ghost" data-k="gen">自動で作る</button><button class="ghost" data-k="no">キャンセル</button><button class="primary" data-k="ok">変える</button></div>`);
+  const q=k=>m.querySelector(`[data-k=${k}]`);
+  q('gen').onclick=()=>{ q('pw').value=genPw(10); };
+  q('no').onclick=()=>m.remove();
+  q('ok').onclick=guard(q('ok'),async()=>{ const pw=q('pw').value;
+    if(pw.length<8){ await uiAlert('パスワードは8文字以上にしてください'); return; }
+    const r= kind==='dev'?await rpc('admin_set_device_pw',{p_user:id,p_pw:pw})
+           : kind==='cs'?await rpc('admin_set_cs_pw',{p_store:storeId,p_kind:id,p_pw:pw})
+           : await rpc('admin_set_account_pw',{p_id:id,p_pw:pw});
+    if(!r.ok) return; m.remove(); toast('変えました'); PAGES.pw(); });
+}
+
+start();
+</script>
+</body>
+</html>
