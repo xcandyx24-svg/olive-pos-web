@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.04 -->
+<title>OLIVE 管理</title><!-- admin v0.05 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -115,8 +115,7 @@ const fmtDT=t=>t?new Date(t).toLocaleString('ja-JP',{year:'numeric',month:'numer
 const SCREENS=[
   {grp:'集計'},
   {k:'summary',n:'まとめ'},
-  {k:'pl_month',n:'収支・月次'},
-  {k:'pl_day',n:'収支・日次'},
+  {k:'pl',n:'収支'},
   {k:'cast_sales',n:'売上集計（キャスト）'},
   {k:'register',n:'レジ精算'},
   {k:'register_month',n:'月間レジ精算一覧'},
@@ -142,7 +141,8 @@ let me=null, storeId=null, page=null;
 const stores=()=>me?.stores||[];
 const curStore=()=>stores().find(s=>s.id===storeId);
 const stSet=()=>me?.settings?.[storeId]||{perms:{},nippo_days:3};
-function perm(k){ if(me?.is_owner) return 'edit'; return stSet().perms?.[k]||'none'; }
+// v0.05：収支は月次・日次を1つの画面にまとめた（前の設定 pl_day／pl_month も読む）
+function perm(k){ if(me?.is_owner) return 'edit'; const p=stSet().perms||{}; if(k==='pl') return p.pl||p.pl_day||p.pl_month||'none'; return p[k]||'none'; }
 
 // ---------- ログイン ----------
 $('loginForm').onsubmit=async e=>{ e.preventDefault(); $('loginErr').textContent='';
@@ -223,9 +223,16 @@ function pagePending(k){ $('main').innerHTML=`<h1>${esc(nameOf(k))}</h1><div cla
 
 const PAGES={};
 
+// ---------- 収支（月次・日次を画面の中で切り替える） ----------
+let plTab='month';
+PAGES.pl=()=>{
+  $('main').innerHTML=`<h1>収支</h1><div class="row" style="margin-bottom:14px"><span class="seg">${[['month','月次'],['day','日次']].map(([v,n])=>`<button data-pt="${v}" class="${plTab===v?'on':''}">${n}</button>`).join('')}</span></div><div class="card muted">${plTab==='month'?'月次':'日次'}の画面はこれから作ります</div>`;
+  $('main').querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>{ plTab=b.dataset.pt; PAGES.pl(); });
+};
+
 // ---------- 表示設定（オーナー） ----------
 PAGES.o_perms=()=>{
-  const s=stSet(); const perms={...(s.perms||{})};
+  const s=stSet(); const perms={...(s.perms||{})}; if(!perms.pl&&(perms.pl_day||perms.pl_month)) perms.pl=perms.pl_day||perms.pl_month;
   const rows=SCREENS.map(x=>x.grp?`<tr><th colspan="2" style="padding-top:14px;color:var(--ink);font-weight:700">${esc(x.grp)}</th></tr>`
     :`<tr class="pr"><td>${esc(x.n)}</td><td style="text-align:right"><span class="seg" data-pk="${x.k}">${['none','view','edit'].map(v=>`<button data-v="${v}" class="${(perms[x.k]||'none')===v?'on':''}">${PERM_LABEL[v]}</button>`).join('')}</span></td></tr>`).join('');
   $('main').innerHTML=`<h1>表示設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>
