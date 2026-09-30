@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.25 -->
+<title>OLIVE 顧客</title><!-- customer v1.26 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -261,6 +261,7 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
   <div class="card"><h2>キープボトル ${open.length}本</h2>
     ${open.map(b=>`<div class="bt"><div class="b1"><span class="nm">${esc(b.name)}<small>${md(b.opened_on)}〜</small></span><select data-rem="${b.id}" aria-label="残量">${[10,9,8,7,6,5,4,3,2,1,0].map(n=>`<option value="${n}" ${b.remaining===n?'selected':''}>${n}/10</option>`).join('')}</select></div>
       <div class="b2"><div class="kn"><span class="muted">キープ名</span><input data-kn="${b.id}" value="${esc(b.keep_name||c.name)}" aria-label="キープ名"></div><div class="b3"><button class="ghost sm" data-fin="${b.id}">飲切</button><button class="ghost sm" data-exp="${b.id}">期限切</button><button class="ghost sm" data-mv="${b.id}">移動</button></div></div></div>`).join('')||'<div class="muted" style="margin-bottom:8px">なし</div>'}
+    ${(cur.other_bottles||[]).length?`<div style="margin-top:8px"><div class="muted" style="font-size:12px">ほかの店舗のキープ（見るだけ）</div>${cur.other_bottles.map(b=>`<div class="muted fit1" style="font-size:13px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.store+'：'+b.name+'　'+(b.remaining??0)+'/10　'+md(b.opened_on)+'〜')}${b.keep_name&&b.keep_name!==c.name?`（キープ名：${esc(b.keep_name)}）`:''}</div>`).join('')}</div>`:''}
     <div style="border-top:1px dashed var(--line);margin-top:10px;padding-top:10px"><div class="muted" style="font-size:13px;margin-bottom:6px">新しくボトルを登録</div><div style="display:flex;gap:6px;align-items:center"><select id="btSel" style="flex:1;min-width:0;padding:10px 6px"><option value="">銘柄を選ぶ</option>${keep.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}<option value="__free">＋ リストに無い銘柄</option></select><select id="btRem" style="width:auto;flex:none;padding:10px 6px" aria-label="残量">${[10,9,8,7,6,5,4,3,2,1].map(n=>`<option value="${n}">${n}/10</option>`).join('')}</select><button class="ok" id="btAdd" style="flex:none">登録</button></div></div>
     ${exp.length?`<div style="margin-top:4px">${exp.map(b=>`<div class="muted fit1" style="font-size:13px;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((b.moved?'ボトル移動':'期限切れ')+'：'+b.name+'　'+(b.remaining??0)+'/10　'+(d=>d?String(d).slice(0,10).split('-').map(Number).join('/'):'')(b.expired_on))}${b.keep_name&&b.keep_name!==c.name?`（キープ名：${esc(b.keep_name)}）`:''}</div>`).join('')}</div>`:''}
     ${fin.length?`<div class="muted" style="font-size:13px;margin-top:10px">飲み切り済み：${fin.slice(0,10).map(b=>esc(b.name)).join('、')}</div>`:''}</div>
@@ -269,7 +270,7 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
     <button class="ok" id="reqBtn" style="width:100%;margin-top:12px">＋ 気づきを申請</button></div>
   <div class="card"><h2>来店履歴</h2>
     <div class="muted" style="font-size:13px;margin-bottom:4px">今月 ${cur.month_count}回・${yen(cur.month_sum)}　／　累計 ${cur.visit_total}回</div>
-    ${visYears((cur.visits||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||jaCmp(a.table,b.table)||(a.guests-b.guests)),v=>v.date,v=>`<div class="vis"><span>${md(v.date)}　${esc(v.table||'')}　${v.guests}名${v.open?' <span class="badge">来店中</span>':''}${v.oki?' <span class="badge gray">置き</span>':''}</span><span class="amt">${v.amount!=null?yen(v.amount):''}</span></div>`)||'<div class="muted">まだありません</div>'}
+    ${visYears((cur.visits||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||jaCmp(a.table,b.table)||(a.guests-b.guests)),v=>v.date,v=>`<div class="vis"><span>${md(v.date)}　${v.store?`【${esc(v.store)}】`:esc(v.table||'')}　${v.guests}名${v.open?' <span class="badge">来店中</span>':''}${v.oki?' <span class="badge gray">置き</span>':''}</span><span class="amt">${v.amount!=null?yen(v.amount):''}</span></div>`)||'<div class="muted">まだありません</div>'}
     ${(cur.visits||[]).length<cur.visit_total?'<div class="muted" style="font-size:12px;margin-top:6px">直近30回を表示しています</div>':''}</div>`;
 
   const D=$('detail'); fitLine(D);
