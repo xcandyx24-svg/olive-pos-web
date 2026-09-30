@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.03 -->
+<title>OLIVE 管理</title><!-- admin v0.04 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -184,8 +184,8 @@ function firstPage(){ return SCREENS.find(s=>s.k&&visible(s.k))?.k||'pw'; }
 function renderAlert(){
   const s=stSet(), box=$('alertBar');
   if(!s.pw_alert){ box.innerHTML=''; return; }
-  box.innerHTML=`<div class="alertbar"><span>⚠ 黒服（${esc(s.pw_alert_note||'')}）が削除されました。POS・タイムカード・顧客サイトのパスワードを変えてください</span>${me.is_owner?'<button class="danger" id="rotBtn">全部のパスワードを新しくする</button>':'<span style="font-weight:400">（オーナーに伝えてください）</span>'}</div>`;
-  if(me.is_owner) $('rotBtn').onclick=guard($('rotBtn'),()=>rotateAll());
+  box.innerHTML=`<div class="alertbar"><span>⚠ 黒服（${esc(s.pw_alert_note||'')}）が削除されました。POS・タイムカード・顧客サイトのパスワードを変えてください</span><button class="danger" id="rotBtn">全部のパスワードを新しくする</button></div>`;
+  $('rotBtn').onclick=guard($('rotBtn'),()=>rotateAll());
 }
 async function rotateAll(){
   const st=curStore();
@@ -197,7 +197,7 @@ const CS_KIND={view:'顧客サイト（見る用）',edit:'顧客サイト（編
 function showNewPasswords(d){ return new Promise(res=>{
   const rows=[...(d.devices||[]).map(x=>`<tr><td>${esc(x.label||'端末')}<br><small class="muted">${esc(x.email||'')}</small></td><td class="pwbox">${esc(x.pw)}</td></tr>`),
               ...(d.cs||[]).map(x=>`<tr><td>${esc(CS_KIND[x.kind]||x.kind)}</td><td class="pwbox">${esc(x.pw)}</td></tr>`)].join('');
-  const m=modal(`<h2 style="margin:0">新しいパスワード</h2><div class="muted" style="font-size:14px">このパスワードは、あとからでも「パスワード」の画面で見られます（オーナーだけ）</div><table class="t">${rows||'<tr><td class="muted">変えるものがありませんでした</td></tr>'}</table><div class="bar"><button class="primary" data-k="ok">閉じる</button></div>`);
+  const m=modal(`<h2 style="margin:0">新しいパスワード</h2><div class="muted" style="font-size:14px">このパスワードは、あとからでも「パスワード」の画面で見られます</div><table class="t">${rows||'<tr><td class="muted">変えるものがありませんでした</td></tr>'}</table><div class="bar"><button class="primary" data-k="ok">閉じる</button></div>`);
   m.querySelector('[data-k=ok]').onclick=()=>{ m.remove(); res(); }; }); }
 
 // ---------- メニュー ----------
@@ -299,15 +299,15 @@ PAGES.pw=async()=>{
   if(r.error){ $('main').lastElementChild.outerHTML=`<div class="card err">${esc(r.error.message)}</div>`; return; }
   const d=r.data||{};
   const pwCell=pw=>pw?`<span class="pwv" data-pwv="${esc(pw)}">••••••••</span> <button class="ghost sm" data-show>見る</button>`:'<small class="muted">管理サイトで変えると、ここに出ます</small>';
-  const O=me.is_owner;
+  const O=true; // v0.04：オーナー以外も自分の店舗のパスワードを変えられる（SQL 047）
   const row=(label,sub,key,pw)=>`<tr><td>${label}${sub?`<br><small class="muted">${sub}</small>`:''}</td><td>${pwCell(pw)}</td><td style="text-align:right">${O?`<button class="ghost sm" data-pw="${esc(key)}" data-label="${esc(label.replace(/<[^>]*>/g,''))}">変える</button>`:''}</td></tr>`;
   $('main').lastElementChild.outerHTML=(O?`
   <div class="card"><h2>全部まとめて新しくする</h2><div class="muted" style="font-size:14px;margin-bottom:10px">POS・タイムカードの端末と顧客サイトのパスワードを、自動で作った新しいものに一度に変えます。黒服が辞めた時に使ってください</div><button class="danger" id="rotAll">全部のパスワードを新しくする</button></div>`:'')+`
-  <div class="card"><h2>今のパスワード</h2><div class="muted" style="font-size:14px;margin-bottom:6px">${O?'「変える」で、好きなパスワードを入れて変えられます（自動で作ることもできます）':'変えるのはオーナーだけです'}</div><table class="t">
+  <div class="card"><h2>今のパスワード</h2><div class="muted" style="font-size:14px;margin-bottom:6px">「変える」で、好きなパスワードを入れて変えられます（自動で作ることもできます）</div><table class="t">
     <tr><th>どこの</th><th>パスワード</th><th></th></tr>
     ${(d.devices||[]).map(x=>row(`POS・タイムカード：${esc(x.label||'端末')}`,`ログイン用メール ${esc(x.email||'')}`,`dev:${x.user_id}`,x.pw)).join('')||'<tr><td class="muted" colspan="3">POS・タイムカードの端末がありません</td></tr>'}
     ${(d.cs||[]).map(x=>row(esc(CS_KIND[x.kind]||x.kind),'',`cs:${x.kind}`,x.pw)).join('')}
-    ${(d.accounts||[]).map(x=>row(`管理サイト：${esc(x.login_id)}`,esc(x.name)+(x.is_owner&&x.name!=='オーナー'?'（オーナー）':'')+(x.is_active?'':'（止めている）'),x.is_owner&&x.login_id===me.login_id?'own:':`acc:${x.id}`,x.pw)).join('')}
+    ${(d.accounts||[]).map(x=>row(`管理サイト：${esc(x.login_id)}`,esc(x.name)+(x.is_owner&&x.name!=='オーナー'?'（オーナー）':'')+(x.is_active?'':'（止めている）'),x.login_id===me.login_id?'own:':`acc:${x.id}`,x.pw)).join('')}
   </table></div>`;
   $('main').querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{ const v=b.previousElementSibling; const on=b.textContent==='見る'; v.textContent=on?v.dataset.pwv:'••••••••'; b.textContent=on?'隠す':'見る'; });
   if(O) $('rotAll').onclick=guard($('rotAll'),()=>rotateAll());
@@ -318,7 +318,7 @@ function bindOwn(){ $('mySave').onclick=guard($('mySave'),async()=>{
   if(a.length<8){ await uiAlert('パスワードは8文字以上にしてください'); return; }
   if(a!==b){ await uiAlert('2つのパスワードが違います'); return; }
   const r=await rpc('admin_set_own_pw',{p_pw:a}); if(!r.ok) return;
-  $('myPw1').value=''; $('myPw2').value=''; toast('パスワードを変えました'); if(page==='pw'&&me.is_owner) PAGES.pw(); }); }
+  $('myPw1').value=''; $('myPw2').value=''; toast('パスワードを変えました'); if(page==='pw') PAGES.pw(); }); }
 async function changeOne(key,label){
   const [kind,id]=[key.slice(0,key.indexOf(':')),key.slice(key.indexOf(':')+1)];
   const m=modal(`<h2 style="margin:0">パスワードを変える</h2><div>${esc(label)}</div>
