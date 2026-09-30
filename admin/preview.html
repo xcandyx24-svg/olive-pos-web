@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.11 -->
+<title>OLIVE 管理</title><!-- admin v0.12 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -375,7 +375,7 @@ PAGES.set_pay=async()=>{
   const st=storeId, ed=perm('set_pay')==='edit';
   $('main').innerHTML=`<h1>給与項目 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="card muted">読み込み中…</div>`;
   const [ps,hb,pos,ft]=await Promise.all([ sb.from('pay_slides').select('kind,threshold,wage').eq('store_id',st).order('threshold'),
-    sb.from('hall_bonus_slides').select('*').eq('store_id',st).order('sales_man'), sb.from('pos_settings').select('wage_by_point').eq('store_id',st).maybeSingle(),
+    sb.from('hall_bonus_slides').select('*').eq('store_id',st).order('sales_man'), sb.from('pos_settings').select('*').eq('store_id',st).maybeSingle(),
     sb.from('fine_types').select('name,target,calc,value,per_unit,sort_order').eq('store_id',st).order('sort_order') ]);
   if(page!=='set_pay'||storeId!==st) return;
   const er=ps.error||hb.error||pos.error; if(er){ $('main').innerHTML=`<h1>給与項目</h1><div class="card err">${esc(/hall_bonus_slides/.test(er.message)&&/does not exist|schema cache/.test(er.message)?'SQL 050 が未実行です：':'読み込めません：')}${esc(er.message)}</div>`; return; }
@@ -387,10 +387,11 @@ PAGES.set_pay=async()=>{
     <div class="muted" style="font-size:13px;margin-top:8px">時給は「${byPt?'ポイント':'小計'}スライド」「同伴スライド」「保証時給（キャスト管理で一人ずつ）」のうち、一番高いものになります</div></div>
   <div class="slgrid">${slideCard(byPt?'points':'sales',R(byPt?'points':'sales'),ed)}${slideCard('douhan',R('douhan'),ed)}${slideCard(byPt?'sales':'points',R(byPt?'sales':'points'),ed,off)}</div>
   ${slideCard('hall',hb.data||[],ed,`<div class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.6">単位は万円。月の総売上が、その行の売上以上になっている行のうち、一番下の行を使います。一番上の行より売上が少ない月は0円です。<br>人件費比率（キャストの給与＋黒服の月給＋体験の報酬 ÷ 総売上）が 目標比率以内／＋2%まで／＋5%まで／5%超 で金額が決まり、売上ボーナスを足した総額を、黒服の売上シェアで分けます</div>`)}
-  ${ft.error?`<div class="card err">${esc(/fine_types/.test(ft.error.message)&&/does not exist|schema cache/.test(ft.error.message)?'SQL 052 が未実行です：':'罰金の種類を読み込めません：')}${esc(ft.error.message)}</div>`:fineCard(ft.data||[],ed)}`;
+  ${ft.error?`<div class="card err">${esc(/fine_types/.test(ft.error.message)&&/does not exist|schema cache/.test(ft.error.message)?'SQL 052 が未実行です：':'罰金の種類を読み込めません：')}${esc(ft.error.message)}</div>`:fineCard(ft.data||[],ed,pos.data?.daily_hours)}`;
   $('main').querySelectorAll('tr[data-fr]').forEach(tr=>fineRowWire(tr,ed));
   if(!ed) return;
   { const fc=$('main').querySelector('[data-fines]'); if(fc){ fc.querySelector('[data-fadd]').onclick=()=>{ const tb=fc.querySelector('table.fn'); fc.querySelector('[data-fempty]')?.remove(); tb.insertAdjacentHTML('beforeend',fineRowHtml({},true)); const last=[...tb.querySelectorAll('tr[data-fr]')].pop(); fineRowWire(last,true); last.querySelector('[data-f=name]').focus(); };
+    const hs=$('dHoursSave'); if(hs) hs.onclick=guard(hs,async()=>{ const h=slNum($('dHours').value); if(h==null||!(h>0&&h<=24)){ await uiAlert('所定時間は0より大きく24以下の数にしてください'); return; } if(!await uiConfirm(`日給の人の所定時間を ${h}時間 にしますか？\n時間給 ＝ 日給 ÷ ${h}時間 になります`)) return; const r=await rpc('admin_set_daily_hours',{p_store:st,p_hours:h}); if(!r.ok) return; toast('保存しました'); PAGES.set_pay(); });
     const sv=fc.querySelector('[data-fsave]'); sv.onclick=guard(sv,async()=>{ const g=fineRead(fc); if(g.err){ await uiAlert(g.err); return; } if(!await uiConfirm(`罰金の種類を保存しますか？（${g.rows.length}行）\nPOS の「＋罰金」の一覧も変わります。今までに登録した罰金は変わりません`)) return;
       const r=await rpc('admin_save_fine_types',{p_store:st,p_rows:g.rows}); if(!r.ok) return; toast('保存しました'); PAGES.set_pay(); }); } }
   $('wb').querySelectorAll('button').forEach(b=>b.onclick=guard(b,async()=>{ const v=b.dataset.v==='true'; if(v===byPt) return;
@@ -406,22 +407,25 @@ PAGES.set_pay=async()=>{
 };
 
 // v0.11・SQL 052：罰金の種類（店舗ごと）。POS の在籍リスト「＋罰金」で選ぶ。金額が決まっているものはそのまま登録、時給の％は月末の時給で計算、日給の％はその人の日給で計算
-const FINE_TG=[['all','全員'],['hourly','時給の人'],['daily','日給の人']], FINE_CL=[['yen','円'],['hourly_pct','時給の％'],['daily_pct','日給の％'],['input','その都度入れる']];
+const FINE_TG=[['all','全員'],['hourly','時給の人'],['daily','日給の人']], FINE_CL=[['yen','円'],['hourly_pct','時給の％'],['daily_pct','日給の％'],['input','その都度入れる'],['daily_late','日給：遅刻（時間分）'],['daily_early','日給：早上がり（時間分）']];
+const FINE_TIME=c=>c==='daily_late'||c==='daily_early';
 function fineRowHtml(r,ed){ const dis=ed?'':'disabled';
   return `<tr data-fr><td><input data-f="name" value="${esc(r.name||'')}" ${dis}></td><td><select data-f="target" ${dis}>${FINE_TG.map(([v,n])=>`<option value="${v}" ${(r.target||'all')===v?'selected':''}>${n}</option>`).join('')}</select></td>
     <td><select data-f="calc" ${dis}>${FINE_CL.map(([v,n])=>`<option value="${v}" ${(r.calc||'yen')===v?'selected':''}>${n}</option>`).join('')}</select></td>
     <td><input data-f="value" inputmode="numeric" value="${r.value??''}" ${dis}><span class="u"></span></td><td><label class="pu"><input type="checkbox" data-f="per_unit" ${r.per_unit?'checked':''} ${dis}>個数を入れる</label></td>${ed?'<td class="x"><button class="ghost sm" data-fdel aria-label="行を消す">✕</button></td>':''}</tr>`; }
 function fineRowWire(tr,ed){ const cl=tr.querySelector('[data-f=calc]'), v=tr.querySelector('[data-f=value]'), pu=tr.querySelector('[data-f=per_unit]'), u=tr.querySelector('.u');
-  const upd=()=>{ const c=cl.value; u.textContent=c==='yen'?'円':c==='input'?'':'%'; v.disabled=!ed||c==='input'; if(c==='input') v.value=''; pu.disabled=!ed||c!=='yen'; if(c!=='yen') pu.checked=false; }; cl.onchange=upd; upd();
+  const upd=()=>{ const c=cl.value; u.textContent=c==='yen'?'円':c==='input'?'':'%'; v.disabled=!ed||c==='input'; if(c==='input') v.value=''; v.placeholder=FINE_TIME(c)?'足す％':''; pu.disabled=!ed||c!=='yen'; if(c!=='yen') pu.checked=false; }; cl.onchange=upd; upd();
   const d=tr.querySelector('[data-fdel]'); if(d) d.onclick=()=>tr.remove(); }
-function fineCard(rows,ed){ return `<div class="card" data-fines><h2>罰金の種類<br><small class="muted" style="font-weight:400">POS の在籍リストの「＋罰金」で選びます</small></h2>
-  <div class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.6">円：選ぶとその金額で登録します（「個数を入れる」にすると 金額×個数）<br>時給の％：月末に決まった時給で計算します（POS では「時給×○%」と記録します）<br>日給の％：その人の日給（POS のキャストの詳細で入れます）で計算します<br>その都度入れる：選んだ時に金額を入れます<br>一覧にないものは、POS で「その他」を選んで理由と金額を入れられます</div>
+function fineCard(rows,ed,hours){ return `<div class="card" data-fines><h2>罰金の種類<br><small class="muted" style="font-weight:400">POS の在籍リストの「＋罰金」で選びます</small></h2>
+  <div class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.6">円：選ぶとその金額で登録します（「個数を入れる」にすると 金額×個数）<br>時給の％：月末に決まった時給で計算します（POS では「時給×○%」と記録します）<br>日給の％：その人の日給（POS のキャストの詳細で入れます）で計算します<br>その都度入れる：選んだ時に金額を入れます<br>日給：遅刻・早上がり：決まった時刻と打刻（15分丸め）の差 × 時間給（日給 ÷ 下の所定時間）。「足す％」を入れると日給のその％を足します（無断の時など）<br>一覧にないものは、POS で「その他」を選んで理由と金額を入れられます</div>
+  <div class="row" style="margin-bottom:10px;font-size:14px">日給の人の所定時間<input id="dHours" inputmode="decimal" value="${hours??''}" ${ed&&hours!=null?'':'disabled'} style="width:80px;text-align:right">時間${ed&&hours!=null?'<button class="ghost sm" id="dHoursSave">保存</button>':''}${hours==null?'<span class="muted" style="font-size:13px">SQL 053 が未実行です</span>':''}</div>
   <div class="slw"><table class="fn"><tr><th>名前</th><th>対象</th><th>決め方</th><th>金額・％</th><th></th>${ed?'<th></th>':''}</tr>${rows.map(r=>fineRowHtml(r,ed)).join('')||''}</table>${rows.length?'':'<div class="muted" data-fempty style="padding:8px 4px">まだ入っていません</div>'}</div>
   ${ed?'<div class="row" style="margin-top:10px"><button class="ghost sm" data-fadd>＋ 行を足す</button><button class="primary sm" data-fsave>保存</button></div>':''}</div>`; }
 function fineRead(card){ const out=[]; let i=0;
   for(const tr of card.querySelectorAll('tr[data-fr]')){ i++; const g=k=>tr.querySelector(`[data-f=${k}]`); const name=g('name').value.trim(), calc=g('calc').value, vs=g('value').value;
     if(!name&&!vs.trim()) continue; if(!name) return {err:`${i}行目：名前を入れてください`};
-    let value=null; if(calc!=='input'){ value=slNum(vs); if(value==null||!Number.isInteger(value)||value<=0) return {err:`${i}行目（${name}）：${calc==='yen'?'金額':'％'}を1以上の整数で入れてください`}; }
+    let value=null; if(FINE_TIME(calc)){ value=slNum(vs); if(value!=null&&(!Number.isInteger(value)||value<=0)) return {err:`${i}行目（${name}）：足す％は1以上の整数にするか、空けてください`}; }
+    else if(calc!=='input'){ value=slNum(vs); if(value==null||!Number.isInteger(value)||value<=0) return {err:`${i}行目（${name}）：${calc==='yen'?'金額':'％'}を1以上の整数で入れてください`}; }
     out.push({name,target:g('target').value,calc,value,per_unit:calc==='yen'&&g('per_unit').checked}); }
   const seen=new Set(); for(const r of out){ const k=r.name+'/'+r.target; if(seen.has(k)) return {err:`名前と対象が同じ行が2つあります：${r.name}`}; seen.add(k); }
   return {rows:out}; }
