@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.94 -->
+<title>OLIVE 会計</title><!-- v10.95 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -202,7 +202,7 @@
 </div></section>
 
 <section class="view" id="v-cust"><div class="card settings" style="grid-template-columns:280px minmax(0,1.25fr) minmax(0,1fr)">
-  <div style="min-width:0"><div style="display:flex;gap:6px;margin-bottom:8px"><input id="cuSearch" placeholder="名前・会社名で検索" style="flex:1 1 0;min-width:0;width:0"><button class="primary sm" id="cuNew" style="white-space:nowrap;flex:none">＋新規</button></div><div id="cuModes" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="chip on" data-cm="all">全員</button><select id="cuMonths" aria-label="期間"></select><button class="chip" data-cm="old">ご来店なし</button><button class="chip" data-cm="req" id="cuReqChip" style="display:none"></button></div><div class="lst" id="cuList" style="max-height:70vh;overflow:auto"></div></div>
+  <div style="min-width:0"><div style="display:flex;gap:6px;margin-bottom:8px"><input id="cuSearch" placeholder="名前・会社名で検索" style="flex:1 1 0;min-width:0;width:0"><button class="primary sm" id="cuNew" style="white-space:nowrap;flex:none">＋新規</button></div><div id="cuModes" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="chip on" data-cm="all">全員</button><select id="cuMonths" aria-label="ご来店なしの期間"></select><button class="chip" data-cm="req" id="cuReqChip" style="display:none"></button></div><div class="lst" id="cuList" style="max-height:70vh;overflow:auto"></div></div>
   <div id="cuForm" class="form"></div>
   <div id="cuSide"></div>
 </div></section>
@@ -989,7 +989,7 @@ let cuSel=null;
 $('navCust').onclick=async()=>{ show('v-cust'); await loadMasters(); renderCuList(); renderCuForm(); await loadCuInfo(); renderCuList(); };
 document.querySelectorAll('#cuModes [data-cm]').forEach(b=>b.onclick=()=>{ cuMode=b.dataset.cm; renderCuList(); });
 $('cuSearch').oninput=()=>renderCuList();
-function renderCuList(){ const q=$('cuSearch').value.trim(); if(!cuMonthsSel) cuMonthsSel=btMonths(); const ms=$('cuMonths'); const opts=[...new Set([1,2,3,6,12,cuMonthsSel])].sort((a,b)=>a-b); ms.innerHTML=opts.map(n=>`<option value="${n}" ${n===cuMonthsSel?'selected':''}>${n}か月以上</option>`).join(''); ms.onchange=()=>{ cuMonthsSel=Number(ms.value); cuMode='old'; renderCuList(); }; const cut=btCutoff(cuMonthsSel); const reqN=Object.values(cuInfo.req||{}).reduce((a,n)=>a+n,0); if(cuMode==='req'&&!reqN) cuMode='all'; $('cuReqChip').style.display=reqN?'':'none'; $('cuReqChip').textContent=`申請 ${reqN}件`; document.querySelectorAll('#cuModes [data-cm]').forEach(b=>b.classList.toggle('on',b.dataset.cm===cuMode));
+function renderCuList(){ const q=$('cuSearch').value.trim(); if(!cuMonthsSel) cuMonthsSel=btMonths(); const ms=$('cuMonths'); const opts=[...new Set([1,2,3,6,12,cuMonthsSel])].sort((a,b)=>a-b); /* v10.95：［ご来店なし］ボタンはなくし、期間を選ぶだけで絞り込む。全員の時は「ご来店なし」と出す */ ms.innerHTML=(cuMode==='old'?'':'<option value="" selected>ご来店なし</option>')+opts.map(n=>`<option value="${n}" ${cuMode==='old'&&n===cuMonthsSel?'selected':''}>${n}か月以上</option>`).join(''); ms.onchange=()=>{ if(!ms.value) return; cuMonthsSel=Number(ms.value); cuMode='old'; renderCuList(); }; const cut=btCutoff(cuMonthsSel); const reqN=Object.values(cuInfo.req||{}).reduce((a,n)=>a+n,0); if(cuMode==='req'&&!reqN) cuMode='all'; $('cuReqChip').style.display=reqN?'':'none'; $('cuReqChip').textContent=`申請 ${reqN}件`; document.querySelectorAll('#cuModes [data-cm]').forEach(b=>b.classList.toggle('on',b.dataset.cm===cuMode));
   let list=customers.filter(c=>!q||(c.name||'').includes(q)||(c.company||'').includes(q)||(c.receipt_name||'').includes(q)||(cuInfo.kn[c.id]||[]).some(k=>k.includes(q)));
   if(cuMode==='req') list=list.filter(c=>cuInfo.req[c.id]);
   if(cuMode==='old') list=list.filter(c=>cuBase(c.id)&&cuBase(c.id)<=cut).sort((a,b)=>cuBase(a.id).localeCompare(cuBase(b.id))); list=list.slice(0,200);
