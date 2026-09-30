@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.12 -->
+<title>OLIVE 管理</title><!-- admin v0.13 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -374,9 +374,9 @@ function slideRead(card,kind){ const d=SLIDE_DEF[kind]; const out=[];
 PAGES.set_pay=async()=>{
   const st=storeId, ed=perm('set_pay')==='edit';
   $('main').innerHTML=`<h1>給与項目 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="card muted">読み込み中…</div>`;
-  const [ps,hb,pos,ft]=await Promise.all([ sb.from('pay_slides').select('kind,threshold,wage').eq('store_id',st).order('threshold'),
+  const [ps,hb,pos,ft,ax]=await Promise.all([ sb.from('pay_slides').select('kind,threshold,wage').eq('store_id',st).order('threshold'),
     sb.from('hall_bonus_slides').select('*').eq('store_id',st).order('sales_man'), sb.from('pos_settings').select('*').eq('store_id',st).maybeSingle(),
-    sb.from('fine_types').select('name,target,calc,value,per_unit,sort_order').eq('store_id',st).order('sort_order') ]);
+    sb.from('fine_types').select('name,target,calc,value,per_unit,sort_order').eq('store_id',st).order('sort_order'), sb.rpc('admin_get_after_ext',{p_store:st}) ]);
   if(page!=='set_pay'||storeId!==st) return;
   const er=ps.error||hb.error||pos.error; if(er){ $('main').innerHTML=`<h1>給与項目</h1><div class="card err">${esc(/hall_bonus_slides/.test(er.message)&&/does not exist|schema cache/.test(er.message)?'SQL 050 が未実行です：':'読み込めません：')}${esc(er.message)}</div>`; return; }
   const byPt=!!pos.data?.wage_by_point; const R=k=>(ps.data||[]).filter(x=>x.kind===k);
@@ -385,11 +385,17 @@ PAGES.set_pay=async()=>{
   ${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
   <div class="card"><h2>時給の決め方（キャスト）</h2><div class="row"><span class="seg" id="wb">${[[false,'係小計で決める'],[true,'ポイントで決める']].map(([v,n])=>`<button data-v="${v}" class="${byPt===v?'on':''}" ${ed?'':'disabled'}>${n}</button>`).join('')}</span></div>
     <div class="muted" style="font-size:13px;margin-top:8px">時給は「${byPt?'ポイント':'小計'}スライド」「同伴スライド」「保証時給（キャスト管理で一人ずつ）」のうち、一番高いものになります</div></div>
+  ${afterCard(ax,ed)}
   <div class="slgrid">${slideCard(byPt?'points':'sales',R(byPt?'points':'sales'),ed)}${slideCard('douhan',R('douhan'),ed)}${slideCard(byPt?'sales':'points',R(byPt?'sales':'points'),ed,off)}</div>
   ${slideCard('hall',hb.data||[],ed,`<div class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.6">単位は万円。月の総売上が、その行の売上以上になっている行のうち、一番下の行を使います。一番上の行より売上が少ない月は0円です。<br>人件費比率（キャストの給与＋黒服の月給＋体験の報酬 ÷ 総売上）が 目標比率以内／＋2%まで／＋5%まで／5%超 で金額が決まり、売上ボーナスを足した総額を、黒服の売上シェアで分けます</div>`)}
   ${ft.error?`<div class="card err">${esc(/fine_types/.test(ft.error.message)&&/does not exist|schema cache/.test(ft.error.message)?'SQL 052 が未実行です：':'罰金の種類を読み込めません：')}${esc(ft.error.message)}</div>`:fineCard(ft.data||[],ed,pos.data?.daily_hours)}`;
   $('main').querySelectorAll('tr[data-fr]').forEach(tr=>fineRowWire(tr,ed));
   if(!ed) return;
+  { const ac=$('main').querySelector('[data-after]'); if(ac){ let on=!!ax.data?.on; ac.querySelectorAll('#afOn button').forEach(b=>b.onclick=()=>{ on=b.dataset.v==='true'; ac.querySelectorAll('#afOn button').forEach(x=>x.classList.toggle('on',x===b)); });
+    $('afU').oninput=()=>{ $('afU2').textContent=$('afU').value; };
+    const sv=$('afSave'); sv.onclick=guard(sv,async()=>{ const b=$('afB').value, u=$('afU').value; if(!b||!u){ await uiAlert('時刻を入れてください'); return; } if(b>='12:00'||u>='12:00'){ await uiAlert('時刻は 0:00〜11:59（日付が変わった後）で入れてください'); return; } if(b>=u){ await uiAlert('境目の時刻は、付ける時刻より前にしてください'); return; }
+      if(!await uiConfirm(on?`アフターの打刻が ${b}〜${u} の間なら、${u} まで働いたことにしますか？\nこれから押す打刻から変わります`:'アフターの延長を「しない」にしますか？\nこれから押す打刻から変わります')) return;
+      const r=await rpc('admin_set_after_ext',{p_store:st,p_on:on,p_from:b,p_to:u}); if(!r.ok) return; toast('保存しました'); PAGES.set_pay(); }); } }
   { const fc=$('main').querySelector('[data-fines]'); if(fc){ fc.querySelector('[data-fadd]').onclick=()=>{ const tb=fc.querySelector('table.fn'); fc.querySelector('[data-fempty]')?.remove(); tb.insertAdjacentHTML('beforeend',fineRowHtml({},true)); const last=[...tb.querySelectorAll('tr[data-fr]')].pop(); fineRowWire(last,true); last.querySelector('[data-f=name]').focus(); };
     const hs=$('dHoursSave'); if(hs) hs.onclick=guard(hs,async()=>{ const h=slNum($('dHours').value); if(h==null||!(h>0&&h<=24)){ await uiAlert('所定時間は0より大きく24以下の数にしてください'); return; } if(!await uiConfirm(`日給の人の所定時間を ${h}時間 にしますか？\n時間給 ＝ 日給 ÷ ${h}時間 になります`)) return; const r=await rpc('admin_set_daily_hours',{p_store:st,p_hours:h}); if(!r.ok) return; toast('保存しました'); PAGES.set_pay(); });
     const sv=fc.querySelector('[data-fsave]'); sv.onclick=guard(sv,async()=>{ const g=fineRead(fc); if(g.err){ await uiAlert(g.err); return; } if(!await uiConfirm(`罰金の種類を保存しますか？（${g.rows.length}行）\nPOS の「＋罰金」の一覧も変わります。今までに登録した罰金は変わりません`)) return;
@@ -429,6 +435,14 @@ function fineRead(card){ const out=[]; let i=0;
     out.push({name,target:g('target').value,calc,value,per_unit:calc==='yen'&&g('per_unit').checked}); }
   const seen=new Set(); for(const r of out){ const k=r.name+'/'+r.target; if(seen.has(k)) return {err:`名前と対象が同じ行が2つあります：${r.name}`}; seen.add(k); }
   return {rows:out}; }
+
+// v0.13・SQL 054：アフターの延長（attendance_rules。タイムカードの打刻の時に round_punch が使う）。境目の時刻〜付ける時刻 の間に押したアフターは、付ける時刻まで働いたことにする
+function afterCard(ax,ed){ const h='<h2>アフターの延長<br><small class="muted" style="font-weight:400">アフターの打刻（退勤の代わり）で、時給を付ける時間を延ばします</small></h2>';
+  if(ax.error) return `<div class="card">${h}<div class="err">${esc(/admin_get_after_ext/.test(ax.error.message)&&/find|exist|schema cache/.test(ax.error.message)?'SQL 054 が未実行です：':'読み込めません：')}${esc(ax.error.message)}</div></div>`;
+  const a=ax.data||{}, on=!!a.on, dis=ed?'':'disabled';
+  return `<div class="card" data-after>${h}<div class="row"><span class="seg" id="afOn">${[[true,'する'],[false,'しない']].map(([v,n])=>`<button data-v="${v}" class="${on===v?'on':''}" ${dis}>${n}</button>`).join('')}</span></div>
+    <div class="row" style="margin-top:10px;font-size:14px">アフターの打刻が<input type="time" id="afB" value="${esc(a.from||'00:30')}" ${dis} style="width:130px">〜<input type="time" id="afU" value="${esc(a.to||'01:00')}" ${dis} style="width:130px">の間なら、<span id="afU2">${esc(a.to||'01:00')}</span>まで働いたことにする${ed?'<button class="primary sm" id="afSave">保存</button>':''}</div>
+    <div class="muted" style="font-size:13px;margin-top:8px;line-height:1.6">時給の人・日給の人の両方。タイムカードで打刻した時に決まります（変えても、前の打刻はそのまま）<br>打ち止めの時刻（${esc(a.end_cap||'01:00')}）より後にはできません</div></div>`; }
 
 // ---------- 表示設定（オーナー） ----------
 PAGES.o_perms=()=>{
