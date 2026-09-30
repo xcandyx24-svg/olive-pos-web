@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.06 -->
+<title>OLIVE 管理</title><!-- admin v0.07 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -50,7 +50,12 @@
   .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
   .seg button{border-radius:0;background:#fff;height:36px;font-size:14px;padding:0 12px;border-right:1px solid var(--line)}.seg button:last-child{border-right:none}
   .seg button.on{background:var(--ink);color:#fff}
-  .badge{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--gold);color:#fff}.badge.gray{background:#999}
+  .badge{font-size:12px;padding:2px 8px;border-radius:999px;white-space:nowrap;background:var(--gold);color:#fff}.badge.gray{background:#999}.badge.k{background:var(--acc)}.badge.warnb{background:var(--warn)}
+  .num{text-align:right!important;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .alert{background:#fde8e8;color:#9b1c1c;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-weight:700}
+  table.reg{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:13px}table.reg td,table.reg th{padding:6px 5px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:right}
+  table.reg th{color:var(--muted);font-weight:400}table.reg tr[data-rd]{cursor:pointer}table.reg tr[data-rd]:hover{background:#f3f2ee}
+  .kv2{display:grid;grid-template-columns:1fr auto;gap:8px 14px;align-items:center}
   .pwbox{font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;letter-spacing:.05em}
   .pwv{font-family:ui-monospace,Menlo,monospace;font-size:17px;font-weight:700;letter-spacing:.05em;white-space:nowrap}
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
@@ -118,7 +123,6 @@ const SCREENS=[
   {k:'pl',n:'収支'},
   {k:'cast_sales',n:'売上集計（キャスト）'},
   {k:'register',n:'レジ精算'},
-  {k:'register_month',n:'月間レジ精算一覧'},
   {k:'nippo',n:'日報登録'},
   {k:'cust',n:'お客様分析'},
   {grp:'設定'},
@@ -142,7 +146,7 @@ const stores=()=>me?.stores||[];
 const curStore=()=>stores().find(s=>s.id===storeId);
 const stSet=()=>me?.settings?.[storeId]||{perms:{},nippo_days:3};
 // v0.05：収支は月次・日次を1つの画面にまとめた（前の設定 pl_day／pl_month も読む）
-function perm(k){ if(me?.is_owner) return 'edit'; const p=stSet().perms||{}; if(k==='pl') return p.pl||p.pl_day||p.pl_month||'none'; return p[k]||'none'; }
+function perm(k){ if(me?.is_owner) return 'edit'; const p=stSet().perms||{}; if(k==='pl') return p.pl||p.pl_day||p.pl_month||'none'; if(k==='register') return p.register||p.register_month||'none'; /* v0.07：レジ精算も月次・日次を1つの画面に */ return p[k]||'none'; }
 
 // ---------- ログイン ----------
 $('loginForm').onsubmit=async e=>{ e.preventDefault(); $('loginErr').textContent='';
@@ -230,9 +234,120 @@ PAGES.pl=()=>{
   $('main').querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>{ plTab=b.dataset.pt; PAGES.pl(); });
 };
 
+// ---------- レジ精算（v0.07：月次・日次を1つの画面で切り替える）----------
+// POS の閉店作業と同じ計算。管理サイトでは見るだけ（精算の保存は POS で行う）
+const DENOMS=[[10000,'1万円札'],[5000,'5千円札'],[2000,'2千円札'],[1000,'千円札'],[500,'500円玉'],[100,'100円玉'],[50,'50円玉'],[10,'10円玉'],[5,'5円玉'],[1,'1円玉']];
+const yen=n=>Number(n||0).toLocaleString('ja-JP')+'円';
+const sgnYen=n=>(n>0?'+':'')+yen(n);
+function businessDate(d=new Date()){ const x=new Date(d.getTime()-8*3600*1000); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
+const bdStart=d=>new Date(`${d}T08:00:00`).toISOString();
+const md=x=>`${+x.slice(5,7)}/${+x.slice(8,10)}`;
+const WJ=['日','月','火','水','木','金','土'];
+let regDate=null, regMonth=null, regTab='day';
+const regHead=()=>`<h1>レジ精算 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="row" style="margin-bottom:14px"><span class="seg">${[['month','月次'],['day','日次']].map(([v,n])=>`<button data-rt="${v}" class="${regTab===v?'on':''}">${n}</button>`).join('')}</span></div>`;
+function regTabs(){ $('main').querySelectorAll('[data-rt]').forEach(b=>b.onclick=()=>{ regTab=b.dataset.rt; PAGES.register(); }); }
+PAGES.register=()=>regTab==='month'?regMonthPage():regDayPage();
+// 期間（from〈含まない〉〜to〈含まない〉）の日ごとの 現金売上・入金・出金（日払い含む）
+async function regMoves(fromEx,toEx){
+  const [mv,adv,pay]=await Promise.all([
+    sb.from('cash_movements').select('business_date,kind,amount').eq('store_id',storeId).gt('business_date',fromEx).lt('business_date',toEx),
+    sb.from('daily_advances').select('business_date,amount').eq('store_id',storeId).gt('business_date',fromEx).lt('business_date',toEx),
+    sb.from('payments').select('amount,paid_at,bills!inner(status,store_id)').eq('method','cash').eq('bills.store_id',storeId).gte('paid_at',bdStart(fromEx)).lt('paid_at',bdStart(toEx)) ]);
+  const er=mv.error||adv.error||pay.error; if(er) return {error:er};
+  const sum={}; const add=(dd,k,v)=>{ if(dd<=fromEx||dd>=toEx) return; (sum[dd]=sum[dd]||{sales:0,cin:0,cout:0})[k]+=Number(v)||0; };
+  (mv.data||[]).forEach(x=>add(x.business_date,x.kind==='in'?'cin':'cout',x.amount)); (adv.data||[]).filter(x=>x.amount>0).forEach(x=>add(x.business_date,'cout',x.amount));
+  (pay.data||[]).filter(p=>p.bills&&p.bills.status!=='void'&&p.amount).forEach(p=>add(businessDate(new Date(p.paid_at)),'sales',p.amount));
+  return {sum}; }
+const dayAdd=(d,n)=>{ const x=new Date(d+'T00:00:00'); x.setDate(x.getDate()+n); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
+
+async function regDayPage(){
+  const today=businessDate(); if(!regDate) regDate=today; if(!regMonth) regMonth=regDate.slice(0,7); const d=regDate; const st=storeId;
+  $('main').innerHTML=regHead()+`<div class="card muted">読み込み中…</div>`; regTabs();
+  const [mv,adv,pay,cls,prev,stf]=await Promise.all([
+    sb.from('cash_movements').select('*').eq('store_id',st).eq('business_date',d).order('created_at'),
+    sb.from('daily_advances').select('staff_id,amount').eq('store_id',st).eq('business_date',d),
+    sb.from('payments').select('amount,bills!inner(status,store_id)').eq('method','cash').eq('bills.store_id',st).gte('paid_at',bdStart(d)).lt('paid_at',bdStart(dayAdd(d,1))),
+    sb.from('register_closings').select('*').eq('store_id',st).eq('business_date',d).maybeSingle(),
+    sb.from('register_closings').select('business_date,next_float').eq('store_id',st).lt('business_date',d).order('business_date',{ascending:false}).limit(1),
+    sb.from('staff').select('id,display_name').eq('store_id',st) ]);
+  if(page!=='register'||regTab!=='day'||regDate!==d||storeId!==st) return;
+  const er=mv.error||adv.error||pay.error||cls.error||prev.error; if(er){ $('main').innerHTML=regHead()+`<div class="card err">${esc(er.message)}</div>`; regTabs(); return; }
+  const nm=id=>(stf.data||[]).find(x=>x.id===id)?.display_name||'';
+  const moves=mv.data||[]; const inSum=moves.filter(m=>m.kind==='in').reduce((a,m)=>a+m.amount,0), outSum=moves.filter(m=>m.kind==='out').reduce((a,m)=>a+m.amount,0);
+  const advRows=(adv.data||[]).filter(a=>a.amount>0); const advSum=advRows.reduce((a,x)=>a+x.amount,0);
+  const cashSales=(pay.data||[]).filter(p=>p.bills&&p.bills.status!=='void').reduce((a,p)=>a+(p.amount||0),0);
+  const saved=cls.data||null, prevRow=(prev.data||[])[0]||null;
+  // 前回の精算から今日までに未精算の日があれば、その日の現金の動きも本日釣銭に含める（POS と同じ）
+  let gapNet=0, gapDays=[]; if(!saved&&prevRow){ const g=await regMoves(prevRow.business_date,d); if(page!=='register'||regDate!==d) return; const done=new Set(); const r2=await sb.from('register_closings').select('business_date').eq('store_id',st).gt('business_date',prevRow.business_date).lt('business_date',d); (r2.data||[]).forEach(x=>done.add(x.business_date)); Object.entries(g.sum||{}).forEach(([k,v])=>{ if(done.has(k)) return; const n=v.sales+v.cin-v.cout; if(n){ gapNet+=n; gapDays.push(k); } }); gapDays.sort(); }
+  const idle=!saved&&d<today&&!outSum&&!inSum&&!advSum&&!cashSales;
+  const opening=saved?saved.opening_float:(prevRow?Number(prevRow.next_float)+gapNet:null);
+  const sales=saved?saved.cash_sales:cashSales, cin=saved?saved.cash_in:inSum, cout=saved?saved.cash_out:outSum+advSum;
+  const expected=opening==null?null:opening+sales+cin-cout;
+  const counted=saved?saved.counted:idle?expected:null, diff=saved?saved.diff:idle?0:null, deposit=saved?saved.deposit:idle?0:null, next=saved?(saved.next_float??saved.counted-saved.deposit):idle?expected:null;
+  const cnt=saved?.counts||{};
+  const V=v=>v==null?'<span class="muted">—</span>':yen(v);
+  $('main').innerHTML=regHead()+`<div id="regWarn"></div>
+  <div class="row" style="margin-bottom:14px"><button class="ghost sm" id="regPrev">◀ 前の日</button><input type="date" id="regDateIn" value="${d}" style="width:auto"><button class="ghost sm" id="regNext">次の日 ▶</button>
+    <span class="badge ${saved||idle?'k':d>today?'gray':'warnb'}">${saved?'精算済み':idle?'精算済み（変動なし自動繰越）':d>today?'これから':'未精算'}</span><span class="muted" style="font-size:13px">見るだけ（精算の保存は POS で行います）</span></div>
+  <div class="card"><h2>入出金</h2><table class="t">${moves.map(m=>`<tr><td style="width:60px"><span class="badge ${m.kind==='out'?'gray':''}">${m.kind==='out'?'出金':'入金'}</span></td><td style="width:100%">${esc(m.memo||'')}</td><td class="num">${yen(m.amount)}</td></tr>`).join('')}
+    <tr><td><span class="badge gray">出金</span></td><td style="width:100%">日払い合計 <small class="muted">${advRows.length?esc(advRows.map(a=>nm(a.staff_id)+' '+a.amount.toLocaleString()).join('、')):'なし'}</small></td><td class="num">${yen(advSum)}</td></tr></table></div>
+  <div class="card"><h2>レジ金合わせ</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;align-items:start">
+    <table class="t"><tr><th>金種</th><th class="num">枚数</th><th class="num">金額</th></tr>${saved?DENOMS.map(([v,n])=>{ const c=Number(cnt[v])||0; return `<tr><td>${n}</td><td class="num">${c?c.toLocaleString():''}</td><td class="num">${c?yen(v*c):''}</td></tr>`; }).join('')+`<tr><td><b>合計金額</b></td><td></td><td class="num"><b>${yen(saved.counted)}</b></td></tr>`:'<tr><td colspan="3" class="muted">まだ精算していません</td></tr>'}</table>
+    <div class="kv2">
+      <span>本日釣銭${gapDays.length?`<br><small class="muted">${gapDays.map(md).join('・')} の未精算分 ${sgnYen(gapNet)} を含む</small>`:''}</span><span class="num">${opening==null?'<span class="muted">初回は POS で入力</span>':yen(opening)}</span>
+      <span>現金売上 <small class="muted">その日に受け取った現金</small></span><span class="num">${yen(sales)}</span>
+      <span>入金合計</span><span class="num">${yen(cin)}</span>
+      <span>出金合計 <small class="muted">日払いを含む</small></span><span class="num">${yen(cout)}</span>
+      <span>レジ内現金（理論値）</span><span class="num">${V(expected)}</span>
+      <span>レジ内現金</span><span class="num">${V(counted)}</span>
+      <b>現金過不足</b><b class="num" style="${diff?'color:#c0392b':''}">${diff==null?'<span class="muted">—</span>':sgnYen(diff)}</b>
+      <span>預金金額</span><span class="num">${V(deposit)}</span>
+      <span>翌日釣銭準備金</span><span class="num">${V(next)}</span>
+    </div></div></div>
+  <div class="row"><button class="ghost" id="regMonthGo">${+d.slice(5,7)}月の月次を見る</button></div>`; regTabs();
+  const goD=x=>{ regDate=x; PAGES.register(); };
+  $('regDateIn').onchange=e=>{ if(e.target.value) goD(e.target.value); };
+  $('regPrev').onclick=()=>goD(dayAdd(d,-1)); $('regNext').onclick=()=>goD(dayAdd(d,1));
+  $('regMonthGo').onclick=()=>{ regMonth=d.slice(0,7); regTab='month'; PAGES.register(); };
+  // 前回の精算の翌日〜前日で、動きがあったのに精算していない日（直近31日）
+  const lo=dayAdd(d,-32), from=prevRow&&prevRow.business_date>lo?prevRow.business_date:lo;
+  const [g,cl]=await Promise.all([regMoves(from,d), sb.from('register_closings').select('business_date').eq('store_id',st).gt('business_date',from).lt('business_date',d)]);
+  if(page!=='register'||regTab!=='day'||regDate!==d||!$('regWarn')) return; const done=new Set((cl.data||[]).map(r=>r.business_date));
+  const miss=Object.keys(g.sum||{}).filter(k=>!done.has(k)).sort(); if(!miss.length) return;
+  $('regWarn').innerHTML=`<div class="alert">${miss.map(x=>`<a href="#" data-rw="${x}" style="color:inherit">${md(x)}</a>`).join('・')} が未精算です</div>`;
+  $('regWarn').querySelectorAll('[data-rw]').forEach(a=>a.onclick=e=>{ e.preventDefault(); goD(a.dataset.rw); });
+}
+
+async function regMonthPage(){
+  const today=businessDate(); if(!regMonth) regMonth=today.slice(0,7); const mo=regMonth, st=storeId;
+  const [y,m]=mo.split('-').map(Number); const last=new Date(y,m,0).getDate(); const d1=`${mo}-01`, dN=`${mo}-${String(last).padStart(2,'0')}`;
+  $('main').innerHTML=regHead()+`<div class="row" style="margin-bottom:14px"><button class="ghost sm" id="rmPrev">◀ 前の月</button><input type="month" id="rmIn" value="${mo}" style="width:auto"><button class="ghost sm" id="rmNext">次の月 ▶</button></div><div class="card" id="rmBox"><div class="muted">読み込み中…</div></div>`; regTabs();
+  const goM=x=>{ regMonth=x; PAGES.register(); };
+  const shiftM=n=>{ const t=new Date(y,m-1+n,1); goM(`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`); };
+  $('rmIn').onchange=e=>{ if(e.target.value) goM(e.target.value); }; $('rmPrev').onclick=()=>shiftM(-1); $('rmNext').onclick=()=>shiftM(1);
+  const [r,pv,g]=await Promise.all([ sb.from('register_closings').select('*').eq('store_id',st).gte('business_date',d1).lte('business_date',dN),
+    sb.from('register_closings').select('next_float').eq('store_id',st).lt('business_date',d1).order('business_date',{ascending:false}).limit(1),
+    regMoves(dayAdd(d1,-1),dayAdd(dN,1)) ]);
+  if(page!=='register'||regTab!=='month'||regMonth!==mo||storeId!==st) return;
+  const er=r.error||pv.error||g.error; if(er){ $('rmBox').innerHTML=`<div class="err">${esc(er.message)}</div>`; return; }
+  const byD={}; (r.data||[]).forEach(x=>byD[x.business_date]=x); const sum=g.sum||{};
+  let carry=Number((pv.data||[])[0]?.next_float)||0; const rows=[]; const C=v=>`<td>${v}</td>`; const CS=v=>`<td style="text-align:left;font-size:12px;line-height:1.3">${v}</td>`;
+  const tot={sales:0,cin:0,cout:0,diff:0,deposit:0};
+  for(let i=1;i<=last;i++){ const dd=`${mo}-${String(i).padStart(2,'0')}`; const dl=`${dd.slice(5).replace('-','/')}（${WJ[new Date(dd+'T00:00:00').getDay()]}）`; const x=byD[dd];
+    if(x){ rows.push(`<tr data-rd="${dd}">${C(dl)}${C(yen(x.opening_float))}${C(yen(x.cash_sales))}${C(yen(x.cash_in))}${C(yen(x.cash_out))}${C(yen(x.expected))}${C(yen(x.counted))}<td style="${x.diff?'color:#c0392b':''}">${sgnYen(x.diff)}</td>${C(yen(x.deposit))}${CS('精算済み')}</tr>`);
+      tot.sales+=x.cash_sales; tot.cin+=x.cash_in; tot.cout+=x.cash_out; tot.diff+=x.diff; tot.deposit+=x.deposit; carry=Number(x.next_float??(x.counted-x.deposit))||0; continue; }
+    if(dd>today){ rows.push(`<tr style="color:var(--muted)">${C(dl)}${C('').repeat(9)}</tr>`); continue; }
+    const t=sum[dd]||{sales:0,cin:0,cout:0}; const exp=carry+t.sales+t.cin-t.cout; const idle=!t.sales&&!t.cin&&!t.cout; tot.sales+=t.sales; tot.cin+=t.cin; tot.cout+=t.cout;
+    rows.push(`<tr data-rd="${dd}" style="color:var(--muted)">${C(dl)}${C(yen(carry))}${C(yen(t.sales))}${C(yen(t.cin))}${C(yen(t.cout))}${C(yen(exp))}${idle?C(yen(exp))+C(yen(0))+C(yen(0))+CS(dd<today?'精算済み<br>（変動なし自動繰越）':''):C('')+C('')+C('')+CS('<span style="color:#c0392b">未精算</span>')}</tr>`); carry=exp; }
+  $('rmBox').innerHTML=`<div style="overflow-x:auto"><table class="reg"><tr>${['日付','本日釣銭','現金売上','入金合計','出金合計','理論値','レジ内現金','過不足','預金','状態'].map(h=>`<th${h==='状態'?' style="text-align:left"':''}>${h}</th>`).join('')}</tr>${rows.join('')}
+    <tr style="font-weight:700"><td>合計</td><td></td><td>${yen(tot.sales)}</td><td>${yen(tot.cin)}</td><td>${yen(tot.cout)}</td><td></td><td></td><td style="${tot.diff?'color:#c0392b':''}">${sgnYen(tot.diff)}</td><td>${yen(tot.deposit)}</td><td></td></tr></table></div>
+    <div class="muted" style="font-size:13px;margin-top:8px">行を押すと、その日の日次を開きます</div>`;
+  $('rmBox').querySelectorAll('[data-rd]').forEach(t=>t.onclick=()=>{ regDate=t.dataset.rd; regTab='day'; PAGES.register(); });
+}
+
 // ---------- 表示設定（オーナー） ----------
 PAGES.o_perms=()=>{
-  const s=stSet(); const perms={...(s.perms||{})}; if(!perms.pl&&(perms.pl_day||perms.pl_month)) perms.pl=perms.pl_day||perms.pl_month;
+  const s=stSet(); const perms={...(s.perms||{})}; if(!perms.pl&&(perms.pl_day||perms.pl_month)) perms.pl=perms.pl_day||perms.pl_month; if(!perms.register&&perms.register_month) perms.register=perms.register_month;
   const rows=SCREENS.map(x=>x.grp?`<tr><th colspan="2" style="padding-top:14px;color:var(--ink);font-weight:700">${esc(x.grp)}</th></tr>`
     :`<tr class="pr"><td>${esc(x.n)}</td><td style="text-align:right"><span class="seg" data-pk="${x.k}">${['none','view','edit'].map(v=>`<button data-v="${v}" class="${(perms[x.k]||'none')===v?'on':''}">${PERM_LABEL[v]}</button>`).join('')}</span></td></tr>`).join('');
   $('main').innerHTML=`<h1>表示設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>
