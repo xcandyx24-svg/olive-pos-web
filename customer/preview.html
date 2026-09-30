@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.23 -->
+<title>OLIVE 顧客</title><!-- customer v1.24 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -222,7 +222,7 @@ document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{ mode=b.datas
 $('q').oninput=()=>renderList();
 function renderList(){ const q=$('q').value.trim();
   document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));
-  const ms=$('months'); const opts=[...new Set([1,2,3,6,12,monthsSel])].sort((a,b)=>a-b); ms.innerHTML=`<option value="" ${mode==='old'?'':'selected'}>全員</option>`+opts.map(n=>`<option value="${n}" ${mode==='old'&&n===monthsSel?'selected':''}>${n}か月以上ご来店なし</option>`).join(''); ms.onchange=()=>{ if(!ms.value){ mode='all'; renderList(); return; } monthsSel=Number(ms.value); mode='old'; renderList(); };
+  const ms=$('months'); const opts=[...new Set([1,2,3,6,12,monthsSel])].sort((a,b)=>a-b); ms.innerHTML=`<option value="" ${mode==='old'?'':'selected'}>全員</option>`+opts.map(n=>`<option value="${n}" ${mode==='old'&&n===monthsSel?'selected':''}>${n%12?n+"か月":n/12+"年"}以上ご来店なし</option>`).join(''); ms.onchange=()=>{ if(!ms.value){ mode='all'; renderList(); return; } monthsSel=Number(ms.value); mode='old'; renderList(); };
   const cut=cutoff(monthsSel);
   let list=custs.filter(c=>!q||[c.name,c.company,c.receipt_name,...(c.keep_names||[])].some(v=>v&&String(v).includes(q)));
   if(mode==='old') list=list.filter(c=>base(c)&&base(c)<=cut).sort((a,b)=>base(a).localeCompare(base(b)));

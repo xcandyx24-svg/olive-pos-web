@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.97 -->
+<title>OLIVE 会計</title><!-- v10.98 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -989,7 +989,7 @@ let cuSel=null;
 $('navCust').onclick=async()=>{ show('v-cust'); await loadMasters(); renderCuList(); renderCuForm(); await loadCuInfo(); renderCuList(); };
 document.querySelectorAll('#cuModes [data-cm]').forEach(b=>b.onclick=()=>{ cuMode=b.dataset.cm; renderCuList(); });
 $('cuSearch').oninput=()=>renderCuList();
-function renderCuList(){ const q=$('cuSearch').value.trim(); if(!cuMonthsSel) cuMonthsSel=btMonths(); const ms=$('cuMonths'); const opts=[...new Set([1,2,3,6,12,cuMonthsSel])].sort((a,b)=>a-b); /* v10.97：選択肢は「○か月以上ご来店なし」。v10.96：［全員］［ご来店なし］ボタンはなくし、この欄で「全員」か期間を選ぶ */ ms.innerHTML=`<option value="" ${cuMode==='old'?'':'selected'}>全員</option>`+opts.map(n=>`<option value="${n}" ${cuMode==='old'&&n===cuMonthsSel?'selected':''}>${n}か月以上ご来店なし</option>`).join(''); ms.onchange=()=>{ if(!ms.value){ cuMode='all'; renderCuList(); return; } cuMonthsSel=Number(ms.value); cuMode='old'; renderCuList(); }; const cut=btCutoff(cuMonthsSel); const reqN=Object.values(cuInfo.req||{}).reduce((a,n)=>a+n,0); if(cuMode==='req'&&!reqN) cuMode='all'; $('cuReqChip').style.display=reqN?'':'none'; $('cuReqChip').textContent=`申請 ${reqN}件`; document.querySelectorAll('#cuModes [data-cm]').forEach(b=>b.classList.toggle('on',b.dataset.cm===cuMode));
+function renderCuList(){ const q=$('cuSearch').value.trim(); if(!cuMonthsSel) cuMonthsSel=btMonths(); const ms=$('cuMonths'); const opts=[...new Set([1,2,3,6,12,cuMonthsSel])].sort((a,b)=>a-b); /* v10.98：12か月は「1年以上ご来店なし」。v10.97：選択肢は「○か月以上ご来店なし」。v10.96：［全員］［ご来店なし］ボタンはなくし、この欄で「全員」か期間を選ぶ */ ms.innerHTML=`<option value="" ${cuMode==='old'?'':'selected'}>全員</option>`+opts.map(n=>`<option value="${n}" ${cuMode==='old'&&n===cuMonthsSel?'selected':''}>${n%12?n+"か月":n/12+"年"}以上ご来店なし</option>`).join(''); ms.onchange=()=>{ if(!ms.value){ cuMode='all'; renderCuList(); return; } cuMonthsSel=Number(ms.value); cuMode='old'; renderCuList(); }; const cut=btCutoff(cuMonthsSel); const reqN=Object.values(cuInfo.req||{}).reduce((a,n)=>a+n,0); if(cuMode==='req'&&!reqN) cuMode='all'; $('cuReqChip').style.display=reqN?'':'none'; $('cuReqChip').textContent=`申請 ${reqN}件`; document.querySelectorAll('#cuModes [data-cm]').forEach(b=>b.classList.toggle('on',b.dataset.cm===cuMode));
   let list=customers.filter(c=>!q||(c.name||'').includes(q)||(c.company||'').includes(q)||(c.receipt_name||'').includes(q)||(cuInfo.kn[c.id]||[]).some(k=>k.includes(q)));
   if(cuMode==='req') list=list.filter(c=>cuInfo.req[c.id]);
   if(cuMode==='old') list=list.filter(c=>cuBase(c.id)&&cuBase(c.id)<=cut).sort((a,b)=>cuBase(a.id).localeCompare(cuBase(b.id))); list=list.slice(0,200);
