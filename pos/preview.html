@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v11.01 -->
+<title>OLIVE 会計</title><!-- v11.02 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -984,7 +984,7 @@ function btMonths(){ return Number(settings?.bottle_keep_months)||6; } /* v10.99
 // v11.01：係は店舗ごと（SQL 048 の customer_kakari）。読み込んだお客様の kakari_staff_id を、この店舗の係に置き換える
 const CUSEL='*,customer_kakari(store_id,staff_id)';
 function cuK(c){ if(!c||!('customer_kakari' in c)) return c; const k=(c.customer_kakari||[]).find(x=>x.store_id===store?.id); delete c.customer_kakari; c.kakari_staff_id=k?k.staff_id:null; return c; }
-async function cuLoadAll(){ let r=await sbAll(()=>sb.from('customers').select(CUSEL).order('name').order('id')); if(r.error&&/customer_kakari/.test(r.error.message)){ toast('SQL 048 が未実行です'); r=await sbAll(()=>sb.from('customers').select('*').order('name').order('id')); } return r; }
+async function cuLoadAll(){ let r=await sbAll(()=>sb.from('customers').select(CUSEL).order('name').order('id')); if(r.error&&/customer_kakari/.test(r.error.message)){ toast((/does not exist|schema cache/.test(r.error.message)?'SQL 048 が未実行です：':'係を読み込めません：')+r.error.message); r=await sbAll(()=>sb.from('customers').select('*').order('name').order('id')); } return r; }
 async function sbAll(mk){ let all=[]; for(let from=0;;from+=1000){ const r=await mk().range(from,from+999); if(r.error) return {data:all.length?all:null,error:r.error}; all=all.concat(r.data||[]); if((r.data||[]).length<1000) return {data:all,error:null}; } }
 /* v10.99：並び順を顧客サイトとそろえる（名前・卓名は日本語順、数字は数の順） */
 function jaCmp(a,b){ return (jaCmp.c||(jaCmp.c=new Intl.Collator('ja',{numeric:true}))).compare(String(a??''),String(b??'')); }
@@ -1028,13 +1028,13 @@ function renderCuForm(){ const c=customers.find(x=>x.id===cuSel); if(!c){ $('cuF
   $('cuSave').onclick=async()=>{ const patch={}; $('cuForm').querySelectorAll('[data-k]').forEach(i=>patch[i.dataset.k]=i.value.trim()||null); if(!patch.name){toast('お名前は必須です');return;} if(c.is_industry&&!patch.company){ await uiAlert('店名を会社名に入力してください'); return; } if(patch.birthday){ const m=patch.birthday.replace(/[０-９／]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)).match(/^(\d{1,2})[\/月.\-](\d{1,2})日?$/); const dim=[31,29,31,30,31,30,31,31,30,31,30,31]; if(!m||+m[1]<1||+m[1]>12||+m[2]<1||+m[2]>dim[+m[1]-1]){ toast('お誕生日は 11/24 のように入力してください'); return; } patch.birthday=`${+m[1]}/${+m[2]}`; }
         const changed=Object.keys(patch).filter(k=>k==='good_cast_ids'?JSON.stringify(c[k]||[])!==JSON.stringify(patch[k]):(c[k]||null)!==patch[k]); if(!changed.length){toast('変更はありません');return;}
     /* v10.99：変えた欄だけ保存する。ほかの端末（顧客サイトなど）で同じ欄が先に変わっていたら上書きしない */
-    const now=await sb.from('customers').select(CUSEL).eq('id',c.id).maybeSingle(); if(now.error){ toast(/customer_kakari/.test(now.error.message)?'SQL 048 が未実行です：'+now.error.message:now.error.message); return; } cuK(now.data); if(!now.data){ await uiAlert('このお客様は削除されています'); customers=customers.filter(x=>x.id!==c.id); cuSel=null; renderCuList(); renderCuForm(); return; }
+    const now=await sb.from('customers').select(CUSEL).eq('id',c.id).maybeSingle(); if(now.error){ toast(/customer_kakari/.test(now.error.message)?'係を読み込めません：'+now.error.message:now.error.message); return; } cuK(now.data); if(!now.data){ await uiAlert('このお客様は削除されています'); customers=customers.filter(x=>x.id!==c.id); cuSel=null; renderCuList(); renderCuForm(); return; }
     const clash=changed.filter(k=>JSON.stringify(now.data[k]??null)!==JSON.stringify(c[k]??null));
     if(clash.length){ const lb=Object.fromEntries(CUF); const keep=changed.filter(k=>!clash.includes(k)); Object.assign(c,now.data); renderCuForm(); keep.forEach(k=>{ const i=$('cuForm').querySelector(`[data-k=${k}]`); if(i) i.value=patch[k]??''; }); renderCuList(); await uiAlert(`ほかの端末で「${clash.map(k=>lb[k]||k).join('・')}」が先に変更されていました。\n最新の内容に入れ替えたので、確かめてからもう一度保存してください。`); return; }
     const up={}; changed.forEach(k=>up[k]=patch[k]);
     /* v11.01：係はこの店舗の係として customer_kakari に保存（ほかの店舗の係は変わらない） */ const { kakari_staff_id:kk, ...cup }=up;
     if(Object.keys(cup).length){ const { error } = await sb.from('customers').update(cup).eq('id',c.id); if(error){ toast(error.message.includes('column')?'SQL 011 が未適用です：'+error.message:error.message); return; } }
-    if('kakari_staff_id' in up){ const kr=kk?await sb.from('customer_kakari').upsert({customer_id:c.id,store_id:store.id,staff_id:kk,updated_at:new Date().toISOString()},{onConflict:'customer_id,store_id'}):await sb.from('customer_kakari').delete().eq('customer_id',c.id).eq('store_id',store.id); if(kr.error){ toast(/customer_kakari/.test(kr.error.message)?'SQL 048 が未実行です：'+kr.error.message:kr.error.message); return; } }
+    if('kakari_staff_id' in up){ const kr=kk?await sb.from('customer_kakari').upsert({customer_id:c.id,store_id:store.id,staff_id:kk,updated_at:new Date().toISOString()},{onConflict:'customer_id,store_id'}):await sb.from('customer_kakari').delete().eq('customer_id',c.id).eq('store_id',store.id); if(kr.error){ toast('係を保存できません：'+kr.error.message); return; } }
     await logOp('顧客変更',{name:c.name,fields:changed},null,true); const other=Object.keys(now.data).some(k=>!changed.includes(k)&&JSON.stringify(now.data[k]??null)!==JSON.stringify(c[k]??null)); Object.assign(c,now.data,up); toast('保存しました'); renderCuList(); if(other) renderCuForm(); /* ほかの端末で変わった欄も最新にする */ };
   $('cuInd').onclick=async e=>{ e.preventDefault(); const on=!c.is_industry; const co=($('cuForm').querySelector('[data-k=company]')?.value||'').trim(); if(on){ if(!co){ await uiAlert('店名を会社名に入力してください'); return; } if(!await uiConfirm(`お店の名前は${co}ですね`)) return; } const r=await sb.from('customers').update(on?{is_industry:true,company:co}:{is_industry:false}).eq('id',c.id); if(r.error){ toast(r.error.message); return; } await logOp(on?'同業に登録':'同業の登録を解除',{name:c.name},null,true); c.is_industry=on; if(on) c.company=co; renderCuForm(); renderCuList(); };
   $('cuDel').onclick=async()=>{ /* v10.99：来店履歴があれば先に知らせる。ボトルの記録があれば一緒に消す（英語のエラーを出さない） */
