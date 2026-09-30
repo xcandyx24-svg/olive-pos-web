@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.08 -->
+<title>OLIVE 管理</title><!-- admin v0.09 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -55,6 +55,9 @@
   .alert{background:#fde8e8;color:#9b1c1c;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-weight:700}
   table.reg{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:13px}table.reg td,table.reg th{padding:6px 5px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:right}
   table.reg th{color:var(--muted);font-weight:400}table.reg tr[data-rd]{cursor:pointer}table.reg tr[data-rd]:hover{background:#f3f2ee}
+  table.sl{border-collapse:collapse;font-variant-numeric:tabular-nums}table.sl th{font-size:12px;color:var(--muted);font-weight:400;padding:4px 4px;text-align:right;white-space:nowrap}
+  table.sl td{padding:3px 4px}table.sl input{width:88px;text-align:right;height:38px}table.sl td.x{width:40px}
+  .slw{overflow-x:auto}.slgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;align-items:start}
   .kv2{display:grid;grid-template-columns:1fr auto;gap:8px 14px;align-items:center}
   .pwbox{font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;letter-spacing:.05em}
   .pwv{font-family:ui-monospace,Menlo,monospace;font-size:17px;font-weight:700;letter-spacing:.05em;white-space:nowrap}
@@ -121,7 +124,7 @@ const SCREENS=[
   {grp:'集計'},
   {k:'summary',n:'まとめ'},
   {k:'pl',n:'収支'},
-  {k:'cast_sales',n:'売上集計（キャスト）'},
+  {k:'cast_sales',n:'キャスト'},
   {k:'register',n:'レジ精算'},
   {k:'nippo',n:'日報登録'},
   {k:'cust',n:'お客様分析'},
@@ -343,6 +346,55 @@ async function regMonthPage(){
     <div class="muted" style="font-size:13px;margin-top:8px">行を押すと、その日の日次を開きます</div>`;
   $('rmBox').querySelectorAll('[data-rd]').forEach(t=>t.onclick=()=>{ regDate=t.dataset.rd; regTab='day'; PAGES.register(); });
 }
+
+// ---------- 給与項目（v0.09：スライド表。店舗で全員同じ）----------
+// キャストの時給＝小計（またはポイント）スライド・同伴スライド・保証時給のうち一番高いもの（POS と同じ）。黒服のボーナス総額＝人件費比率のボーナス＋売上ボーナス
+const SLIDE_DEF={
+  sales:{t:'小計スライド',sub:'係小計で時給が決まる',cols:[{k:'threshold',l:'係小計（万円以上）',sc:10000},{k:'wage',l:'時給（円）'}]},
+  points:{t:'ポイントスライド',sub:'ポイントで時給が決まる',cols:[{k:'threshold',l:'ポイント（以上）'},{k:'wage',l:'時給（円）'}]},
+  douhan:{t:'同伴スライド',sub:'月の同伴回数で時給が決まる',cols:[{k:'threshold',l:'同伴（回以上）'},{k:'wage',l:'時給（円）'}]},
+  hall:{t:'黒服ボーナススライド',sub:'',cols:[{k:'sales_man',l:'売上（万円以上）'},{k:'target_ratio',l:'目標比率（%）',sc:0.01},{k:'b_within',l:'以内'},{k:'b_plus2',l:'＋2%まで'},{k:'b_plus5',l:'＋5%まで'},{k:'b_over',l:'5%超'},{k:'b_sales',l:'売上ボーナス'}]},
+};
+const slNum=v=>{ const t=String(v??'').replace(/[０-９．]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[,，\s]/g,''); return t===''?null:Number(t); };
+const slShow=(v,sc)=>v==null?'':String(Math.round(Number(v)/(sc||1)*10000)/10000);
+function slideCard(kind,rows,ed,note){ const d=SLIDE_DEF[kind];
+  const body=rows.map((r,i)=>`<tr data-i="${i}">${d.cols.map(c=>`<td><input inputmode="decimal" data-c="${c.k}" value="${esc(slShow(r[c.k],c.sc))}" ${ed?'':'disabled'}></td>`).join('')}${ed?`<td class="x"><button class="ghost sm" data-del="${i}" aria-label="行を消す">✕</button></td>`:''}</tr>`).join('');
+  return `<div class="card" data-sl="${kind}"><h2>${d.t}${d.sub?`<br><small class="muted" style="font-weight:400">${esc(d.sub)}</small>`:''}</h2>${note||''}
+    <div class="slw"><table class="sl"><tr>${d.cols.map(c=>`<th>${c.l}</th>`).join('')}${ed?'<th></th>':''}</tr>${body||`<tr><td colspan="${d.cols.length}" class="muted" style="padding:8px 4px">まだ入っていません</td></tr>`}</table></div>
+    ${ed?`<div class="row" style="margin-top:10px"><button class="ghost sm" data-add>＋ 行を足す</button><button class="primary sm" data-save>保存</button></div>`:''}</div>`; }
+function slideRead(card,kind){ const d=SLIDE_DEF[kind]; const out=[];
+  for(const tr of card.querySelectorAll('tr[data-i]')){ const r={}; let empty=true;
+    for(const c of d.cols){ const v=slNum(tr.querySelector(`[data-c="${c.k}"]`).value); if(v!=null) empty=false; if(v!=null&&!Number.isFinite(v)) return {err:`「${c.l}」に数字でないものがあります`}; r[c.k]=v==null?null:Math.round(v*(c.sc||1)*10000)/10000; }
+    if(empty) continue; if(r[d.cols[0].k]==null||r[d.cols[1].k]==null) return {err:`「${d.cols[0].l}」と「${d.cols[1].l}」は必ず入れてください`}; out.push(r); }
+  const k0=d.cols[0].k; out.sort((a,b)=>a[k0]-b[k0]); for(let i=1;i<out.length;i++) if(out[i][k0]===out[i-1][k0]) return {err:`「${d.cols[0].l}」が同じ行が2つあります`};
+  return {rows:out}; }
+PAGES.set_pay=async()=>{
+  const st=storeId, ed=perm('set_pay')==='edit';
+  $('main').innerHTML=`<h1>給与項目 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="card muted">読み込み中…</div>`;
+  const [ps,hb,pos]=await Promise.all([ sb.from('pay_slides').select('kind,threshold,wage').eq('store_id',st).order('threshold'),
+    sb.from('hall_bonus_slides').select('*').eq('store_id',st).order('sales_man'), sb.from('pos_settings').select('wage_by_point').eq('store_id',st).maybeSingle() ]);
+  if(page!=='set_pay'||storeId!==st) return;
+  const er=ps.error||hb.error||pos.error; if(er){ $('main').innerHTML=`<h1>給与項目</h1><div class="card err">${esc(/hall_bonus_slides/.test(er.message)?'SQL 050 が未実行です：':'')}${esc(er.message)}</div>`; return; }
+  const byPt=!!pos.data?.wage_by_point; const R=k=>(ps.data||[]).filter(x=>x.kind===k);
+  const off='<div class="muted" style="font-size:13px;margin-bottom:8px">今は使っていません（上の「時給の決め方」で切り替えます）</div>';
+  $('main').innerHTML=`<h1>給与項目 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>
+  ${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
+  <div class="card"><h2>時給の決め方（キャスト）</h2><div class="row"><span class="seg" id="wb">${[[false,'係小計で決める'],[true,'ポイントで決める']].map(([v,n])=>`<button data-v="${v}" class="${byPt===v?'on':''}" ${ed?'':'disabled'}>${n}</button>`).join('')}</span></div>
+    <div class="muted" style="font-size:13px;margin-top:8px">時給は「${byPt?'ポイント':'小計'}スライド」「同伴スライド」「保証時給（キャスト管理で一人ずつ）」のうち、一番高いものになります</div></div>
+  <div class="slgrid">${slideCard(byPt?'points':'sales',R(byPt?'points':'sales'),ed)}${slideCard('douhan',R('douhan'),ed)}${slideCard(byPt?'sales':'points',R(byPt?'sales':'points'),ed,off)}</div>
+  ${slideCard('hall',hb.data||[],ed,`<div class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.6">単位は万円。月の総売上が、その行の売上以上になっている行のうち、一番下の行を使います。一番上の行より売上が少ない月は0円です。<br>人件費比率（キャストの給与＋黒服の月給＋体験の報酬 ÷ 総売上）が 目標比率以内／＋2%まで／＋5%まで／5%超 で金額が決まり、売上ボーナスを足した総額を、黒服の売上シェアで分けます</div>`)}`;
+  if(!ed) return;
+  $('wb').querySelectorAll('button').forEach(b=>b.onclick=guard(b,async()=>{ const v=b.dataset.v==='true'; if(v===byPt) return;
+    if(!await uiConfirm(`時給の決め方を「${v?'ポイント':'係小計'}」に変えますか？\nPOS の時給の表示も変わります`)) return;
+    const r=await rpc('admin_set_wage_basis',{p_store:st,p_by_point:v}); if(!r.ok) return; toast('変えました'); PAGES.set_pay(); }));
+  $('main').querySelectorAll('[data-sl]').forEach(card=>{ const kind=card.dataset.sl, d=SLIDE_DEF[kind];
+    card.querySelector('[data-add]').onclick=()=>{ const tb=card.querySelector('table.sl'); const ph=tb.querySelector('td[colspan]'); if(ph) ph.parentElement.remove(); const i=tb.querySelectorAll('tr[data-i]').length+Date.now(); const tr=document.createElement('tr'); tr.dataset.i=i; tr.innerHTML=d.cols.map(c=>`<td><input inputmode="decimal" data-c="${c.k}"></td>`).join('')+`<td class="x"><button class="ghost sm" aria-label="行を消す">✕</button></td>`; tr.querySelector('button').onclick=()=>tr.remove(); tb.appendChild(tr); tr.querySelector('input').focus(); };
+    card.querySelectorAll('[data-del]').forEach(x=>x.onclick=()=>x.closest('tr').remove());
+    const sv=card.querySelector('[data-save]'); sv.onclick=guard(sv,async()=>{ const g=slideRead(card,kind); if(g.err){ await uiAlert(g.err); return; }
+      if(!await uiConfirm(`${d.t}を保存しますか？（${g.rows.length}行）`)) return;
+      const r=kind==='hall'?await rpc('admin_save_hall_bonus',{p_store:st,p_rows:g.rows}):await rpc('admin_save_pay_slides',{p_store:st,p_kind:kind,p_rows:g.rows}); if(!r.ok) return;
+      toast('保存しました'); PAGES.set_pay(); }); });
+};
 
 // ---------- 表示設定（オーナー） ----------
 PAGES.o_perms=()=>{
