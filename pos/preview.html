@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v10.93 -->
+<title>OLIVE 会計</title><!-- v10.94 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -973,9 +973,11 @@ async function moveBottle(b,cname){ if(!b) return false; if(!await uiConfirm(`${
 async function unexpireBottle(b,cname){ if(!b) return false; if(!await uiConfirm(`${b.name} の${b.moved?'ボトル移動':'期限切れ'}を取り消して、キープ中に戻しますか？`)) return false; const { error } = await sb.from('customer_bottles').update({expired_on:null,...(b.moved?{moved:false}:{}),updated_at:new Date().toISOString()}).eq('id',b.id); if(error){ toast(error.message); return false; } await logOp(b.moved?'ボトル移動を戻す':'ボトル期限切れを戻す',{customer:cname,bottle:b.name,remaining:b.remaining},null,true); b.expired_on=null; b.moved=false; toast('キープ中に戻しました'); return true; }
 function btMonths(){ return 6; }
 function btCutoff(n){ const [y,m,d]=businessDate().split('-').map(Number); const x=new Date(y,m-1-(n||btMonths()),d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
-// 顧客一覧に出す情報：最終来店日・キープ中のボトル本数・キープ名（検索用）
-let cuInfo={last:{},cnt:{},first:{},kn:{},req:{}}, cuMode='all';
-async function loadCuInfo(){ const info={last:{},cnt:{},first:{},kn:{},req:{}}; const rq=await sb.from('customer_note_requests').select('customer_id').eq('store_id',store.id).eq('status','pending'); (rq.data||[]).forEach(x=>{ info.req[x.customer_id]=(info.req[x.customer_id]||0)+1; }); const bt=await sb.from('customer_bottles').select('*').eq('is_finished',false); (bt.data||[]).filter(b=>!b.expired_on).forEach(b=>{ const c=b.customer_id; info.cnt[c]=(info.cnt[c]||0)+1; const d=b.opened_on||String(b.created_at||'').slice(0,10); if(d&&(!info.first[c]||d<info.first[c])) info.first[c]=d; if(b.keep_name) (info.kn[c]||(info.kn[c]=[])).push(b.keep_name); });
+// 顧客一覧に出す情報：最終来店日・キープ中のボトル本数と銘柄・キープ名（検索用）
+// v10.94：一覧は「最終 日付・係の名前・キープ中の銘柄（3本まで、4本以上は「ほか○本」）」。顧客サイトと同じ
+function bnLine(names,n){ names=names||[]; if(!names.length) return n?`ボトル${n}本`:''; return names.slice(0,3).join('、')+(names.length>3?` ほか${names.length-3}本`:''); }
+let cuInfo={last:{},cnt:{},first:{},kn:{},req:{},bn:{}}, cuMode='all';
+async function loadCuInfo(){ const info={last:{},cnt:{},first:{},kn:{},req:{},bn:{}}; const rq=await sb.from('customer_note_requests').select('customer_id').eq('store_id',store.id).eq('status','pending'); (rq.data||[]).forEach(x=>{ info.req[x.customer_id]=(info.req[x.customer_id]||0)+1; }); const bt=await sb.from('customer_bottles').select('*').eq('is_finished',false).order('opened_on',{ascending:false}); (bt.data||[]).filter(b=>!b.expired_on).forEach(b=>{ const c=b.customer_id; info.cnt[c]=(info.cnt[c]||0)+1; (info.bn[c]||(info.bn[c]=[])).push(b.name); const d=b.opened_on||String(b.created_at||'').slice(0,10); if(d&&(!info.first[c]||d<info.first[c])) info.first[c]=d; if(b.keep_name) (info.kn[c]||(info.kn[c]=[])).push(b.keep_name); });
   for(let from=0;;from+=1000){ const v=await sb.from('bill_customers').select('customer_id,bills(business_date,status)').range(from,from+999); if(v.error) break; (v.data||[]).forEach(x=>{ const bl=x.bills; if(!bl||bl.status==='void') return; if(!info.last[x.customer_id]||bl.business_date>info.last[x.customer_id]) info.last[x.customer_id]=bl.business_date; }); if((v.data||[]).length<1000) break; } cuInfo=info; }
 function cuBase(id){ return cuInfo.last[id]||cuInfo.first[id]||String(customers.find(c=>c.id===id)?.created_at||'').slice(0,10)||''; }
 let cuMonthsSel=null;
@@ -992,7 +994,7 @@ function renderCuList(){ const q=$('cuSearch').value.trim(); if(!cuMonthsSel) cu
   if(cuMode==='req') list=list.filter(c=>cuInfo.req[c.id]);
   if(cuMode==='old') list=list.filter(c=>cuBase(c.id)&&cuBase(c.id)<=cut).sort((a,b)=>cuBase(a.id).localeCompare(cuBase(b.id))); list=list.slice(0,200);
   const md=d=>{ const m=String(d).match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[1]===businessDate().slice(0,4)?'':m[1]+'/'}${+m[2]}/${+m[3]}`:''; };
-  $('cuList').innerHTML=list.map(c=>{ const last=cuInfo.last[c.id], n=cuInfo.cnt[c.id]||0; const old=cuMode==='old'&&cuBase(c.id)&&cuBase(c.id)<=cut; return `<button class="row ${c.id===cuSel?'on':''}" data-id="${c.id}" style="text-align:left;width:100%"><span class="nm">${esc(c.name)}${c.company?` <small class="muted">${esc(c.company)}</small>`:''}<br><small class="muted" style="${old?'color:#c0392b':''}">最終来店 ${last?md(last):'なし'}${n?`・ボトル${n}本`:''}</small>${cuInfo.req[c.id]?` <span class="badge warnb">申請 ${cuInfo.req[c.id]}件</span>`:''}</span></button>`; }).join('')||'<div class="muted">該当なし</div>';
+  $('cuList').innerHTML=list.map(c=>{ const last=cuInfo.last[c.id], n=cuInfo.cnt[c.id]||0; const old=cuMode==='old'&&cuBase(c.id)&&cuBase(c.id)<=cut; return `<button class="row ${c.id===cuSel?'on':''}" data-id="${c.id}" style="text-align:left;width:100%"><span class="nm">${esc(c.name)}${c.company?` <small class="muted">${esc(c.company)}</small>`:''}<br><small class="muted" style="white-space:normal;display:block;${old?'color:#c0392b':''}">${[`最終 ${last?md(last):'なし'}`,c.kakari_staff_id?esc(snm(c.kakari_staff_id)):'',esc(bnLine(cuInfo.bn[c.id],n))].filter(Boolean).join('・')}</small>${cuInfo.req[c.id]?` <span class="badge warnb">申請 ${cuInfo.req[c.id]}件</span>`:''}</span></button>`; }).join('')||'<div class="muted">該当なし</div>';
   $('cuList').querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{ cuSel=b.dataset.id; renderCuList(); renderCuForm(); }); }
 $('cuNew').onclick=async()=>{ const name=await uiPrompt('新しいお客様の名前', $('cuSearch').value.trim()); if(!name||!name.trim())return; const { data, error } = await sb.from('customers').insert({store_id:store.id,name:name.trim()}).select().single(); if(error){toast(error.message);return;} await logOp('顧客追加',{name:data.name},null,true); customers.push(data); customers.sort((a,b)=>a.name.localeCompare(b.name,'ja')); cuSel=data.id; $('cuSearch').value=''; renderCuList(); renderCuForm(); };
 const CUF=[['name','お名前'],['birthday','お誕生日'],['receipt_name','領収書名'],['kakari_staff_id','係'],['good_cast_ids','反応の良かったキャスト'],['company','会社名'],['company_address','会社住所'],['memo','メモ']]; // v10.50：反応の良かったキャスト（3名まで。退店したキャストも記録として残し「（退店）」と表示、新しくは選べない）
