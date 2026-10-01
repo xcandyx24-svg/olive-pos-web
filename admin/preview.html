@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.19 -->
+<title>OLIVE 管理</title><!-- admin v0.20 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -76,6 +76,7 @@
   .cs-gu{display:inline-flex;align-items:center;gap:6px}.cs-gu input[type=date]{width:140px;text-align:left}.cs-gu label{display:inline-flex;align-items:center;gap:3px;font-size:13px;color:var(--ink)}.cs-gu input[type=checkbox]{width:auto;height:auto}
   .cs-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px}.cs-tabs button{background:none;border-radius:0;border-bottom:3px solid transparent;color:var(--muted);height:42px}.cs-tabs button.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:700}
   table.rgden input,#rgDepIn,#rgOpenIn{height:38px;font-size:15px}
+  .sif{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}.sit{display:flex;align-items:center;gap:6px;margin-top:4px}.sit input{flex:1}
   [data-st] .seg button{height:var(--h)}[data-st] .stb{display:inline-flex;align-items:center;height:var(--h);padding:0 12px;border:1px solid var(--line);border-radius:8px;background:#f6f5f2;white-space:nowrap}
   .cs-li{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.cs-li:last-child{border-bottom:none}
   @media (max-width:820px){
@@ -704,18 +705,35 @@ async function csDetailPage(){ const st=storeId, s=csDetail.s, ed=perm('set_cast
 }
 
 // ---------- 店舗設定 v0.14・SQL 055：閉店時間（タイムカードの打ち止め。アフターの延長もここから数える） ----------
-PAGES.set_store=async()=>{ const st=storeId, ed=perm('set_store')==='edit';
+// v0.20・SQL 060：店の情報（店名・営業時間・住所・電話・メール・インボイス番号・領収書メールの宛先）。書き換えはここだけ
+// 店名は全部のサイト（POS・顧客サイト・タイムカード）に出る。住所・電話・インボイス番号は POS の領収書に出る。領収書メールの宛先は POS の閉店作業で使う。開店時間は登録するだけ
+PAGES.set_store=async()=>{ const st=storeId, ed=perm('set_store')==='edit', dis=ed?'':'disabled';
   $('main').innerHTML=`<h1>店舗設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="card muted">読み込み中…</div>`;
-  const ax=await sb.rpc('admin_get_after_ext',{p_store:st}); if(page!=='set_store'||storeId!==st) return;
-  const bad=ax.error||ax.data?.close==null;
+  const r=await sb.rpc('admin_get_store_info',{p_store:st}); if(page!=='set_store'||storeId!==st) return;
+  if(r.error){ $('main').innerHTML=`<h1>店舗設定</h1><div class="card err">${esc(/admin_get_store_info/.test(r.error.message)?'SQL 060 が未実行です：':'読み込めません：')}${esc(r.error.message)}</div>`; return; }
+  const d=r.data||{}, f=(id,label,v,o={})=>`<label>${label}<input id="${id}" value="${esc(v||'')}" ${o.type?`type="${o.type}"`:''} ${o.ph?`placeholder="${esc(o.ph)}"`:''} ${o.im?`inputmode="${o.im}"`:''} ${o.ml?`maxlength="${o.ml}"`:''} ${dis}></label>`;
   $('main').innerHTML=`<h1>店舗設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
-  <div class="card"><h2>閉店時間</h2>${bad?`<div class="err">${ax.error?'読み込めません：'+esc(ax.error.message):'SQL 055 が未実行です'}</div>`:`
-    <div class="row" style="font-size:14px">閉店<input type="time" id="clT" value="${esc(ax.data.close)}" ${ed?'':'disabled'} style="width:140px">${ed?'<button class="primary sm" id="clSave">保存</button>':''}</div>
-    <div class="muted" style="font-size:13px;margin-top:8px;line-height:1.6">タイムカードの退勤・アフターの打刻は、閉店より後になりません（時給は閉店まで）<br>0:00〜6:00 は日付が変わった後として扱います（例：1:00 ＝ 翌1:00、23:00 ＝ その日の23:00）<br>アフターの延長（給与項目）も、この閉店時間から数えます。変えても、前の打刻はそのまま</div>`}</div>`;
-  if(!ed||bad) return;
-  const sv=$('clSave'); sv.onclick=guard(sv,async()=>{ const v=$('clT').value; if(!v){ await uiAlert('閉店時間を入れてください'); return; } if(v>'06:00'&&v<'18:00'){ await uiAlert('閉店時間は 18:00〜翌6:00 の間にしてください'); return; }
-    if(!await uiConfirm(`閉店時間を ${closeTxt(v)} にしますか？\nこれから押す打刻から変わります`)) return;
-    const r=await rpc('admin_set_close_time',{p_store:st,p_close:v}); if(!r.ok) return; toast('保存しました'); PAGES.set_store(); }); };
+  <div class="card"><h2>店の情報</h2><div class="sif">
+    ${f('siName','店名',d.name,{ml:40})}
+    <label>営業時間<span class="sit"><input type="time" id="siOpen" value="${esc(d.open||'')}" ${dis}><span>〜</span><input type="time" id="siClose" value="${esc(d.close||'')}" ${dis}></span></label>
+    ${f('siAddr','住所',d.address)}
+    ${f('siTel','電話番号',d.phone,{type:'tel',ph:'03-0000-0000'})}
+    ${f('siMail','メールアドレス',d.email,{type:'email',ph:'info@example.com'})}
+    ${f('siInv','インボイス番号（T＋数字13桁）',d.invoice,{ph:'T1234567890123',ml:20})}
+    ${f('siRcpt','領収書メールの宛先',d.receipt_mail,{type:'email'})}
+  </div>
+  ${ed?'<div class="row" style="margin-top:12px"><button class="primary" id="siSave">保存</button></div>':''}
+  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">店名は POS・顧客サイト・タイムカード・管理サイトに出ます。住所・電話番号・インボイス番号は POS の領収書に出ます。領収書メールの宛先は POS の閉店作業「領収書をメールで送る」で使います。開店時間は登録だけです<br>閉店時間：タイムカードの退勤・アフターの打刻は、閉店より後になりません（時給は閉店まで）<br>0:00〜6:00 は日付が変わった後として扱います（例：1:00 ＝ 翌1:00、23:00 ＝ その日の23:00）<br>アフターの延長（給与項目）も、この閉店時間から数えます。変えても、前の打刻はそのまま</div></div>`;
+  if(!ed) return;
+  const sv=$('siSave'); sv.onclick=guard(sv,async()=>{ const v=id=>$(id).value.trim(), name=v('siName'), op=v('siOpen'), cl=v('siClose');
+    if(!name){ await uiAlert('店名を入れてください'); return; } if(!cl){ await uiAlert('閉店時間を入れてください'); return; } if(cl>'06:00'&&cl<'18:00'){ await uiAlert('閉店時間は 18:00〜翌6:00 の間にしてください'); return; }
+    let iv=v('siInv').replace(/[Ａ-Ｚａ-ｚ０-９]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)).replace(/[\s-]/g,'').toUpperCase(); if(/^\d{13}$/.test(iv)) iv='T'+iv;
+    if(iv&&!/^T\d{13}$/.test(iv)){ await uiAlert('インボイス番号は T＋数字13桁 で入れてください'); return; }
+    const em=/^[^@\s]+@[^@\s]+\.[^@\s]+$/; if(v('siMail')&&!em.test(v('siMail'))){ await uiAlert('メールアドレスの形が正しくありません'); return; } if(v('siRcpt')&&!em.test(v('siRcpt'))){ await uiAlert('領収書メールの宛先の形が正しくありません'); return; }
+    const chg=[]; if(name!==(d.name||'')) chg.push('店名（全部のサイトの表示が変わります）'); if(cl!==(d.close||'')) chg.push(`閉店時間 ${closeTxt(cl)}（これから押す打刻から変わります）`);
+    if(!await uiConfirm('店の情報を保存しますか？'+(chg.length?'\n'+chg.map(x=>'・'+x).join('\n'):''))) return;
+    const x=await rpc('admin_save_store_info',{p_store:st,p_name:name,p_open:op||null,p_close:cl,p_address:v('siAddr'),p_phone:v('siTel'),p_email:v('siMail'),p_invoice:iv,p_receipt_mail:v('siRcpt')}); if(!x.ok) return;
+    toast('保存しました'); me=await loadMe()||me; renderStoreSel(); PAGES.set_store(); }); };
 
 // ---------- 表示設定（オーナー） ----------
 PAGES.o_perms=()=>{
