@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.14 -->
+<title>OLIVE 管理</title><!-- admin v0.15 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -68,6 +68,14 @@
   .modal .box{background:#fff;border-radius:16px;padding:18px;width:min(520px,100%);max-height:88vh;overflow:auto;display:flex;flex-direction:column;gap:10px}
   .modal .bar{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
   #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#333;color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}#toast.on{opacity:1}
+  /* v0.15 キャスト設定 */
+  .cs-w{overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px}.cs-w.editing{border-color:var(--blue)}
+  table.cs{width:max-content;min-width:100%}table.cs td,table.cs th{padding:7px 8px}table.cs th.nm,table.cs td.nm{position:sticky;left:0;background:#fff;text-align:left;z-index:1;border-right:1px solid var(--line)}
+  table.cs td.nm a{color:var(--blue);font-weight:700;cursor:pointer}
+  table.cs input,table.cs select{height:34px;font-size:13px;padding:0 6px;width:auto}table.cs input{text-align:right}table.cs button.sm{height:34px}
+  .cs-gu{display:inline-flex;align-items:center;gap:6px}.cs-gu input[type=date]{width:140px;text-align:left}.cs-gu label{display:inline-flex;align-items:center;gap:3px;font-size:13px;color:var(--ink)}.cs-gu input[type=checkbox]{width:auto;height:auto}
+  .cs-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px}.cs-tabs button{background:none;border-radius:0;border-bottom:3px solid transparent;color:var(--muted);height:42px}.cs-tabs button.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:700}
+  .cs-li{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.cs-li:last-child{border-bottom:none}
   @media (max-width:820px){
     #menuBtn{display:inline-block}
     nav{position:fixed;top:52px;bottom:0;left:0;z-index:15;transform:translateX(-100%);transition:transform .2s;box-shadow:2px 0 12px rgba(0,0,0,.15)}
@@ -132,7 +140,7 @@ const SCREENS=[
   {k:'nippo',n:'日報登録'},
   {k:'cust',n:'お客様分析'},
   {grp:'設定'},
-  {k:'set_cast',n:'キャスト管理（給与条件）'},
+  {k:'set_cast',n:'キャスト設定'},
   {k:'set_pay',n:'給与項目'},
   {k:'set_cash',n:'入出金項目'},
   {k:'set_store',n:'店舗設定'},
@@ -384,7 +392,7 @@ PAGES.set_pay=async()=>{
   $('main').innerHTML=`<h1>給与項目 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>
   ${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
   <div class="card"><h2>時給の決め方（キャスト）</h2><div class="row"><span class="seg" id="wb">${[[false,'係小計で決める'],[true,'ポイントで決める']].map(([v,n])=>`<button data-v="${v}" class="${byPt===v?'on':''}" ${ed?'':'disabled'}>${n}</button>`).join('')}</span></div>
-    <div class="muted" style="font-size:13px;margin-top:8px">時給は「${byPt?'ポイント':'小計'}スライド」「同伴スライド」「保証時給（キャスト管理で一人ずつ）」のうち、一番高いものになります</div></div>
+    <div class="muted" style="font-size:13px;margin-top:8px">時給は「${byPt?'ポイント':'小計'}スライド」「同伴スライド」「保証時給（キャスト設定で一人ずつ）」のうち、一番高いものになります</div></div>
   ${afterCard(ax,ed)}
   <div class="slgrid">${slideCard(byPt?'points':'sales',R(byPt?'points':'sales'),ed)}${slideCard('douhan',R('douhan'),ed)}${slideCard(byPt?'sales':'points',R(byPt?'sales':'points'),ed,off)}</div>
   ${slideCard('hall',hb.data||[],ed,`<div class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.6">単位は万円。月の総売上が、その行の売上以上になっている行のうち、一番下の行を使います。一番上の行より売上が少ない月は0円です。<br>人件費比率（キャストの給与＋黒服の月給＋体験の報酬 ÷ 総売上）が 目標比率以内／＋2%まで／＋5%まで／5%超 で金額が決まり、売上ボーナスを足した総額を、黒服の売上シェアで分けます</div>`)}
@@ -444,6 +452,164 @@ function afterCard(ax,ed){ const h='<h2>アフターの延長<br><small class="m
   return `<div class="card" data-after>${h}<div class="row"><span class="seg" id="afOn">${[[true,'する'],[false,'しない']].map(([v,n])=>`<button data-v="${v}" class="${on===v?'on':''}" ${dis}>${n}</button>`).join('')}</span></div>
     <div class="row" style="margin-top:10px;font-size:14px">閉店（${esc(cl)}）の<input id="afM" inputmode="numeric" value="${esc(String(a.minutes))}" ${dis} style="width:80px;text-align:right">分前を過ぎたアフターは、閉店（${esc(cl)}）まで働いたことにする${ed?'<button class="primary sm" id="afSave">保存</button>':''}</div>
     <div class="muted" style="font-size:13px;margin-top:8px;line-height:1.6">時給の人・日給の人の両方。タイムカードで打刻した時に決まります（変えても、前の打刻はそのまま）<br>閉店時間は「店舗設定」で変えます。退勤・アフターの打刻は閉店より後になりません</div></div>`; }
+
+// ---------- キャスト設定 v0.15・SQL 056：一人ずつの給与条件（月ごと。その月以降／その月のみ）・その人だけの条件・メモ ----------
+// 担当・給与（時給／日給）・日給・日払い・契約書は staff に入れる（月で変わらない。POS と同じ欄）
+// 保証時給・期限・同伴ノルマ・バック・源泉徴収・消費税・厚生費・罰金の免除は cast_terms に月ごとに入れる（その月の行があればそれ、なければ前の月の「以降」の行）
+const CS_FOREVER='9999-12-31', CS_CATS=['性格','体調','お客様','勤怠','良かったこと','その他'];
+const CS_SP={pay:'特別な支給',deduct:'特別な控除',text:'文字だけ'};
+let csMonth=null, csEdit=false, csDetail=null, csTab='sp';
+const csNowMonth=()=>new Date(Date.now()+9*3600e3).toISOString().slice(0,7)+'-01';
+const csAddMonth=(m,n)=>{ const [y,mo]=m.split('-').map(Number); const d=new Date(Date.UTC(y,mo-1+n,1)); return d.toISOString().slice(0,7)+'-01'; };
+const csMLabel=m=>{ const [y,mo]=m.split('-').map(Number); return `${y}年${mo}月`; };
+const csMShort=m=>`${Number(m.split('-')[1])}月`;
+const csList=st=>sb.from('staff').select('*').eq('store_id',st).eq('is_active',true).order('sort_order').order('id');
+function csTerms(s,rows,m){ const t=rows.filter(r=>r.staff_id===s.id&&r.month<=m&&(r.month===m||!r.only_month)).sort((a,b)=>a.month<b.month?1:-1)[0];
+  if(t) return {...t,exempt_fines:t.exempt_fines||[]};
+  return {month:null,only_month:false,guaranteed_wage:s.guaranteed_wage??null,guarantee_until:s.guarantee_until??null,douhan_quota:s.douhan_quota??null,back_pct:null,back_mode:'add',withhold:null,ctax_pct:null,welfare_mode:'std',welfare_amount:null,exempt_fines:[]}; }
+const csNum=v=>v==null||v===''?null:Number(v);
+const csDate=d=>{ if(!d) return '—'; if(d===CS_FOREVER) return '永久'; const [y,m,dd]=d.split('-').map(Number); return `${y}/${m}/${dd}`; };
+
+PAGES.set_cast=async()=>{
+  if(csDetail&&csDetail.store===storeId) return csDetailPage();
+  csDetail=null; const st=storeId, ed=perm('set_cast')==='edit'; if(!ed) csEdit=false;
+  const cur=csNowMonth(); if(!csMonth) csMonth=cur; const m=csMonth;
+  const head=`<h1>キャスト設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>`;
+  $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>';
+  const [sf,tm,ft,nt]=await Promise.all([csList(st), sb.from('cast_terms').select('*').eq('store_id',st).lte('month',m),
+    sb.from('fine_types').select('name').eq('store_id',st).order('sort_order'), sb.from('cast_notes').select('staff_id').eq('store_id',st).eq('is_void',false)]);
+  if(page!=='set_cast'||storeId!==st||csMonth!==m) return;
+  const er=sf.error||tm.error||nt.error;
+  if(er){ $('main').innerHTML=head+`<div class="card err">${esc(/cast_terms|cast_notes|day_pay_ok/.test(er.message)&&/exist|schema cache/.test(er.message)?'SQL 056 が未実行です：':'読み込めません：')}${esc(er.message)}</div>`; return; }
+  const all=sf.data||[], halls=all.filter(x=>x.kind==='hall'), casts=all.filter(x=>x.kind==='cast'&&!x.is_trial&&!x.kakari_only);
+  const nc={}; (nt.data||[]).forEach(x=>nc[x.staff_id]=(nc[x.staff_id]||0)+1);
+  const fines=[...new Set([...(ft.data||[]).map(x=>x.name),'同伴ノルマ','新調日'])];
+  const rows=casts.map(s=>({s,t:csTerms(s,tm.data||[],m)}));
+  const mOpts=[]; for(let i=1;i>=-12;i--) mOpts.push(csAddMonth(cur,i));
+  const hallName=id=>halls.find(h=>h.id===id)?.display_name||'—';
+  const E=csEdit;
+  const sel=(k,v,os,dis)=>`<select data-k="${k}" ${dis?'disabled':''}>${os.map(([ov,on])=>`<option value="${esc(ov)}" ${String(v??'')===String(ov)?'selected':''}>${esc(on)}</option>`).join('')}</select>`;
+  const inp=(k,v,w,dis)=>`<input data-k="${k}" inputmode="decimal" value="${esc(v??'')}" style="width:${w}px" ${dis?'disabled':''}>`;
+  const yn=v=>v==null?'—':v;
+  const cell=({s,t})=>{ const sp=s.is_seppan, daily=!sp&&s.pay_type==='daily';
+    const back=t.back_pct==null?'—':`${Number(t.back_pct)}%${t.back_mode==='instead'?'（時給なし）':''}`;
+    const wf=t.welfare_mode==='amount'?yen(t.welfare_amount):t.welfare_mode==='none'?'なし':'いつもの決まり';
+    if(!E) return [hallName(s.manager_staff_id), sp?'折半':daily?'日給':'時給', daily&&s.daily_wage!=null?yen(s.daily_wage):'—', t.guaranteed_wage!=null?yen(t.guaranteed_wage):'—',
+      t.guaranteed_wage!=null?csDate(t.guarantee_until):'—', t.douhan_quota!=null?t.douhan_quota+'回':'—', back, t.withhold==null?'—':t.withhold?'する':'しない',
+      t.ctax_pct==null?'—':Number(t.ctax_pct)+'%', wf, t.exempt_fines.length?esc(t.exempt_fines.join('・')):'—', s.day_pay_ok==null?'—':s.day_pay_ok?'可':'不可',
+      s.contract_done==null?'—':s.contract_done?'<span class="badge k">済</span>':'<span class="badge warnb">未</span>'];
+    const fe=t.guarantee_until===CS_FOREVER;
+    return [sel('mgr',s.manager_staff_id||'',[['','未選択'],...halls.map(h=>[h.id,h.display_name])]),
+      sp?'折半<br><small class="muted">POSで</small>':sel('pt',daily?'daily':'hourly',[['hourly','時給'],['daily','日給']]), sp?'—':inp('dw',daily?s.daily_wage:'',80,!daily),
+      inp('g',t.guaranteed_wage,80), `<span class="cs-gu"><input type="date" data-k="gu" value="${fe?'':esc(t.guarantee_until||'')}" ${fe?'disabled':''}><label><input type="checkbox" data-k="gf" ${fe?'checked':''}>永久</label></span>`,
+      inp('q',t.douhan_quota,50)+' 回', inp('bk',t.back_pct==null?'':Number(t.back_pct),50)+' % '+sel('bm',t.back_mode,[['add','上乗せ'],['instead','時給の代わり']]),
+      sel('wh',t.withhold==null?'':String(t.withhold),[['','—'],['true','する'],['false','しない']]), inp('ct',t.ctax_pct==null?'':Number(t.ctax_pct),50)+' %',
+      sel('wm',t.welfare_mode,[['std','いつもの決まり'],['amount','金額'],['none','なし']])+' '+inp('wa',t.welfare_amount,80,t.welfare_mode!=='amount'),
+      `<button class="ghost sm" data-k="ex" data-v="${esc(JSON.stringify(t.exempt_fines))}">${t.exempt_fines.length?esc(t.exempt_fines.join('・')):'—'}</button>`,
+      sel('dp',s.day_pay_ok==null?'':String(s.day_pay_ok),[['','—'],['true','可'],['false','不可']]), sel('ct2',s.contract_done==null?'':String(s.contract_done),[['','—'],['true','済'],['false','未']])]; };
+  const HD=['担当','給与','日給','保証時給','保証の期限','同伴ノルマ','小計バック','源泉徴収','消費税','厚生費','罰金の免除','日払い','契約書','メモ'];
+  $('main').innerHTML=head+`${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
+  <div class="row" style="margin-bottom:12px"><select id="csM" style="width:auto" ${E?'disabled':''}>${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select>
+    <span style="flex:1"></span>${ed?(E?'<button class="ghost" id="csCancel">やめる</button><button class="primary" id="csSave">保存</button>':'<button class="ghost" id="csEd">編集</button>'):''}</div>
+  ${rows.length?`<div class="cs-w ${E?'editing':''}"><table class="reg cs"><tr><th class="nm">名前</th>${HD.map(h=>`<th>${h}</th>`).join('')}</tr>
+  ${rows.map(r=>`<tr data-sid="${r.s.id}"><td class="nm">${E?esc(r.s.display_name):`<a data-open="${r.s.id}">${esc(r.s.display_name)}</a>`}${r.t.month===m&&r.t.only_month?`<br><small class="muted">${csMShort(m)}のみ</small>`:''}</td>${cell(r).map(c=>`<td>${c}</td>`).join('')}<td>${nc[r.s.id]?nc[r.s.id]+'件':'—'}</td></tr>`).join('')}</table></div>`
+  :'<div class="card muted">在籍のキャストがいません</div>'}
+  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">${E?'表の中で直して「保存」。保証時給・期限・同伴ノルマ・バック・源泉徴収・消費税・厚生費・罰金の免除を変えた時は「以降／のみ」を聞きます':'名前を押すと、その人だけの条件とメモが開きます'}${ed&&!E?'。直す時は「編集」':''}</div>`;
+  $('csM').onchange=()=>{ csMonth=$('csM').value; PAGES.set_cast(); };
+  $('main').querySelectorAll('[data-open]').forEach(a=>a.onclick=()=>{ const s=casts.find(x=>x.id===a.dataset.open); csDetail={store:st,s}; csTab='sp'; PAGES.set_cast(); });
+  if(!ed) return;
+  if(!E){ $('csEd').onclick=()=>{ csEdit=true; PAGES.set_cast(); }; return; }
+  $('csCancel').onclick=()=>{ csEdit=false; PAGES.set_cast(); };
+  const tb=$('main').querySelector('table.cs');
+  tb.querySelectorAll('tr[data-sid]').forEach(tr=>{ const q=k=>tr.querySelector(`[data-k=${k}]`);
+    if(q('pt')) q('pt').onchange=()=>{ q('dw').disabled=q('pt').value!=='daily'; if(q('dw').disabled) q('dw').value=''; };
+    q('wm').onchange=()=>{ q('wa').disabled=q('wm').value!=='amount'; };
+    q('gf').onchange=()=>{ q('gu').disabled=q('gf').checked; };
+    q('ex').onclick=()=>{ const cur=JSON.parse(q('ex').dataset.v||'[]'); const opts=[...new Set([...fines,...cur])];
+      const md=modal(`<h2 style="margin:0">罰金の免除</h2><div class="muted" style="font-size:14px">${esc(rows.find(r=>r.s.id===tr.dataset.sid).s.display_name)}：チェックした罰金は付けません</div>
+        <div style="display:flex;flex-direction:column;gap:8px">${opts.map(o=>`<label style="display:flex;align-items:center;gap:8px;font-size:15px;color:var(--ink)"><input type="checkbox" style="width:auto;height:auto" value="${esc(o)}" ${cur.includes(o)?'checked':''}>${esc(o)}</label>`).join('')}</div>
+        <div class="bar"><button class="ghost" data-k="no">やめる</button><button class="primary" data-k="ok">決める</button></div>`);
+      md.querySelector('[data-k=no]').onclick=()=>md.remove();
+      md.querySelector('[data-k=ok]').onclick=()=>{ const v=[...md.querySelectorAll('input:checked')].map(x=>x.value); q('ex').dataset.v=JSON.stringify(v); q('ex').textContent=v.length?v.join('・'):'—'; md.remove(); }; }; });
+  const sv=$('csSave'); sv.onclick=guard(sv,async()=>{
+    const out=[]; let needP=false;
+    for(const {s,t} of rows){ const tr=tb.querySelector(`tr[data-sid="${s.id}"]`), q=k=>tr.querySelector(`[data-k=${k}]`), nm=s.display_name;
+      const int=(k,l,max)=>{ const v=slNum(q(k).value); if(v==null) return null; if(!Number.isFinite(v)||v<0||(max!=null&&v>max)) throw `${nm}：${l}が正しくありません`; return v; };
+      let so, to;
+      try{ const pt=s.is_seppan?s.pay_type:q('pt').value, dw=pt==='daily'&&!s.is_seppan?int('dw','日給'):(s.is_seppan?s.daily_wage:null);
+        if(!s.is_seppan&&pt==='daily'&&!dw) throw `${nm}：日給を入れてください`;
+        const b=v=>v===''?null:v==='true';
+        so={manager_staff_id:q('mgr').value||null,pay_type:pt,daily_wage:dw==null?null:Math.round(dw),day_pay_ok:b(q('dp').value),contract_done:b(q('ct2').value)};
+        const g=int('g','保証時給'), gf=q('gf').checked, gu=gf?CS_FOREVER:(q('gu').value||null), wm=q('wm').value, wa=wm==='amount'?int('wa','厚生費'):null, bk=int('bk','小計バック',100);
+        if(wm==='amount'&&wa==null) throw `${nm}：厚生費の金額を入れてください`;
+        if(q('bm').value==='instead'&&bk==null) throw `${nm}：時給の代わりにする時は、バックの％を入れてください`;
+        to={guaranteed_wage:g==null?null:Math.round(g),guarantee_until:g==null?null:gu,douhan_quota:(v=>v==null?null:Math.round(v))(int('q','同伴ノルマ')),back_pct:bk,back_mode:q('bm').value,
+          withhold:b(q('wh').value),ctax_pct:int('ct','消費税',100),welfare_mode:wm,welfare_amount:wa==null?null:Math.round(wa),exempt_fines:JSON.parse(q('ex').dataset.v||'[]')};
+      }catch(e){ if(typeof e==='string'){ await uiAlert(e); return; } throw e; }
+      const so0={manager_staff_id:s.manager_staff_id||null,pay_type:s.pay_type,daily_wage:s.daily_wage??null,day_pay_ok:s.day_pay_ok??null,contract_done:s.contract_done??null};
+      if(!s.is_seppan&&so0.pay_type!=='daily') so0.pay_type='hourly'; if(so0.pay_type!=='daily'&&!s.is_seppan) so0.daily_wage=null;
+      const to0={guaranteed_wage:t.guaranteed_wage??null,guarantee_until:t.guaranteed_wage==null?null:(t.guarantee_until??null),douhan_quota:t.douhan_quota??null,back_pct:t.back_pct==null?null:Number(t.back_pct),back_mode:t.back_mode||'add',
+        withhold:t.withhold??null,ctax_pct:t.ctax_pct==null?null:Number(t.ctax_pct),welfare_mode:t.welfare_mode||'std',welfare_amount:t.welfare_mode==='amount'?(t.welfare_amount??null):null,exempt_fines:t.exempt_fines||[]};
+      const r={staff_id:s.id}; if(JSON.stringify(so)!==JSON.stringify(so0)) r.staff=so; if(JSON.stringify(to)!==JSON.stringify(to0)){ r.terms=to; needP=true; }
+      if(r.staff||r.terms) out.push(r); }
+    if(!out.length){ csEdit=false; toast('変更はありません'); PAGES.set_cast(); return; }
+    let only=false;
+    if(needP){ const ans=await new Promise(res=>{ const md=modal(`<h2 style="margin:0">いつから変えますか？</h2><div style="display:flex;flex-direction:column;gap:8px">
+        <button class="ghost" data-v="after">${csMShort(m)}以降</button><button class="ghost" data-v="only">${csMShort(m)}のみ</button><button class="ghost" data-v="" style="border:none;color:var(--muted)">やめる</button></div>`);
+        md.querySelectorAll('button').forEach(b=>b.onclick=()=>{ md.remove(); res(b.dataset.v); }); });
+      if(!ans) return; only=ans==='only'; }
+    const r=await rpc('admin_save_cast_settings',{p_store:st,p_month:m,p_only:only,p_rows:out}); if(!r.ok) return;
+    csEdit=false; toast('保存しました'); PAGES.set_cast(); });
+};
+
+// 名前を押した時：その人だけの条件・メモ
+async function csDetailPage(){ const st=storeId, s=csDetail.s, ed=perm('set_cast')==='edit';
+  const head=`<div class="row" style="margin-bottom:12px"><button class="ghost" id="csBack">← 一覧に戻る</button><h1 style="margin:0">${esc(s.display_name)}</h1></div>
+   <div class="cs-tabs"><button data-t="sp" class="${csTab==='sp'?'on':''}">その人だけの条件</button><button data-t="memo" class="${csTab==='memo'?'on':''}">メモ</button></div>`;
+  $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>';
+  const wire=()=>{ $('csBack').onclick=()=>{ csDetail=null; PAGES.set_cast(); }; $('main').querySelectorAll('.cs-tabs button').forEach(b=>b.onclick=()=>{ csTab=b.dataset.t; csDetailPage(); }); };
+  wire();
+  const t=csTab;
+  if(t==='sp'){
+    const r=await sb.from('cast_specials').select('*').eq('staff_id',s.id).eq('is_void',false).order('from_month',{ascending:false}).order('created_at',{ascending:false});
+    if(page!=='set_cast'||storeId!==st||csDetail?.s!==s||csTab!==t) return;
+    if(r.error){ $('main').innerHTML=head+`<div class="card err">読み込めません：${esc(r.error.message)}</div>`; wire(); return; }
+    const cur=csNowMonth(), mo=[]; for(let i=-12;i<=12;i++) mo.push(csAddMonth(cur,i));
+    const per=x=>`${csMLabel(x.from_month)}${x.to_month?(x.to_month===x.from_month?'のみ':'〜'+csMLabel(x.to_month)):'〜'}`;
+    $('main').innerHTML=head+`<div class="card">${(r.data||[]).map(x=>`<div class="cs-li"><span class="badge gray">${CS_SP[x.kind]}</span><span style="flex:1;min-width:0">${esc(x.title)}${x.amount!=null?`　<b>${yen(x.amount)}</b>`:''}<br><small class="muted">${per(x)}</small></span>${ed?`<button class="ghost sm" data-del="${x.id}" aria-label="消す">✕</button>`:''}</div>`).join('')||'<div class="muted">まだありません</div>'}</div>
+    ${ed?`<div class="card"><h2>追加</h2><div class="row" style="margin-bottom:10px"><span class="seg" id="spK">${Object.entries(CS_SP).map(([k,n],i)=>`<button data-v="${k}" class="${i?'':'on'}">${n}</button>`).join('')}</span></div>
+      <div class="row"><input id="spT" maxlength="50" placeholder="内容（50字まで）" style="flex:1;min-width:200px"><input id="spA" inputmode="numeric" placeholder="金額" style="width:120px;text-align:right">
+      <select id="spF" style="width:auto">${mo.map(x=>`<option value="${x}" ${x===cur?'selected':''}>${csMLabel(x)}から</option>`).join('')}</select>
+      <select id="spTo" style="width:auto"><option value="">ずっと</option>${mo.map(x=>`<option value="${x}">${csMLabel(x)}まで</option>`).join('')}</select><button class="primary" id="spAdd">追加</button></div>
+      <div class="muted" style="font-size:13px;margin-top:8px">特別な支給・特別な控除は、その期間の毎月の給料に足す／引く金額です。罰金の免除は一覧の「罰金の免除」で決めます</div></div>`:''}`;
+    wire(); if(!ed) return;
+    let kind='pay'; const kb=$('spK').querySelectorAll('button'); kb.forEach(b=>b.onclick=()=>{ kind=b.dataset.v; kb.forEach(x=>x.classList.toggle('on',x===b)); $('spA').disabled=kind==='text'; if(kind==='text') $('spA').value=''; });
+    $('main').querySelectorAll('[data-del]').forEach(b=>b.onclick=guard(b,async()=>{ if(!await uiConfirm('この条件を消しますか？','消す','danger')) return; const x=await rpc('admin_void_cast_special',{p_id:b.dataset.del}); if(!x.ok) return; toast('消しました'); csDetailPage(); }));
+    const ad=$('spAdd'); ad.onclick=guard(ad,async()=>{ const title=$('spT').value.trim(), a=slNum($('spA').value), f=$('spF').value, to=$('spTo').value||null;
+      if(!title){ await uiAlert('内容を入れてください'); return; }
+      if(kind!=='text'&&(a==null||!Number.isInteger(a)||a<=0)){ await uiAlert('金額を1以上の整数で入れてください'); return; }
+      if(to&&to<f){ await uiAlert('「まで」が「から」より前になっています'); return; }
+      const x=await rpc('admin_add_cast_special',{p_store:st,p_staff:s.id,p_kind:kind,p_title:title,p_amount:kind==='text'?null:a,p_from:f,p_to:to}); if(!x.ok) return; toast('追加しました'); csDetailPage(); });
+    return; }
+  const [nr,cr]=await Promise.all([sb.from('cast_notes').select('*').eq('staff_id',s.id).eq('is_void',false).order('created_at',{ascending:false}), sb.from('cast_note_cats').select('names').eq('store_id',st).maybeSingle()]);
+  if(page!=='set_cast'||storeId!==st||csDetail?.s!==s||csTab!==t) return;
+  if(nr.error){ $('main').innerHTML=head+`<div class="card err">読み込めません：${esc(nr.error.message)}</div>`; wire(); return; }
+  const cats=cr.data?.names?.length?cr.data.names:CS_CATS;
+  const dt=x=>{ const d=new Date(x); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`; };
+  $('main').innerHTML=head+`${ed?`<div class="card"><div class="row"><select id="nC" style="width:auto">${cats.map(c=>`<option>${esc(c)}</option>`).join('')}</select><input id="nB" maxlength="50" placeholder="1行・50字まで" style="flex:1;min-width:200px"><button class="primary" id="nAdd">追加</button></div>
+    <div style="margin-top:8px;text-align:right"><button class="ghost sm" id="nCats">分類を変える</button></div></div>`:''}
+    <div class="card">${(nr.data||[]).map(x=>`<div class="cs-li"><small class="muted" style="white-space:nowrap">${dt(x.created_at)} ${esc(x.author_name||'')}</small><span class="badge gray">${esc(x.category)}</span><span style="flex:1;min-width:0">${esc(x.body)}</span>${ed?`<button class="ghost sm" data-del="${x.id}" aria-label="消す">✕</button>`:''}</div>`).join('')||'<div class="muted">まだありません</div>'}</div>
+    <div class="muted" style="font-size:13px">メモは管理サイトだけで見られます（POS・タイムカードには出ません）</div>`;
+  wire(); if(!ed) return;
+  const ad=$('nAdd'); ad.onclick=guard(ad,async()=>{ const b=$('nB').value.trim(); if(!b){ await uiAlert('メモを入れてください'); return; }
+    const x=await rpc('admin_add_cast_note',{p_store:st,p_staff:s.id,p_cat:$('nC').value,p_body:b}); if(!x.ok) return; toast('追加しました'); csDetailPage(); });
+  $('main').querySelectorAll('[data-del]').forEach(b=>b.onclick=guard(b,async()=>{ if(!await uiConfirm('このメモを消しますか？','消す','danger')) return; const x=await rpc('admin_void_cast_note',{p_id:b.dataset.del}); if(!x.ok) return; toast('消しました'); csDetailPage(); }));
+  $('nCats').onclick=()=>{ const md=modal(`<h2 style="margin:0">メモの分類</h2><div class="muted" style="font-size:14px">1行に1つ（10字まで）。今までのメモの分類は変わりません</div><textarea id="nCT" rows="8" style="font:inherit;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:8px">${esc(cats.join('\n'))}</textarea>
+      <div class="bar"><button class="ghost" data-k="no">やめる</button><button class="primary" data-k="ok">保存</button></div>`);
+    md.querySelector('[data-k=no]').onclick=()=>md.remove();
+    const ok=md.querySelector('[data-k=ok]'); ok.onclick=guard(ok,async()=>{ const ns=md.querySelector('#nCT').value.split('\n').map(x=>x.trim()).filter(Boolean); if(!ns.length){ await uiAlert('分類を1つ以上入れてください'); return; }
+      const x=await rpc('admin_save_note_cats',{p_store:st,p_names:ns}); if(!x.ok) return; md.remove(); toast('保存しました'); csDetailPage(); }); };
+}
 
 // ---------- 店舗設定 v0.14・SQL 055：閉店時間（タイムカードの打ち止め。アフターの延長もここから数える） ----------
 PAGES.set_store=async()=>{ const st=storeId, ed=perm('set_store')==='edit';
