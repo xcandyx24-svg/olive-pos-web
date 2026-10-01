@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v11.09 -->
+<title>OLIVE 会計</title><!-- v11.10 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -504,7 +504,8 @@ function renderCastForm(){ const f=$('cForm'); const s=cSel; if(!s){ f.innerHTML
     <div class="bar"><button class="primary" id="cSave">${s._new?'登録':'保存'}</button><button class="ghost sm" id="cDel" style="color:var(--muted);${s._new?'display:none':''}">削除</button>${s._new?'':'<span class="muted" style="font-size:13px">削除すると一覧・タイムカードから消えます</span>'}</div>`;
   $('cDel').onclick=async()=>{ if(!await uiConfirm(`${s.display_name} を削除しますか？（在籍から外します。過去のデータは残ります）`))return; const { error } = await sb.from('staff').update({is_active:false}).eq('id',s.id); if(!error) await logOp('キャスト削除',{name:s.display_name},null,true); toast(error?error.message:'削除しました'); if(!error){ cSel=null; renderCasts(); } };
   // v11.09・SQL 058：時給（日給）＝その人が管理サイト「キャスト設定」で選んだスライド表（月ごと）と保証時給のうち一番高いもの。日給の人は日給の表と、設定の日給のうち一番高いもの
-  // 表は管理サイト「給与項目」で作る（slide_tables・slide_rows。何で決まるか＝係小計／ポイント／同伴回数／出勤日数）。ここは表示だけ
+  // 表は管理サイト「給与項目」で作る（slide_tables・slide_rows。何で決まるか＝係小計／ポイント／同伴数／出勤日数）。ここは表示だけ
+  // v11.10・SQL 059：反応数（反応◎の回数。取り消し伝票は除く）・組数（その人が係の会計済み伝票の数）・人数（その伝票の客数の合計）を追加
   if(s.kind!=='hall') (async()=>{ const bd=businessDate(), m1=bd.slice(0,7)+'-01'; const box=$('cSlRows'); const daily=s.pay_type==='daily'&&!s.is_seppan, unit=daily?'daily':'hourly';
     const [dh,ctm,stb,srw]=await Promise.all([
       s._new?Promise.resolve(0):sb.from('bill_casts').select('role,bills!inner(business_date,status,store_id)').eq('staff_id',s.id).gte('bills.business_date',m1).lte('bills.business_date',bd).then(r=>r.error?null:(r.data||[]).filter(x=>isDouhan(x.role)&&x.bills&&x.bills.status!=='void'&&x.bills.store_id===store.id).length),
@@ -518,12 +519,14 @@ function renderCastForm(){ const f=$('cForm'); const s=cSel; if(!s){ f.innerHTML
     if(s.is_seppan||s.is_trial){ box.innerHTML=`<div style="padding:5px 6px">${s.is_seppan?'折半':'体験'}のためスライドはありません</div>`; txt('cWage','—'); return; }
     const mine=(stb||[]).filter(t=>t.unit===unit&&(ctm?.slide_ids||[]).includes(t.id));
     const need=new Set(mine.map(t=>t.basis)), sid=new Set([s.id]);
-    const [ks,pt,dy]=await Promise.all([ need.has('sales')&&!s._new?monthKakari(sid).then(m=>m?(m[s.id]||0):null):null, need.has('points')&&!s._new?monthPoints(sid).then(m=>m?(m[s.id]||0):null):null,
-      need.has('days')&&!s._new?sb.from('attendance_events').select('business_date').eq('staff_id',s.id).gte('business_date',m1).lte('business_date',bd).in('event_type',['clock_in','douhan']).then(r=>r.error?null:new Set((r.data||[]).map(x=>x.business_date)).size):null ]);
+    const kb=(need.has('groups')||need.has('guests'))&&!s._new?sb.from('bills').select('guest_count,bill_casts!inner(staff_id,is_kakari)').eq('store_id',store.id).eq('status','closed').gte('business_date',m1).lte('business_date',bd).eq('bill_casts.staff_id',s.id).eq('bill_casts.is_kakari',true).then(r=>r.error?null:(r.data||[])):Promise.resolve(null);
+    const [ks,pt,dy,rc,kbl]=await Promise.all([ need.has('sales')&&!s._new?monthKakari(sid).then(m=>m?(m[s.id]||0):null):null, need.has('points')&&!s._new?monthPoints(sid).then(m=>m?(m[s.id]||0):null):null,
+      need.has('days')&&!s._new?sb.from('attendance_events').select('business_date').eq('staff_id',s.id).gte('business_date',m1).lte('business_date',bd).in('event_type',['clock_in','douhan']).then(r=>r.error?null:new Set((r.data||[]).map(x=>x.business_date)).size):null,
+      need.has('reactions')&&!s._new?sb.from('good_reactions').select('bills!inner(business_date,status)').eq('staff_id',s.id).eq('store_id',store.id).gte('bills.business_date',m1).lte('bills.business_date',bd).then(r=>r.error?null:(r.data||[]).filter(x=>x.bills&&x.bills.status!=='void').length):null, kb ]);
     if(cSel!==s) return;
-    const met={sales:[ks,v=>yen(v),'係小計'],points:[pt,v=>Number(v).toLocaleString('ja-JP')+'pt','ポイント'],douhan:[dh,v=>v+'回','同伴'],days:[dy,v=>v+'日','出勤']};
+    const met={sales:[ks,v=>yen(v),'係小計'],points:[pt,v=>Number(v).toLocaleString('ja-JP')+'pt','ポイント'],douhan:[dh,v=>v+'回','同伴'],days:[dy,v=>v+'日','出勤'],reactions:[rc,v=>v+'回','反応◎'],groups:[kbl&&kbl.length,v=>v+'組','係の組数'],guests:[kbl&&kbl.reduce((a,b)=>a+Number(b.guest_count||0),0),v=>v+'人','係の人数']};
     const cand=[]; let html='';
-    for(const t of mine){ const [v,f,l]=met[t.basis]; const rs=(srw||[]).filter(r=>r.table_id===t.id); const hit=v==null?null:rs.filter(r=>Number(r.threshold)<=v).sort((a,b)=>b.threshold-a.threshold)[0];
+    for(const t of mine){ const [v,f,l]=met[t.basis]||[null,String,t.basis]; const rs=(srw||[]).filter(r=>r.table_id===t.id); const hit=v==null?null:rs.filter(r=>Number(r.threshold)<=v).sort((a,b)=>b.threshold-a.threshold)[0];
       const k='t'+t.id; if(hit) cand.push([k,hit.amount]); html+=row(k,esc(t.name),`${l} ${v==null?'—':f(v)}`,hit?yen(hit.amount):rs.length?'該当なし':'未設定'); }
     if(!mine.length) html+=`<div style="padding:5px 6px;color:#c0392b">スライド表：未選択（管理サイトのキャスト設定で選びます）</div>`;
     if(daily){ const dw=num(s.daily_wage); if(dw!=null) cand.push(['dw',dw]); html+=row('dw','日給（設定）','',dw==null?'未設定':yen(dw)); }
