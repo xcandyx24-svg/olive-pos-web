@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v11.11 -->
+<title>OLIVE 会計</title><!-- v11.12 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -868,7 +868,8 @@ function openReceipt(o){ const rate=Number(cur.totals?.tax_rate)||10; const m=do
 $('extAdd').textContent=`延長（${settings?.ext_minutes||30}分）`;
 $('extAdd').onclick=guard($('extAdd'),async()=>{ const { error } = await sb.from('bill_extensions').insert({bill_id:cur.id,minutes:settings.ext_minutes,unit_price:settings.ext_unit_price,qty:cur.guest_count,is_auto:false}); if(error){ toast(error.message); return; } await logOp('延長追加（手動）',{minutes:settings.ext_minutes,amount:settings.ext_unit_price*cur.guest_count}); await openBill(cur.id); });
 $('bBack').onclick=()=>{ if(billFrom==='bills'){ renderSettings('bills'); show('v-settings'); return; } loadHall(); show('v-hall'); };
-$('bVoid').onclick=async()=>{ const why=await askReason('この伝票を取り消します。'); if(!why)return; await logOp('伝票取消',{total:cur.totals?.amount_due??null,guest_count:cur.guest_count,items:(cur.bill_items||[]).filter(i=>!i.is_void).map(i=>`${i.name}×${i.qty}`)},why); await sb.from('bills').update({status:'void',closed_at:new Date().toISOString()}).eq('id',cur.id); loadHall(); show('v-hall'); };
+// v11.12：先に「削除しますか？」を出す（やめられる）。続けて理由（必須）
+$('bVoid').onclick=async()=>{ const tn=tables.find(t=>t.id===cur.table_id)?.name||''; if(!await uiConfirm(`卓${tn}の伝票を削除しますか？\n伝票は削除されますが、履歴は残ります`))return; const why=await askReason(`卓${tn}の伝票を削除します。`); if(!why)return; await logOp('伝票取消',{total:cur.totals?.amount_due??null,guest_count:cur.guest_count,items:(cur.bill_items||[]).filter(i=>!i.is_void).map(i=>`${i.name}×${i.qty}`)},why); await sb.from('bills').update({status:'void',closed_at:new Date().toISOString()}).eq('id',cur.id); loadHall(); show('v-hall'); };
 $('bOrder').onclick=()=>openOrder();
 $('bPay').onclick=async()=>{ if(cur&&cur.status==='open'){ const miss=[]; if(!(cur.bill_customers||[]).length) miss.push('お客様が登録されていません'); if(!(cur.bill_casts||[]).some(c=>c.is_kakari)) miss.push('係が登録されていません'); if(miss.length){ await uiAlert(miss.join('\n')); return; } } renderPay(); show('v-pay'); };
 
@@ -992,7 +993,8 @@ let okiBusy=false; async function closeAsOki(){ if(okiBusy||!cur||cur.status!=='
   try{ const r=await sb.from('payments').insert({bill_id:cur.id,method:'oki',amount:un,revenue_date:cur.business_date,received_at:null}); if(r.error){ toast(r.error.message); return; } await logOp('入金',{method:METHOD.oki,amount:un});
     const { error } = await sb.from('bills').update({status:'closed',closed_at:new Date().toISOString(),set_end:billEnd(cur).toISOString()}).eq('id',cur.id); if(error){ toast(error.message); return; }
     await logOp('会計締め（置き）',{total:cur.totals.amount_due,oki:un,payments:[...(cur.payments||[]).filter(p=>p.amount>0).map(p=>`${METHOD[p.method]}:${p.amount}`),`${METHOD.oki}:${un}`]}); toast('置きで会計を終了しました'); payMethod='cash'; loadHall(); show('v-hall'); } finally { okiBusy=false; } }
-async function addAdj(kind){ const v=parseInt($('payAmount').value||'0',10); if(!v){toast('金額を入力してください');return;} if(!await uiConfirm(`${kind==='discount'?'値引':'値増'} ${yen(v)} を入れますか？`))return; const wasOki=isOki(cur); const ra=await sb.from('bill_adjustments').insert({bill_id:cur.id,kind,amount:v,reason:''}); if(ra.error){ toast(ra.error.message); return; } await logOp(kind==='discount'?'値引':'値増',{amount:v}); await openBill(cur.id); if(await okiSync(wasOki)) return; renderPay(); show('v-pay'); }
+// v11.12：値引は請求額まで（請求額より多くは引けない）
+async function addAdj(kind){ const v=parseInt($('payAmount').value||'0',10); if(!v){toast('金額を入力してください');return;} if(kind==='discount'){ const due=Number(cur.totals?.amount_due||0); if(v>due){ await uiAlert(`値引は請求額（${yen(due)}）までです`); return; } } if(!await uiConfirm(`${kind==='discount'?'値引':'値増'} ${yen(v)} を入れますか？`))return; const wasOki=isOki(cur); const ra=await sb.from('bill_adjustments').insert({bill_id:cur.id,kind,amount:v,reason:''}); if(ra.error){ toast(ra.error.message); return; } await logOp(kind==='discount'?'値引':'値増',{amount:v}); await openBill(cur.id); if(await okiSync(wasOki)) return; renderPay(); show('v-pay'); }
 $('payAdjDiscount').onclick=()=>addAdj('discount'); $('payAdjSurcharge').onclick=()=>addAdj('surcharge');
 $('payAdd').onclick=guard($('payAdd'),async()=>{ const v=parseInt($('payAmount').value||'0',10); if(!v||v<0){toast('金額を入力してください');return;}
   const wasOki=isOki(cur); if(wasOki&&v>okiRemain(cur)){ toast(`置きの残額は ${yen(okiRemain(cur))} です`); return; }
