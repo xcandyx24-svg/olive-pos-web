@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.13 -->
+<title>OLIVE 管理</title><!-- admin v0.14 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -392,10 +392,9 @@ PAGES.set_pay=async()=>{
   $('main').querySelectorAll('tr[data-fr]').forEach(tr=>fineRowWire(tr,ed));
   if(!ed) return;
   { const ac=$('main').querySelector('[data-after]'); if(ac){ let on=!!ax.data?.on; ac.querySelectorAll('#afOn button').forEach(b=>b.onclick=()=>{ on=b.dataset.v==='true'; ac.querySelectorAll('#afOn button').forEach(x=>x.classList.toggle('on',x===b)); });
-    $('afU').oninput=()=>{ $('afU2').textContent=$('afU').value; };
-    const sv=$('afSave'); sv.onclick=guard(sv,async()=>{ const b=$('afB').value, u=$('afU').value; if(!b||!u){ await uiAlert('時刻を入れてください'); return; } if(b>='12:00'||u>='12:00'){ await uiAlert('時刻は 0:00〜11:59（日付が変わった後）で入れてください'); return; } if(b>=u){ await uiAlert('境目の時刻は、付ける時刻より前にしてください'); return; }
-      if(!await uiConfirm(on?`アフターの打刻が ${b}〜${u} の間なら、${u} まで働いたことにしますか？\nこれから押す打刻から変わります`:'アフターの延長を「しない」にしますか？\nこれから押す打刻から変わります')) return;
-      const r=await rpc('admin_set_after_ext',{p_store:st,p_on:on,p_from:b,p_to:u}); if(!r.ok) return; toast('保存しました'); PAGES.set_pay(); }); } }
+    const sv=$('afSave'); sv.onclick=guard(sv,async()=>{ const m=slNum($('afM').value); if(m==null||!Number.isInteger(m)||m<1||m>180){ await uiAlert('何分前かは 1〜180 の整数で入れてください'); return; } const cl=closeTxt(ax.data.close);
+      if(!await uiConfirm(on?`閉店（${cl}）の ${m}分前を過ぎたアフターは、閉店まで働いたことにしますか？\nこれから押す打刻から変わります`:'アフターの延長を「しない」にしますか？\nこれから押す打刻から変わります')) return;
+      const r=await rpc('admin_set_after_ext',{p_store:st,p_on:on,p_minutes:m}); if(!r.ok) return; toast('保存しました'); PAGES.set_pay(); }); } }
   { const fc=$('main').querySelector('[data-fines]'); if(fc){ fc.querySelector('[data-fadd]').onclick=()=>{ const tb=fc.querySelector('table.fn'); fc.querySelector('[data-fempty]')?.remove(); tb.insertAdjacentHTML('beforeend',fineRowHtml({},true)); const last=[...tb.querySelectorAll('tr[data-fr]')].pop(); fineRowWire(last,true); last.querySelector('[data-f=name]').focus(); };
     const hs=$('dHoursSave'); if(hs) hs.onclick=guard(hs,async()=>{ const h=slNum($('dHours').value); if(h==null||!(h>0&&h<=24)){ await uiAlert('所定時間は0より大きく24以下の数にしてください'); return; } if(!await uiConfirm(`日給の人の所定時間を ${h}時間 にしますか？\n時間給 ＝ 日給 ÷ ${h}時間 になります`)) return; const r=await rpc('admin_set_daily_hours',{p_store:st,p_hours:h}); if(!r.ok) return; toast('保存しました'); PAGES.set_pay(); });
     const sv=fc.querySelector('[data-fsave]'); sv.onclick=guard(sv,async()=>{ const g=fineRead(fc); if(g.err){ await uiAlert(g.err); return; } if(!await uiConfirm(`罰金の種類を保存しますか？（${g.rows.length}行）\nPOS の「＋罰金」の一覧も変わります。今までに登録した罰金は変わりません`)) return;
@@ -436,13 +435,29 @@ function fineRead(card){ const out=[]; let i=0;
   const seen=new Set(); for(const r of out){ const k=r.name+'/'+r.target; if(seen.has(k)) return {err:`名前と対象が同じ行が2つあります：${r.name}`}; seen.add(k); }
   return {rows:out}; }
 
-// v0.13・SQL 054：アフターの延長（attendance_rules。タイムカードの打刻の時に round_punch が使う）。境目の時刻〜付ける時刻 の間に押したアフターは、付ける時刻まで働いたことにする
+// v0.14・SQL 055：アフターの延長（attendance_rules。タイムカードの打刻の時に round_punch が使う）。閉店の○分前を過ぎたアフターは、閉店まで働いたことにする。閉店時間は店舗設定で決める
+const closeTxt=c=>{ const m=String(c||'01:00').match(/^(\d{1,2}):(\d{2})/); return m?`${+m[1]<12?'翌':''}${+m[1]}:${m[2]}`:String(c); };
 function afterCard(ax,ed){ const h='<h2>アフターの延長<br><small class="muted" style="font-weight:400">アフターの打刻（退勤の代わり）で、時給を付ける時間を延ばします</small></h2>';
-  if(ax.error) return `<div class="card">${h}<div class="err">${esc(/admin_get_after_ext/.test(ax.error.message)&&/find|exist|schema cache/.test(ax.error.message)?'SQL 054 が未実行です：':'読み込めません：')}${esc(ax.error.message)}</div></div>`;
-  const a=ax.data||{}, on=!!a.on, dis=ed?'':'disabled';
+  if(ax.error) return `<div class="card">${h}<div class="err">${esc(/after_ext|minutes|close/.test(ax.error.message)||/find|exist|schema cache/.test(ax.error.message)?'SQL 055 が未実行です：':'読み込めません：')}${esc(ax.error.message)}</div></div>`;
+  const a=ax.data||{}; if(a.minutes==null) return `<div class="card">${h}<div class="err">SQL 055 が未実行です</div></div>`;
+  const on=!!a.on, dis=ed?'':'disabled', cl=closeTxt(a.close);
   return `<div class="card" data-after>${h}<div class="row"><span class="seg" id="afOn">${[[true,'する'],[false,'しない']].map(([v,n])=>`<button data-v="${v}" class="${on===v?'on':''}" ${dis}>${n}</button>`).join('')}</span></div>
-    <div class="row" style="margin-top:10px;font-size:14px">アフターの打刻が<input type="time" id="afB" value="${esc(a.from||'00:30')}" ${dis} style="width:130px">〜<input type="time" id="afU" value="${esc(a.to||'01:00')}" ${dis} style="width:130px">の間なら、<span id="afU2">${esc(a.to||'01:00')}</span>まで働いたことにする${ed?'<button class="primary sm" id="afSave">保存</button>':''}</div>
-    <div class="muted" style="font-size:13px;margin-top:8px;line-height:1.6">時給の人・日給の人の両方。タイムカードで打刻した時に決まります（変えても、前の打刻はそのまま）<br>打ち止めの時刻（${esc(a.end_cap||'01:00')}）より後にはできません</div></div>`; }
+    <div class="row" style="margin-top:10px;font-size:14px">閉店（${esc(cl)}）の<input id="afM" inputmode="numeric" value="${esc(String(a.minutes))}" ${dis} style="width:80px;text-align:right">分前を過ぎたアフターは、閉店（${esc(cl)}）まで働いたことにする${ed?'<button class="primary sm" id="afSave">保存</button>':''}</div>
+    <div class="muted" style="font-size:13px;margin-top:8px;line-height:1.6">時給の人・日給の人の両方。タイムカードで打刻した時に決まります（変えても、前の打刻はそのまま）<br>閉店時間は「店舗設定」で変えます。退勤・アフターの打刻は閉店より後になりません</div></div>`; }
+
+// ---------- 店舗設定 v0.14・SQL 055：閉店時間（タイムカードの打ち止め。アフターの延長もここから数える） ----------
+PAGES.set_store=async()=>{ const st=storeId, ed=perm('set_store')==='edit';
+  $('main').innerHTML=`<h1>店舗設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="card muted">読み込み中…</div>`;
+  const ax=await sb.rpc('admin_get_after_ext',{p_store:st}); if(page!=='set_store'||storeId!==st) return;
+  const bad=ax.error||ax.data?.close==null;
+  $('main').innerHTML=`<h1>店舗設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
+  <div class="card"><h2>閉店時間</h2>${bad?`<div class="err">${ax.error?'読み込めません：'+esc(ax.error.message):'SQL 055 が未実行です'}</div>`:`
+    <div class="row" style="font-size:14px">閉店<input type="time" id="clT" value="${esc(ax.data.close)}" ${ed?'':'disabled'} style="width:140px">${ed?'<button class="primary sm" id="clSave">保存</button>':''}</div>
+    <div class="muted" style="font-size:13px;margin-top:8px;line-height:1.6">タイムカードの退勤・アフターの打刻は、閉店より後になりません（時給は閉店まで）<br>0:00〜6:00 は日付が変わった後として扱います（例：1:00 ＝ 翌1:00、23:00 ＝ その日の23:00）<br>アフターの延長（給与項目）も、この閉店時間から数えます。変えても、前の打刻はそのまま</div>`}</div>`;
+  if(!ed||bad) return;
+  const sv=$('clSave'); sv.onclick=guard(sv,async()=>{ const v=$('clT').value; if(!v){ await uiAlert('閉店時間を入れてください'); return; } if(v>'06:00'&&v<'18:00'){ await uiAlert('閉店時間は 18:00〜翌6:00 の間にしてください'); return; }
+    if(!await uiConfirm(`閉店時間を ${closeTxt(v)} にしますか？\nこれから押す打刻から変わります`)) return;
+    const r=await rpc('admin_set_close_time',{p_store:st,p_close:v}); if(!r.ok) return; toast('保存しました'); PAGES.set_store(); }); };
 
 // ---------- 表示設定（オーナー） ----------
 PAGES.o_perms=()=>{
