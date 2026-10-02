@@ -105,6 +105,16 @@
     <div class="err" id="loginErr"></div>
   </form>
 </div>
+<!-- 2026-10-02・SQL 063：登録した端末だけ打刻できる。管理サイト（オーナー）の「パスワード」画面で出した登録コードを、この端末で1回入れる -->
+<div class="login hidden" id="reg">
+  <form id="regForm">
+    <h1>この端末を登録</h1>
+    <div style="font-size:15px;color:var(--muted);line-height:1.6">管理サイトの「パスワード」画面で出した登録コード（6けた）を入れてください</div>
+    <input id="regCode" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="登録コード">
+    <button type="submit">登録する</button>
+    <div class="err" id="regErr"></div>
+  </form>
+</div>
 
 <div id="app" class="hidden">
   <div class="top">
@@ -166,10 +176,28 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
   start();
 });
 
+const TC_KEY = 'olive_tc_terminal';
+const tcGet = () => { try { return localStorage.getItem(TC_KEY); } catch(e) { return null; } };
+const tcSet = v => { try { v == null ? localStorage.removeItem(TC_KEY) : localStorage.setItem(TC_KEY, v); } catch(e) {} };
+function showReg(msg){ document.getElementById('app').classList.add('hidden'); document.getElementById('reg').classList.remove('hidden');
+  document.getElementById('regErr').textContent = msg || ''; document.getElementById('regCode').value = ''; }
+document.getElementById('regForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const err = document.getElementById('regErr'); err.textContent = '';
+  const code = document.getElementById('regCode').value.trim();
+  if (!/^\d{6}$/.test(code)) { err.textContent = '登録コードは6けたの数字です'; return; }
+  const { data, error } = await sb.rpc('tc_register', { p_code: code });
+  if (error) { err.textContent = error.message; return; }
+  tcSet(data.token); document.getElementById('reg').classList.add('hidden'); start();
+});
+
 async function start(){
   const { data:{ session } } = await sb.auth.getSession();
   if (!session) return;
   document.getElementById('login').classList.add('hidden');
+  { const { data, error } = await sb.rpc('tc_check', { p_token: tcGet() || '' });
+    if (error) { showReg(/tc_check/.test(error.message) ? 'SQL 063 が未実行です' : error.message); return; }
+    if (!data || !data.ok) { tcSet(null); showReg(); return; } }
   document.getElementById('app').classList.remove('hidden');
   const { data: stores } = await sb.from('stores').select('id,name').limit(1);
   store = stores?.[0] || null;
@@ -255,7 +283,8 @@ async function punch(staff){
       const { error: upErr } = await sb.storage.from('selfies').upload(photoPath, blob, { contentType:'image/jpeg' });
       if (upErr) { console.warn('upload failed', upErr); await showToast('写真を保存できません', '通信を確認して、もう一度押してください', 3000); return; }
     }
-    const { error } = await sb.rpc('punch', { p_staff_id: staff.id, p_type: type, p_photo: photoPath });
+    const { error } = await sb.rpc('punch', { p_staff_id: staff.id, p_type: type, p_photo: photoPath, p_terminal: tcGet() || '' });
+    if (error && /登録されていません/.test(error.message)) { tcSet(null); showReg('この端末の登録が消されました。登録コードを入れ直してください'); return; }
     if (error) throw error;
 
     if (type === 'douhan')      await fxDouhan(staff.display_name);
