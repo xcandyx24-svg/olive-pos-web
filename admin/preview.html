@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.22 -->
+<title>OLIVE 管理</title><!-- admin v0.23 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -77,6 +77,8 @@
   .cs-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px}.cs-tabs button{background:none;border-radius:0;border-bottom:3px solid transparent;color:var(--muted);height:42px}.cs-tabs button.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:700}
   table.rgden input,#rgDepIn,#rgOpenIn{height:38px;font-size:15px}
   .ck{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--ink);min-height:var(--h)}.ck input{width:auto;height:auto;margin:0}
+  table.pc th,table.pc td{vertical-align:top;text-align:left}.pc-c{display:flex;flex-direction:column;align-items:flex-start;gap:4px;font-size:15px}.pc-c img{width:72px;height:54px;object-fit:cover;border-radius:6px;border:1px solid var(--line);cursor:pointer;background:#eee}
+  .tccode{font-size:44px;font-weight:700;letter-spacing:.2em;text-align:center;font-variant-numeric:tabular-nums;padding:8px 0}
   table.vip input{width:110px;text-align:right}
   .sif{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}.sit{display:flex;align-items:center;gap:6px;margin-top:4px}.sit input{flex:1}
   [data-st] .seg button{height:var(--h)}[data-st] .stb{display:inline-flex;align-items:center;height:var(--h);padding:0 12px;border:1px solid var(--line);border-radius:8px;background:#f6f5f2;white-space:nowrap}
@@ -143,6 +145,7 @@ const SCREENS=[
   {k:'cast_sales',n:'キャスト'},
   {k:'register',n:'現金管理'},
   {k:'nippo',n:'日報登録'},
+  {k:'punches',n:'打刻一覧'},
   {k:'cust',n:'お客様分析'},
   {grp:'設定'},
   {k:'set_cast',n:'キャスト設定'},
@@ -548,14 +551,17 @@ function afterCard(ax,ed){ const h='<h2>アフターの延長<br><small class="m
 const CS_FOREVER='9999-12-31', CS_CATS=['性格','体調','お客様','勤怠','良かったこと','その他'];
 const CS_SP={pay:'特別な支給',deduct:'特別な控除',text:'文字だけ'};
 let csMonth=null, csEdit=false, csDetail=null, csTab='sp';
-const csNowMonth=()=>new Date(Date.now()+9*3600e3).toISOString().slice(0,7)+'-01';
+// v0.23：「今月」は営業日（朝8時で日付が変わる）の月
+const csNowMonth=()=>businessDate().slice(0,7)+'-01';
 const csAddMonth=(m,n)=>{ const [y,mo]=m.split('-').map(Number); const d=new Date(Date.UTC(y,mo-1+n,1)); return d.toISOString().slice(0,7)+'-01'; };
 const csMLabel=m=>{ const [y,mo]=m.split('-').map(Number); return `${y}年${mo}月`; };
 const csMShort=m=>`${Number(m.split('-')[1])}月`;
 const csList=st=>sb.from('staff').select('*').eq('store_id',st).eq('is_active',true).order('sort_order').order('id');
+// v0.23・SQL 063：給与形態（時給・日給）と日給も月ごと。前の行（pay_type が空）は staff の値を使う
 function csTerms(s,rows,m){ const t=rows.filter(r=>r.staff_id===s.id&&r.month<=m&&(r.month===m||!r.only_month)).sort((a,b)=>a.month<b.month?1:-1)[0];
-  if(t) return {...t,exempt_fines:t.exempt_fines||[]};
-  return {month:null,only_month:false,guaranteed_wage:s.guaranteed_wage??null,guarantee_until:s.guarantee_until??null,douhan_quota:s.douhan_quota??null,back_pct:null,back_mode:'add',withhold:null,ctax_pct:null,welfare_mode:'std',welfare_amount:null,exempt_fines:[],slide_ids:null}; }
+  const pay=x=>{ if(s.is_seppan) return {...x,pay_type:null,daily_wage:null}; const pt=x.pay_type||(s.pay_type==='daily'?'daily':'hourly'); return {...x,pay_type:pt,daily_wage:pt==='daily'?(x.pay_type?x.daily_wage:s.daily_wage)??null:null}; };
+  if(t) return pay({...t,exempt_fines:t.exempt_fines||[]});
+  return pay({month:null,only_month:false,guaranteed_wage:s.guaranteed_wage??null,guarantee_until:s.guarantee_until??null,douhan_quota:s.douhan_quota??null,back_pct:null,back_mode:'add',withhold:null,ctax_pct:null,welfare_mode:'std',welfare_amount:null,exempt_fines:[],slide_ids:null,pay_type:null,daily_wage:null}); }
 const csNum=v=>v==null||v===''?null:Number(v);
 const csDate=d=>{ if(!d) return '—'; if(d===CS_FOREVER) return '永久'; const [y,m,dd]=d.split('-').map(Number); return `${y}/${m}/${dd}`; };
 
@@ -574,9 +580,9 @@ PAGES.set_cast=async()=>{
   const all=sf.data||[], halls=all.filter(x=>x.kind==='hall'), casts=all.filter(x=>x.kind==='cast'&&!x.is_trial&&!x.kakari_only);
   const nc={}; (nt.data||[]).forEach(x=>nc[x.staff_id]=(nc[x.staff_id]||0)+1);
   const tbls=stb.error?[]:(stb.data||[]); // SQL 058 の前は空
-  const unitOf=s=>s.is_seppan?null:s.pay_type==='daily'?'daily':'hourly';
+  const unitOf=(s,t)=>s.is_seppan?null:t.pay_type==='daily'?'daily':'hourly';
   const slOk=(ids,u)=>(ids||[]).filter(id=>tbls.some(x=>x.id===id&&x.unit===u));
-  const slTxt=(s,t)=>{ const u=unitOf(s); if(!u) return '—'; const ok=slOk(t.slide_ids,u); return ok.length?esc(ok.map(id=>tbls.find(x=>x.id===id).name).join('・')):'<span class="badge warnb">未選択</span>'; };
+  const slTxt=(s,t)=>{ const u=unitOf(s,t); if(!u) return '—'; const ok=slOk(t.slide_ids,u); return ok.length?esc(ok.map(id=>tbls.find(x=>x.id===id).name).join('・')):'<span class="badge warnb">未選択</span>'; };
   const fines=[...new Set([...(ft.data||[]).map(x=>x.name),'同伴ノルマ','新調日'])];
   const rows=casts.map(s=>({s,t:csTerms(s,tm.data||[],m)}));
   const mOpts=[]; for(let i=1;i>=-12;i--) mOpts.push(csAddMonth(cur,i));
@@ -585,17 +591,17 @@ PAGES.set_cast=async()=>{
   const sel=(k,v,os,dis)=>`<select data-k="${k}" ${dis?'disabled':''}>${os.map(([ov,on])=>`<option value="${esc(ov)}" ${String(v??'')===String(ov)?'selected':''}>${esc(on)}</option>`).join('')}</select>`;
   const inp=(k,v,w,dis)=>`<input data-k="${k}" inputmode="decimal" value="${esc(v??'')}" style="width:${w}px" ${dis?'disabled':''}>`;
   const yn=v=>v==null?'—':v;
-  const cell=({s,t})=>{ const sp=s.is_seppan, daily=!sp&&s.pay_type==='daily';
+  const cell=({s,t})=>{ const sp=s.is_seppan, daily=!sp&&t.pay_type==='daily';
     const back=t.back_pct==null?'—':`${Number(t.back_pct)}%${t.back_mode==='instead'?'（時給なし）':''}`;
     const wf=t.welfare_mode==='amount'?yen(t.welfare_amount):t.welfare_mode==='none'?'なし':'いつもの決まり';
-    if(!E) return [hallName(s.manager_staff_id), sp?'折半':daily?'日給':'時給', slTxt(s,t), daily&&s.daily_wage!=null?yen(s.daily_wage):'—', t.guaranteed_wage!=null?yen(t.guaranteed_wage):'—',
+    if(!E) return [hallName(s.manager_staff_id), sp?'折半':daily?'日給':'時給', slTxt(s,t), daily&&t.daily_wage!=null?yen(t.daily_wage):'—', t.guaranteed_wage!=null?yen(t.guaranteed_wage):'—',
       t.guaranteed_wage!=null?csDate(t.guarantee_until):'—', t.douhan_quota!=null?t.douhan_quota+'回':'—', back, t.withhold==null?'—':t.withhold?'する':'しない',
       t.ctax_pct==null?'—':Number(t.ctax_pct)+'%', wf, t.exempt_fines.length?esc(t.exempt_fines.join('・')):'—', s.day_pay_ok==null?'—':s.day_pay_ok?'可':'不可',
       s.contract_done==null?'—':s.contract_done?'<span class="badge k">済</span>':'<span class="badge warnb">未</span>'];
     const fe=t.guarantee_until===CS_FOREVER;
     return [sel('mgr',s.manager_staff_id||'',[['','未選択'],...halls.map(h=>[h.id,h.display_name])]),
       sp?'折半<br><small class="muted">POSで</small>':sel('pt',daily?'daily':'hourly',[['hourly','時給'],['daily','日給']]),
-      sp?'—':`<button class="ghost sm" data-k="sl" data-v="${esc(JSON.stringify(slOk(t.slide_ids,unitOf(s))))}">${slTxt(s,t)}</button>`, sp?'—':inp('dw',daily?s.daily_wage:'',80,!daily),
+      sp?'—':`<button class="ghost sm" data-k="sl" data-v="${esc(JSON.stringify(slOk(t.slide_ids,unitOf(s,t))))}">${slTxt(s,t)}</button>`, sp?'—':inp('dw',daily?t.daily_wage:'',80,!daily),
       inp('g',t.guaranteed_wage,80), `<span class="cs-gu"><input type="date" data-k="gu" value="${fe?'':esc(t.guarantee_until||'')}" ${fe?'disabled':''}><label><input type="checkbox" data-k="gf" ${fe?'checked':''}>永久</label></span>`,
       inp('q',t.douhan_quota,50)+' 回', inp('bk',t.back_pct==null?'':Number(t.back_pct),50)+' % '+sel('bm',t.back_mode,[['add','上乗せ'],['instead','時給の代わり']]),
       sel('wh',t.withhold==null?'':String(t.withhold),[['','—'],['true','する'],['false','しない']]), inp('ct',t.ctax_pct==null?'':Number(t.ctax_pct),50)+' %',
@@ -609,7 +615,7 @@ PAGES.set_cast=async()=>{
   ${rows.length?`<div class="cs-w ${E?'editing':''}"><table class="reg cs"><tr><th class="nm">名前</th>${HD.map(h=>`<th>${h}</th>`).join('')}</tr>
   ${rows.map(r=>`<tr data-sid="${r.s.id}"><td class="nm">${E?esc(r.s.display_name):`<a data-open="${r.s.id}">${esc(r.s.display_name)}</a>`}${r.t.month===m&&r.t.only_month?`<br><small class="muted">${csMShort(m)}のみ</small>`:''}</td>${cell(r).map(c=>`<td>${c}</td>`).join('')}<td>${nc[r.s.id]?nc[r.s.id]+'件':'—'}</td></tr>`).join('')}</table></div>`
   :'<div class="card muted">在籍のキャストがいません</div>'}
-  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">${E?'表の中で直して「保存」。スライド表・保証時給・期限・同伴ノルマ・バック・源泉徴収・消費税・厚生費・罰金の免除を変えた時は「以降／のみ」を聞きます':'名前を押すと、その人だけの条件とメモが開きます'}${ed&&!E?'。直す時は「編集」':''}</div>`;
+  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">${E?'表の中で直して「保存」。給与・日給・スライド表・保証時給・期限・同伴ノルマ・バック・源泉徴収・消費税・厚生費・罰金の免除を変えた時は「以降／のみ」を聞きます':'名前を押すと、その人だけの条件とメモが開きます'}${ed&&!E?'。直す時は「編集」':''}</div>`;
   $('csM').onchange=()=>{ csMonth=$('csM').value; PAGES.set_cast(); };
   $('main').querySelectorAll('[data-open]').forEach(a=>a.onclick=()=>{ const s=casts.find(x=>x.id===a.dataset.open); csDetail={store:st,s}; csTab='sp'; PAGES.set_cast(); });
   if(!ed) return;
@@ -637,22 +643,21 @@ PAGES.set_cast=async()=>{
     for(const {s,t} of rows){ const tr=tb.querySelector(`tr[data-sid="${s.id}"]`), q=k=>tr.querySelector(`[data-k=${k}]`), nm=s.display_name;
       const int=(k,l,max)=>{ const v=slNum(q(k).value); if(v==null) return null; if(!Number.isFinite(v)||v<0||(max!=null&&v>max)) throw `${nm}：${l}が正しくありません`; return v; };
       let so, to;
-      try{ const pt=s.is_seppan?s.pay_type:q('pt').value, dw=pt==='daily'&&!s.is_seppan?int('dw','日給'):(s.is_seppan?s.daily_wage:null);
-        if(!s.is_seppan&&pt==='daily'&&!dw) throw `${nm}：日給を入れてください`;
+      try{ const pt=s.is_seppan?null:q('pt').value, dw=pt==='daily'?int('dw','日給'):null;
+        if(pt==='daily'&&!dw) throw `${nm}：日給を入れてください`;
         const b=v=>v===''?null:v==='true';
-        so={manager_staff_id:q('mgr').value||null,pay_type:pt,daily_wage:dw==null?null:Math.round(dw),day_pay_ok:b(q('dp').value),contract_done:b(q('ct2').value)};
+        so={manager_staff_id:q('mgr').value||null,day_pay_ok:b(q('dp').value),contract_done:b(q('ct2').value)};
         const g=int('g','保証時給'), gf=q('gf').checked, gu=gf?CS_FOREVER:(q('gu').value||null), wm=q('wm').value, wa=wm==='amount'?int('wa','厚生費'):null, bk=int('bk','小計バック',100);
         if(wm==='amount'&&wa==null) throw `${nm}：厚生費の金額を入れてください`;
         if(q('bm').value==='instead'&&bk==null) throw `${nm}：時給の代わりにする時は、バックの％を入れてください`;
         to={guaranteed_wage:g==null?null:Math.round(g),guarantee_until:g==null?null:gu,douhan_quota:(v=>v==null?null:Math.round(v))(int('q','同伴ノルマ')),back_pct:bk,back_mode:q('bm').value,
           withhold:b(q('wh').value),ctax_pct:int('ct','消費税',100),welfare_mode:wm,welfare_amount:wa==null?null:Math.round(wa),exempt_fines:JSON.parse(q('ex').dataset.v||'[]'),
-          slide_ids:(v=>v.length?v.sort():null)(q('sl')?JSON.parse(q('sl').dataset.v||'[]'):[])};
+          slide_ids:(v=>v.length?v.sort():null)(q('sl')?JSON.parse(q('sl').dataset.v||'[]'):[]),pay_type:pt,daily_wage:dw==null?null:Math.round(dw)};
       }catch(e){ if(typeof e==='string'){ await uiAlert(e); return; } throw e; }
-      const so0={manager_staff_id:s.manager_staff_id||null,pay_type:s.pay_type,daily_wage:s.daily_wage??null,day_pay_ok:s.day_pay_ok??null,contract_done:s.contract_done??null};
-      if(!s.is_seppan&&so0.pay_type!=='daily') so0.pay_type='hourly'; if(so0.pay_type!=='daily'&&!s.is_seppan) so0.daily_wage=null;
+      const so0={manager_staff_id:s.manager_staff_id||null,day_pay_ok:s.day_pay_ok??null,contract_done:s.contract_done??null};
       const to0={guaranteed_wage:t.guaranteed_wage??null,guarantee_until:t.guaranteed_wage==null?null:(t.guarantee_until??null),douhan_quota:t.douhan_quota??null,back_pct:t.back_pct==null?null:Number(t.back_pct),back_mode:t.back_mode||'add',
         withhold:t.withhold??null,ctax_pct:t.ctax_pct==null?null:Number(t.ctax_pct),welfare_mode:t.welfare_mode||'std',welfare_amount:t.welfare_mode==='amount'?(t.welfare_amount??null):null,exempt_fines:t.exempt_fines||[],
-        slide_ids:(v=>v.length?v.sort():null)(s.is_seppan?[]:slOk(t.slide_ids,unitOf(s)))};
+        slide_ids:(v=>v.length?v.sort():null)(s.is_seppan?[]:slOk(t.slide_ids,unitOf(s,t))),pay_type:t.pay_type,daily_wage:t.daily_wage==null?null:Number(t.daily_wage)};
       const r={staff_id:s.id}; if(JSON.stringify(so)!==JSON.stringify(so0)) r.staff=so; if(JSON.stringify(to)!==JSON.stringify(to0)){ r.terms=to; needP=true; }
       if(r.staff||r.terms) out.push(r); }
     if(!out.length){ csEdit=false; toast('変更はありません'); PAGES.set_cast(); return; }
@@ -805,6 +810,48 @@ function payNumWire(st){ const sv=$('pnSave'); if(!sv) return; sv.onclick=guard(
   if(!await uiConfirm('日払・体験・ポイント・同伴の設定を保存しますか？')) return;
   const r=await rpc('admin_save_pay_settings',{p_store:st,p_vals:v}); if(!r.ok) return; toast('保存しました'); PAGES.set_pay(); }); }
 
+// ---------- 打刻一覧 v0.23・SQL 063：日ごとの打刻と写真（見るだけ。打刻の修正は POS） ----------
+let pcDate=null;
+const PC_TYPES=[['douhan','同伴'],['clock_in','出勤'],['after','アフター'],['clock_out','退勤']];
+PAGES.punches=async()=>{ const st=storeId; if(!pcDate) pcDate=businessDate(); const d=pcDate;
+  const head=`<h1>打刻一覧 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>
+  <div class="row" style="margin-bottom:12px"><button class="ghost" id="pcPrev">◀</button><input type="date" id="pcDate" value="${d}" style="width:auto"><button class="ghost" id="pcNext">▶</button><button class="ghost" id="pcToday">今日</button></div>`;
+  $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>';
+  const wire=()=>{ $('pcDate').onchange=()=>{ if($('pcDate').value){ pcDate=$('pcDate').value; PAGES.punches(); } }; $('pcPrev').onclick=()=>{ pcDate=dayAdd(d,-1); PAGES.punches(); }; $('pcNext').onclick=()=>{ pcDate=dayAdd(d,1); PAGES.punches(); }; $('pcToday').onclick=()=>{ pcDate=businessDate(); PAGES.punches(); }; };
+  const [ev,sf]=await Promise.all([ sb.from('attendance_events').select('staff_id,event_type,event_at,photo_path,is_corrected').eq('store_id',st).eq('business_date',d).order('event_at'),
+    sb.from('staff').select('id,display_name,kind,sort_order').eq('store_id',st).order('sort_order').order('id') ]);
+  if(page!=='punches'||storeId!==st||pcDate!==d) return;
+  const er=ev.error||sf.error; if(er){ $('main').innerHTML=head+`<div class="card err">読み込めません：${esc(er.message)}</div>`; wire(); return; }
+  const by={}; (ev.data||[]).forEach(e=>{ const o=by[e.staff_id]||(by[e.staff_id]={}); o[e.event_type]=e; });
+  const people=(sf.data||[]).filter(x=>by[x.id]);
+  const paths=(ev.data||[]).map(e=>e.photo_path).filter(Boolean); let urls={};
+  if(paths.length){ const r=await sb.storage.from('selfies').createSignedUrls(paths,3600); (r.data||[]).forEach(x=>{ if(x.signedUrl) urls[x.path]=x.signedUrl; }); if(page!=='punches'||pcDate!==d) return; }
+  const hm=t=>{ const x=new Date(t); return `${x.getHours()}:${String(x.getMinutes()).padStart(2,'0')}`; };
+  const cell=e=>!e?'<span class="muted">—</span>':`<div class="pc-c"><span>${hm(e.event_at)}${e.is_corrected?' <small class="badge warnb">修正</small>':''}</span>${e.photo_path?(urls[e.photo_path]?`<img src="${esc(urls[e.photo_path])}" data-big="${esc(urls[e.photo_path])}" alt="">`:'<small class="muted">写真を出せません</small>'):'<small class="muted">写真なし</small>'}</div>`;
+  $('main').innerHTML=head+(people.length?`<div class="cs-w"><table class="reg pc"><tr><th class="nm">名前</th>${PC_TYPES.map(([,n])=>`<th>${n}</th>`).join('')}</tr>
+    ${people.map(p=>`<tr><td class="nm">${esc(p.display_name)}${p.kind==='hall'?' <small class="muted">黒服</small>':''}</td>${PC_TYPES.map(([k])=>`<td>${cell(by[p.id][k])}</td>`).join('')}</tr>`).join('')}</table></div>`
+    :'<div class="card muted">この日の打刻はありません</div>')+`<div class="muted" style="font-size:13px;margin-top:10px">写真を押すと大きく出ます。打刻の修正は POS の在籍リストで行います</div>`;
+  wire();
+  $('main').querySelectorAll('[data-big]').forEach(im=>im.onclick=()=>{ const m=modal(`<img src="${esc(im.dataset.big)}" alt="" style="width:100%;border-radius:10px"><div class="bar"><button class="primary" data-k="ok">閉じる</button></div>`); m.querySelector('[data-k=ok]').onclick=()=>m.remove(); }); };
+
+// ---------- タイムカードの端末 v0.23・SQL 063（オーナーだけ）：登録した端末だけ打刻できる ----------
+async function tcCard(){ const box=$('tcBox'); if(!box) return; const st=storeId;
+  const r=await sb.rpc('admin_tc_list',{p_store:st}); if(page!=='pw'||storeId!==st||!$('tcBox')) return;
+  if(r.error){ box.innerHTML=`<h2>タイムカードの端末</h2><div class="err">${esc(/admin_tc_list/.test(r.error.message)?'SQL 063 が未実行です：':'読み込めません：')}${esc(r.error.message)}</div>`; return; }
+  const L=r.data||[];
+  box.innerHTML=`<h2>タイムカードの端末</h2><div class="muted" style="font-size:14px;margin-bottom:8px">ここで登録した端末だけ打刻できます。「登録コードを出す」で出た6けたを、その端末のタイムカードで入れます（30分有効）</div>
+    <table class="t"><tr><th>端末</th><th>状態</th><th>最後の打刻</th><th></th></tr>
+    ${L.map(x=>`<tr><td>${esc(x.label)}</td><td>${x.registered?'<span class="badge k">登録済み</span>':x.code_expires_at?`<span class="badge warnb">コード待ち</span><br><small class="muted">${esc(fmtDT(x.code_expires_at))} まで</small>`:'<span class="badge gray">未登録</span>'}</td>
+      <td>${x.last_used_at?esc(fmtDT(x.last_used_at)):'—'}</td><td style="text-align:right;white-space:nowrap"><button class="ghost sm" data-tcre="${x.id}" data-l="${esc(x.label)}">登録し直す</button> <button class="ghost sm" data-tcdel="${x.id}" data-l="${esc(x.label)}">消す</button></td></tr>`).join('')||'<tr><td class="muted" colspan="4">まだありません</td></tr>'}</table>
+    <div class="grid2" style="margin-top:10px"><label>端末の名前<input id="tcLabel" placeholder="例：入口の iPad" maxlength="30"></label><div><button class="primary" id="tcAdd" style="width:100%">登録コードを出す</button></div></div>`;
+  const show=(label,code)=>new Promise(res=>{ const m=modal(`<h2 style="margin:0">登録コード</h2><div>${esc(label)}</div><div class="tccode">${esc(code)}</div><div class="muted" style="font-size:14px">この端末のタイムカードを開いて入れてください（30分有効・1回だけ使えます）</div><div class="bar"><button class="primary" data-k="ok">閉じる</button></div>`); m.querySelector('[data-k=ok]').onclick=()=>{ m.remove(); res(); }; });
+  const add=$('tcAdd'); add.onclick=guard(add,async()=>{ const lb=$('tcLabel').value.trim(); if(!lb){ await uiAlert('端末の名前を入れてください'); return; }
+    const x=await rpc('admin_tc_code',{p_store:st,p_id:null,p_label:lb}); if(!x.ok) return; await show(lb,x.data.code); tcCard(); });
+  box.querySelectorAll('[data-tcre]').forEach(b=>b.onclick=guard(b,async()=>{ if(!await uiConfirm(`${b.dataset.l} を登録し直しますか？\n今の登録は使えなくなり、新しい登録コードを入れるまで、この端末では打刻できません`)) return;
+    const x=await rpc('admin_tc_code',{p_store:st,p_id:b.dataset.tcre,p_label:null}); if(!x.ok) return; await show(b.dataset.l,x.data.code); tcCard(); }));
+  box.querySelectorAll('[data-tcdel]').forEach(b=>b.onclick=guard(b,async()=>{ if(!await uiConfirm(`${b.dataset.l} を消しますか？\nこの端末では打刻できなくなります`,'消す','danger')) return;
+    const x=await rpc('admin_tc_delete',{p_id:b.dataset.tcdel}); if(!x.ok) return; toast('消しました'); tcCard(); })); }
+
 // ---------- 表示設定（オーナー） ----------
 PAGES.o_perms=()=>{
   const s=stSet(); const perms={...(s.perms||{})}; if(!perms.pl&&(perms.pl_day||perms.pl_month)) perms.pl=perms.pl_day||perms.pl_month; if(!perms.register&&perms.register_month) perms.register=perms.register_month;
@@ -907,6 +954,7 @@ PAGES.pw=async()=>{
     ${(d.accounts||[]).map(x=>row(`管理サイト：${esc(x.login_id)}`,esc(x.name)+(x.is_owner&&x.name!=='オーナー'?'（オーナー）':'')+(x.is_active?'':'（止めている）'),x.login_id===me.login_id?'own:':`acc:${x.id}`,x.pw)).join('')}
   </table></div>`;
   $('main').querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{ const v=b.previousElementSibling; const on=b.textContent==='見る'; v.textContent=on?v.dataset.pwv:'••••••••'; b.textContent=on?'隠す':'見る'; });
+  $('main').insertAdjacentHTML('beforeend','<div class="card" id="tcBox"><h2>タイムカードの端末</h2><div class="muted">読み込み中…</div></div>'); tcCard();
   if(O) $('rotAll').onclick=guard($('rotAll'),()=>rotateAll());
   $('main').querySelectorAll('[data-pw]').forEach(b=>b.onclick=()=>{ if(b.dataset.pw==='own:'){ $('myPw1').focus(); window.scrollTo(0,0); return; } changeOne(b.dataset.pw,b.dataset.label); });
 };
