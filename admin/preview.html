@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.21 -->
+<title>OLIVE 管理</title><!-- admin v0.22 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -76,6 +76,8 @@
   .cs-gu{display:inline-flex;align-items:center;gap:6px}.cs-gu input[type=date]{width:140px;text-align:left}.cs-gu label{display:inline-flex;align-items:center;gap:3px;font-size:13px;color:var(--ink)}.cs-gu input[type=checkbox]{width:auto;height:auto}
   .cs-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px}.cs-tabs button{background:none;border-radius:0;border-bottom:3px solid transparent;color:var(--muted);height:42px}.cs-tabs button.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:700}
   table.rgden input,#rgDepIn,#rgOpenIn{height:38px;font-size:15px}
+  .ck{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--ink);min-height:var(--h)}.ck input{width:auto;height:auto;margin:0}
+  table.vip input{width:110px;text-align:right}
   .sif{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}.sit{display:flex;align-items:center;gap:6px;margin-top:4px}.sit input{flex:1}
   [data-st] .seg button{height:var(--h)}[data-st] .stb{display:inline-flex;align-items:center;height:var(--h);padding:0 12px;border:1px solid var(--line);border-radius:8px;background:#f6f5f2;white-space:nowrap}
   .cs-li{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.cs-li:last-child{border-bottom:none}
@@ -469,11 +471,13 @@ PAGES.set_pay=async()=>{
   $('main').innerHTML=`<h1>給与項目 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>
   ${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
   ${afterCard(ax,ed)}
+  ${payNumCard(pos,ed)}
   ${stb.error?`<div class="card err">${esc(/slide_tables/.test(stb.error.message)&&/does not exist|schema cache/.test(stb.error.message)?'SQL 058 が未実行です：':'スライド表を読み込めません：')}${esc(stb.error.message)}</div>`:stSection(stb.data||[],srw.data||[],ctm.data||[],ed)}
   ${slideCard('hall',hb.data||[],ed,`<div class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.6">単位は万円。月の総売上が、その行の売上以上になっている行のうち、一番下の行を使います。一番上の行より売上が少ない月は0円です。<br>人件費比率（キャストの給与＋黒服の月給＋体験の報酬 ÷ 総売上）が 目標比率以内／＋2%まで／＋5%まで／5%超 で金額が決まり、売上ボーナスを足した総額を、黒服の売上シェアで分けます</div>`)}
   ${ft.error?`<div class="card err">${esc(/fine_types/.test(ft.error.message)&&/does not exist|schema cache/.test(ft.error.message)?'SQL 052 が未実行です：':'罰金の種類を読み込めません：')}${esc(ft.error.message)}</div>`:fineCard(ft.data||[],ed,pos.data?.daily_hours)}`;
   $('main').querySelectorAll('tr[data-fr]').forEach(tr=>fineRowWire(tr,ed));
   if(!ed) return;
+  payNumWire(st);
   { const ac=$('main').querySelector('[data-after]'); if(ac){ let on=!!ax.data?.on; ac.querySelectorAll('#afOn button').forEach(b=>b.onclick=()=>{ on=b.dataset.v==='true'; ac.querySelectorAll('#afOn button').forEach(x=>x.classList.toggle('on',x===b)); });
     const sv=$('afSave'); sv.onclick=guard(sv,async()=>{ const m=slNum($('afM').value); if(m==null||!Number.isInteger(m)||m<1||m>180){ await uiAlert('何分前かは 1〜180 の整数で入れてください'); return; } const cl=closeTxt(ax.data.close);
       if(!await uiConfirm(on?`閉店（${cl}）の ${m}分前を過ぎたアフターは、閉店まで働いたことにしますか？\nこれから押す打刻から変わります`:'アフターの延長を「しない」にしますか？\nこれから押す打刻から変わります')) return;
@@ -740,6 +744,66 @@ PAGES.set_store=async()=>{ const st=storeId, ed=perm('set_store')==='edit', dis=
     if(!await uiConfirm('店の情報を保存しますか？'+(chg.length?'\n'+chg.map(x=>'・'+x).join('\n'):''))) return;
     const x=await rpc('admin_save_store_info',{p_store:st,p_name:name,p_open:op||null,p_close:cl,p_address:v('siAddr'),p_phone:v('siTel'),p_email:v('siMail'),p_invoice:iv,p_receipt_mail:v('siRcpt')}); if(!x.ok) return;
     toast('保存しました'); me=await loadMe()||me; renderStoreSel(); PAGES.set_store(); }); };
+
+// ---------- POS設定 v0.22・SQL 062：料金（メニュー以外）はここだけで変える。POS では見るだけ ----------
+// HC・BC は伝票を立ち上げた時に人数分つける。金額だけ選ぶ（伝票の名前は HC／BC）。HC は係にバック100%（振分できる）、BC は誰にもバックなし
+const HCBC_OPTS=[[null,'付けない'],...Array.from({length:10},(_,i)=>[(i+1)*1000,((i+1)*1000).toLocaleString('ja-JP')+'円'])];
+PAGES.set_pos=async()=>{ const st=storeId, ed=perm('set_pos')==='edit', dis=ed?'':'disabled';
+  $('main').innerHTML=`<h1>POS設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="card muted">読み込み中…</div>`;
+  const [ps,tb]=await Promise.all([ sb.from('pos_settings').select('*').eq('store_id',st).maybeSingle(), sb.from('tables').select('id,name,vip_set_fee,vip_ext_fee,sort_order').eq('store_id',st).order('sort_order').order('id') ]);
+  if(page!=='set_pos'||storeId!==st) return;
+  const er=ps.error||tb.error; if(er){ $('main').innerHTML=`<h1>POS設定</h1><div class="card err">読み込めません：${esc(er.message)}</div>`; return; }
+  const d=ps.data||{}; if(!('auto_hc_amount' in d)){ $('main').innerHTML=`<h1>POS設定</h1><div class="card err">SQL 062 が未実行です</div>`; return; }
+  const num=(id,label,v)=>`<label>${label}<input id="${id}" inputmode="decimal" value="${esc(v??'')}" ${dis}></label>`;
+  const amt=(id,label,v)=>`<label>${label}<select id="${id}" ${dis}>${HCBC_OPTS.map(([a,n])=>`<option value="${a??''}" ${(v??null)===a?'selected':''}>${n}</option>`).join('')}</select></label>`;
+  const tables=tb.data||[];
+  $('main').innerHTML=`<h1>POS設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
+  <div class="card"><h2>料金</h2><div class="grid2">
+    ${num('psSetM','最初のセット時間（分）',d.set_minutes)}${num('psSetP','セット1名単価（円）',d.set_unit_price)}
+    ${num('psExtM','延長単位（分）',d.ext_minutes)}${num('psExtP','延長1名単価（円）',d.ext_unit_price)}
+    ${num('psSvc','サービス料率（%）',d.service_rate)}${num('psTax','消費税率（%）',d.tax_rate)}
+    ${num('psRnd','合計の切り上げ単位（円）',d.total_round_unit)}
+    ${amt('psHc','HC（人数分・係にバック100%）',d.auto_hc_amount)}${amt('psBc','BC（人数分・バックなし）',d.auto_bc_amount)}
+  </div></div>
+  <div class="card"><h2>伝票</h2>
+    <label class="ck"><input type="checkbox" id="psDk" ${d.douhan_is_kakari?'checked':''} ${dis}>同伴にした人を自動で係にする</label>
+    <label class="ck"><input type="checkbox" id="psCk" ${d.cust_auto_kakari!==false?'checked':''} ${dis}>お客様を登録したら、そのお客様の係を自動で入れる</label></div>
+  <div class="card"><h2>VIP料金（卓ごと・0＝通常卓）</h2>
+    <div class="muted" style="font-size:13px;margin-bottom:6px">VIP代は部屋に1回、VIP延長は延長ごと。人数は掛けません</div>
+    <table class="t vip"><tr><th>卓</th><th>VIP代（円）</th><th>VIP延長（円）</th></tr>
+    ${tables.map(t=>`<tr data-tb="${t.id}"><td>${esc(t.name)}</td><td><input inputmode="numeric" data-v="set" value="${esc(String(t.vip_set_fee||0))}" ${dis}></td><td><input inputmode="numeric" data-v="ext" value="${esc(String(t.vip_ext_fee||0))}" ${dis}></td></tr>`).join('')||'<tr><td class="muted" colspan="3">卓がありません</td></tr>'}</table></div>
+  ${ed?'<div class="row"><button class="primary" id="psSave">保存</button></div>':''}
+  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">保存すると、POS の次の伝票から変わります（今開いている伝票はそのまま）。日払の上限・体験の源泉・ポイント・同伴の準備時間は「給与項目」で変えます</div>`;
+  if(!ed) return;
+  const sv=$('psSave'); sv.onclick=guard(sv,async()=>{
+    const g=id=>slNum($(id).value), v={set_minutes:g('psSetM'),set_unit_price:g('psSetP'),ext_minutes:g('psExtM'),ext_unit_price:g('psExtP'),service_rate:g('psSvc'),tax_rate:g('psTax'),total_round_unit:g('psRnd')};
+    const lab={set_minutes:'最初のセット時間',set_unit_price:'セット1名単価',ext_minutes:'延長単位',ext_unit_price:'延長1名単価',service_rate:'サービス料率',tax_rate:'消費税率',total_round_unit:'合計の切り上げ単位'};
+    for(const [k,x] of Object.entries(v)){ if(x==null||!Number.isFinite(x)||x<0){ await uiAlert(`${lab[k]}を0以上の数で入れてください`); return; } }
+    for(const k of ['set_minutes','set_unit_price','ext_minutes','ext_unit_price','total_round_unit']) if(!Number.isInteger(v[k])){ await uiAlert(`${lab[k]}は整数で入れてください`); return; }
+    if(!(v.set_minutes>0)||!(v.ext_minutes>0)){ await uiAlert('セット時間と延長単位は1分以上にしてください'); return; }
+    if(v.service_rate>100||v.tax_rate>100){ await uiAlert('サービス料率・消費税率は100%までです'); return; }
+    v.auto_hc_amount=$('psHc').value?Number($('psHc').value):null; v.auto_bc_amount=$('psBc').value?Number($('psBc').value):null;
+    v.douhan_is_kakari=$('psDk').checked; v.cust_auto_kakari=$('psCk').checked;
+    const vip=[]; for(const tr of $('main').querySelectorAll('tr[data-tb]')){ const a=slNum(tr.querySelector('[data-v=set]').value)??0, b=slNum(tr.querySelector('[data-v=ext]').value)??0;
+      if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0){ await uiAlert(`${tr.cells[0].textContent} のVIP料金は0以上の整数で入れてください`); return; } vip.push({id:tr.dataset.tb,set:a,ext:b}); }
+    if(!await uiConfirm('POS設定を保存しますか？\nPOS の次の伝票から変わります')) return;
+    const r=await rpc('admin_save_pos_settings',{p_store:st,p_vals:v,p_vip:vip}); if(!r.ok) return; toast('保存しました'); PAGES.set_pos(); }); };
+
+// v0.22・SQL 062：給与で使う数（日払の上限・体験の源泉・ポイント・同伴の準備時間）。前は POS の料金設定にあった
+function payNumCard(pos,ed){ const d=pos.data||{}, dis=ed?'':'disabled'; const num=(id,label,v)=>`<label>${label}<input id="${id}" inputmode="decimal" value="${esc(v??'')}" ${dis}></label>`;
+  return `<div class="card" data-paynum><h2>日払・体験・ポイント・同伴</h2><div class="grid2">
+    ${num('pnCapC','日払の上限（キャスト）円',d.advance_cap_cast)}${num('pnCapH','日払の上限（黒服）円',d.advance_cap_hall)}
+    ${num('pnTw','体験入店の源泉（%）',d.trial_withholding_rate)}
+    ${num('pnSp','セット1名のポイント',d.set_point)}${num('pnEp','延長1回1名のポイント',d.ext_point)}
+    ${num('pnDh','同伴の準備時間（分・0＝警告なし）',d.douhan_punch_limit_min)}
+    ${ed?'<div><button class="primary" id="pnSave" style="width:100%">保存</button></div>':''}</div>
+    <div class="muted" style="font-size:13px;margin-top:8px;line-height:1.6">ポイントは人数分かけて、係で同じに分けます。同伴の準備時間：伝票の立ち上げから出勤の打刻までがこれを超えると、タイムカードで本人に警告します</div></div>`; }
+function payNumWire(st){ const sv=$('pnSave'); if(!sv) return; sv.onclick=guard(sv,async()=>{
+  const g=id=>slNum($(id).value), v={advance_cap_cast:g('pnCapC'),advance_cap_hall:g('pnCapH'),trial_withholding_rate:g('pnTw'),set_point:g('pnSp'),ext_point:g('pnEp'),douhan_punch_limit_min:g('pnDh')};
+  if(Object.values(v).some(x=>x==null||!Number.isFinite(x)||x<0)){ await uiAlert('全部の欄に0以上の数を入れてください'); return; }
+  if(v.trial_withholding_rate>100){ await uiAlert('体験入店の源泉は100%までです'); return; }
+  if(!await uiConfirm('日払・体験・ポイント・同伴の設定を保存しますか？')) return;
+  const r=await rpc('admin_save_pay_settings',{p_store:st,p_vals:v}); if(!r.ok) return; toast('保存しました'); PAGES.set_pay(); }); }
 
 // ---------- 表示設定（オーナー） ----------
 PAGES.o_perms=()=>{
