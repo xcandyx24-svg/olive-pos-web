@@ -16,3 +16,4 @@
   タイムカード：https://xcandyx24-svg.github.io/olive-pos-web/timecard/
   管理サイト：https://xcandyx24-svg.github.io/olive-pos-web/admin/preview.html
 - 会話が重くなったら、言われる前に引き継ぎ文を出す
+- SQL を渡す時は、実行する SQL のすぐ下に、その PR（Merge する）のリンクを置く（さかのぼらなくていいように）
