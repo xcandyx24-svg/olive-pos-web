@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.24 -->
+<title>OLIVE 管理</title><!-- admin v0.25 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -320,14 +320,14 @@ async function regDayPage(){
   <div class="card"><h2>入出金</h2>
     ${canMove?`<div class="row" style="margin-bottom:10px"><select id="rgKind" style="width:auto"><option value="out">出金</option><option value="in">入金</option></select><input id="rgAmt" inputmode="numeric" placeholder="金額" style="width:130px;text-align:right"><select id="rgMemoSel" style="width:auto"><option value="領収書精算">領収書精算</option><option value="支払い">支払い</option><option value="__other">その他</option></select><input id="rgMemo" placeholder="内容を入力" style="flex:1;min-width:160px;display:none"><button class="ok" id="rgAdd">追加</button></div>`:saved&&ed?'<div class="muted" style="margin-bottom:6px;font-size:14px">精算済みのため変更できません</div>':''}
     <table class="t">${moves.map(m=>`<tr><td style="width:60px"><span class="badge ${m.kind==='out'?'gray':''}">${m.kind==='out'?'出金':'入金'}</span></td><td style="width:100%">${esc(m.memo||'')}</td><td class="num">${yen(m.amount)}</td>${canMove?`<td><button class="ghost sm" data-mvdel="${m.id}">削除</button></td>`:''}</tr>`).join('')}
-    <tr><td><span class="badge gray">出金</span></td><td style="width:100%">日払い合計 <small class="muted">${advRows.length?esc(advRows.map(a=>nm(a.staff_id)+' '+a.amount.toLocaleString()).join('、')):'なし'}（POS の在籍リストで入力）</small></td><td class="num">${yen(advSum)}</td>${canMove?'<td></td>':''}</tr></table></div>
+    <tr><td><span class="badge gray">出金</span></td><td style="width:100%">日払（立替）合計 <small class="muted">${advRows.length?esc(advRows.map(a=>nm(a.staff_id)+' '+a.amount.toLocaleString()).join('、')):'なし'}（POS の在籍リストで入力）</small></td><td class="num">${yen(advSum)}</td>${canMove?'<td></td>':''}</tr></table></div>
   <div class="card"><h2>レジ金合わせ</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;align-items:start">
     <table class="t rgden"><tr><th>金種</th><th class="num">枚数</th><th class="num">金額</th></tr>${DENOMS.map(([v,n])=>{ const c=regNum(cnt[v]); return `<tr><td>${n}</td><td class="num">${canSave?`<input data-den="${v}" inputmode="numeric" value="${cnt[v]||''}" style="width:90px;text-align:right">`:(c?c.toLocaleString():'')}</td><td class="num" data-denamt="${v}"></td></tr>`; }).join('')}<tr><td><b>合計金額</b></td><td></td><td class="num"><b id="rgCounted"></b></td></tr></table>
     <div class="kv2">
       <span>本日釣銭${gapDays.length?`<br><small class="muted">${gapDays.map(md).join('・')} の未精算分 ${sgnYen(gapNet)} を含む</small>`:''}</span>${!saved&&!prevRow&&canSave?`<input id="rgOpenIn" inputmode="numeric" value="${regOpening||''}" placeholder="初回のみ入力" style="width:150px;text-align:right">`:`<span class="num" id="rgOpen"></span>`}
       <span>現金売上 <small class="muted">その日に受け取った現金</small></span><span class="num" id="rgSales"></span>
       <span>入金合計</span><span class="num" id="rgIn"></span>
-      <span>出金合計 <small class="muted">日払いを含む</small></span><span class="num" id="rgOut"></span>
+      <span>出金合計 <small class="muted">日払（立替）を含む</small></span><span class="num" id="rgOut"></span>
       <span>レジ内現金（理論値）</span><span class="num" id="rgExp"></span>
       <span>レジ内現金</span><span class="num" id="rgCnt2"></span>
       <b>現金過不足</b><b class="num" id="rgDiff"></b>
@@ -427,7 +427,7 @@ function slideRead(card,kind){ const d=SLIDE_DEF[kind]; const out=[];
   return {rows:out}; }
 // v0.18・SQL 058：スライド表（店ごとにいくつでも）。何で決まるか（係小計・ポイント・同伴数・出勤日数）と時給／日給を表ごとに決める。キャストごとに使う表は「キャスト設定」で選ぶ
 // v0.19・SQL 059：反応数（反応◎の回数）・組数（係の伝票の数）・人数（係の伝票の客数の合計）を追加。何で決まるかは作る時だけ選べて、作ったあとは変えられない
-const ST_BASIS=[['sales','係小計','係小計（万円以上）',10000],['points','ポイント','ポイント（以上）',1],['douhan','同伴数','同伴（回以上）',1],['days','出勤日数','出勤（日以上）',1],['reactions','反応数','反応◎（回以上）',1],['groups','組数','係の組数（組以上）',1],['guests','人数','係の人数（人以上）',1]];
+const ST_BASIS=[['sales','係小計','係小計（万円以上）',10000],['points','ポイント','ポイント（以上）',1],['douhan','同伴数','同伴（回以上）',1],['days','出勤数','出勤（日以上）',1],['reactions','反応数','反応◎（回以上）',1],['groups','組数','係の組数（組以上）',1],['guests','人数','係の人数（人以上）',1]];
 const stB=k=>ST_BASIS.find(x=>x[0]===k)||ST_BASIS[0];
 function stCard(t,rows,users,ed){ const dis=ed?'':'disabled', b=stB(t.basis||'sales'), un=t.unit||'hourly';
   const body=rows.map(r=>`<tr data-i><td><input inputmode="decimal" data-c="th" value="${esc(slShow(r.threshold,b[3]))}" ${dis}></td><td><input inputmode="numeric" data-c="am" value="${esc(r.amount??'')}" ${dis}></td>${ed?'<td class="x"><button class="ghost sm" data-del aria-label="行を消す">✕</button></td>':''}</tr>`).join('');
@@ -613,7 +613,7 @@ PAGES.set_cast=async()=>{
       sel('wm',t.welfare_mode,[['std','いつもの決まり'],['amount','金額'],['none','なし']])+' '+inp('wa',t.welfare_amount,80,t.welfare_mode!=='amount'),
       `<button class="ghost sm" data-k="ex" data-v="${esc(JSON.stringify(t.exempt_fines))}">${t.exempt_fines.length?esc(t.exempt_fines.join('・')):'—'}</button>`,
       sel('dp',s.day_pay_ok==null?'':String(s.day_pay_ok),[['','—'],['true','可'],['false','不可']]), sel('ct2',s.contract_done==null?'':String(s.contract_done),[['','—'],['true','済'],['false','未']])]; };
-  const HD=['担当','給与','スライド表','日給','保証時給','保証の期限','同伴ノルマ','小計バック','源泉徴収','消費税','厚生費','罰金の免除','日払い','契約書','メモ'];
+  const HD=['担当','給与','スライド表','日給','保証時給','保証の期限','同伴ノルマ','小計バック','源泉徴収','消費税','厚生費','罰金の免除','日払（立替）','契約書','メモ'];
   $('main').innerHTML=head+`${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
   <div class="row" style="margin-bottom:12px"><select id="csM" style="width:auto" ${E?'disabled':''}>${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select>
     <span style="flex:1"></span>${ed?(E?'<button class="ghost" id="csCancel">やめる</button><button class="primary" id="csSave">保存</button>':'<button class="ghost" id="csEd">編集</button>'):''}</div>
@@ -703,7 +703,7 @@ async function csHallPage(){ const st=storeId, ed=perm('set_cast')==='edit', cur
       sel('dp',s.day_pay_ok==null?'':String(s.day_pay_ok),[['','—'],['true','可'],['false','不可']]), sel('ct2',s.contract_done==null?'':String(s.contract_done),[['','—'],['true','済'],['false','未']]),
       sel('wh',t.withhold==null?'':String(t.withhold),[['','—'],['true','する'],['false','しない']]), inp('ct',t.ctax_pct??'',50)+' %',
       sel('wm',t.welfare_mode,[['std','いつもの決まり'],['amount','金額'],['none','なし']])+' '+inp('wa',t.welfare_amount,80,t.welfare_mode!=='amount')]; };
-  const HD=['給与','金額','日払い','契約書','源泉徴収','消費税','厚生費'];
+  const HD=['給与','金額','日払（立替）','契約書','源泉徴収','消費税','厚生費'];
   $('main').innerHTML=head+`${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}${sql064?'':'<div class="card err">SQL 064 が未実行です（黒服の月給・時給を保存できません）</div>'}
   <div class="row" style="margin-bottom:12px"><select id="csM" style="width:auto" ${E?'disabled':''}>${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select>
     <span style="flex:1"></span>${ed?(E?'<button class="ghost" id="csCancel">やめる</button><button class="primary" id="csSave">保存</button>':'<button class="ghost" id="csEd">編集</button>'):''}</div>
@@ -853,7 +853,7 @@ PAGES.set_pos=async()=>{ const st=storeId, ed=perm('set_pos')==='edit', dis=ed?'
     <table class="t vip"><tr><th>卓</th><th>VIP代（円）</th><th>VIP延長（円）</th></tr>
     ${tables.map(t=>`<tr data-tb="${t.id}"><td>${esc(t.name)}</td><td><input inputmode="numeric" data-v="set" value="${esc(String(t.vip_set_fee||0))}" ${dis}></td><td><input inputmode="numeric" data-v="ext" value="${esc(String(t.vip_ext_fee||0))}" ${dis}></td></tr>`).join('')||'<tr><td class="muted" colspan="3">卓がありません</td></tr>'}</table></div>
   ${ed?'<div class="row"><button class="primary" id="psSave">保存</button></div>':''}
-  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">保存すると、POS の次の伝票から変わります（今開いている伝票はそのまま）。日払の上限・体験の源泉・ポイント・同伴の準備時間は「給与項目」で変えます</div>`;
+  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">保存すると、POS の次の伝票から変わります（今開いている伝票はそのまま）。日払（立替）の上限・体験の源泉・ポイント・同伴の準備時間は「給与項目」で変えます</div>`;
   if(!ed) return;
   const sv=$('psSave'); sv.onclick=guard(sv,async()=>{
     const g=id=>slNum($(id).value), v={set_minutes:g('psSetM'),set_unit_price:g('psSetP'),ext_minutes:g('psExtM'),ext_unit_price:g('psExtP'),service_rate:g('psSvc'),tax_rate:g('psTax'),total_round_unit:g('psRnd')};
@@ -871,8 +871,8 @@ PAGES.set_pos=async()=>{ const st=storeId, ed=perm('set_pos')==='edit', dis=ed?'
 
 // v0.22・SQL 062：給与で使う数（日払の上限・体験の源泉・ポイント・同伴の準備時間）。前は POS の料金設定にあった
 function payNumCard(pos,ed){ const d=pos.data||{}, dis=ed?'':'disabled'; const num=(id,label,v)=>`<label>${label}<input id="${id}" inputmode="decimal" value="${esc(v??'')}" ${dis}></label>`;
-  return `<div class="card" data-paynum><h2>日払・体験・ポイント・同伴</h2><div class="grid2">
-    ${num('pnCapC','日払の上限（キャスト）円',d.advance_cap_cast)}${num('pnCapH','日払の上限（黒服）円',d.advance_cap_hall)}
+  return `<div class="card" data-paynum><h2>日払（立替）・体験・ポイント・同伴</h2><div class="grid2">
+    ${num('pnCapC','日払（立替）の上限（キャスト）円',d.advance_cap_cast)}${num('pnCapH','日払（立替）の上限（黒服）円',d.advance_cap_hall)}
     ${num('pnTw','体験入店の源泉（%）',d.trial_withholding_rate)}
     ${num('pnSp','セット1名のポイント',d.set_point)}${num('pnEp','延長1回1名のポイント',d.ext_point)}
     ${num('pnDh','同伴の準備時間（分・0＝警告なし）',d.douhan_punch_limit_min)}
@@ -882,7 +882,7 @@ function payNumWire(st){ const sv=$('pnSave'); if(!sv) return; sv.onclick=guard(
   const g=id=>slNum($(id).value), v={advance_cap_cast:g('pnCapC'),advance_cap_hall:g('pnCapH'),trial_withholding_rate:g('pnTw'),set_point:g('pnSp'),ext_point:g('pnEp'),douhan_punch_limit_min:g('pnDh')};
   if(Object.values(v).some(x=>x==null||!Number.isFinite(x)||x<0)){ await uiAlert('全部の欄に0以上の数を入れてください'); return; }
   if(v.trial_withholding_rate>100){ await uiAlert('体験入店の源泉は100%までです'); return; }
-  if(!await uiConfirm('日払・体験・ポイント・同伴の設定を保存しますか？')) return;
+  if(!await uiConfirm('日払（立替）・体験・ポイント・同伴の設定を保存しますか？')) return;
   const r=await rpc('admin_save_pay_settings',{p_store:st,p_vals:v}); if(!r.ok) return; toast('保存しました'); PAGES.set_pay(); }); }
 
 // ---------- 打刻一覧 v0.23・SQL 063：日ごとの打刻と写真（見るだけ。打刻の修正は POS） ----------
