@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.27 -->
+<title>OLIVE 顧客</title><!-- customer v1.28 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -245,7 +245,7 @@ async function reloadDetail(){ if(!curId) return; try{ const d=await rpc('cs_det
 function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $('dName').textContent=c.name+' 様';
   const bts=(cur.bottles||[]).slice().sort((a,b)=>String(b.opened_on||'').localeCompare(String(a.opened_on||''))||String(a.id).localeCompare(String(b.id))); /* v1.25：開けた日の新しい順（POS と同じ） */ const open=bts.filter(b=>!b.is_finished&&!b.expired_on), fin=bts.filter(b=>b.is_finished&&!b.expired_on), exp=bts.filter(b=>b.expired_on);
   const kakari=c.kakari_staff_id?sname(c.kakari_staff_id):'';
-  const good=(cur.good||[]).slice().sort((a,b)=>b.n-a.n||jaCmp(sname(a.staff_id),sname(b.staff_id))).map(g=>`<span style="margin-right:14px;white-space:nowrap;display:inline-block">${esc(sname(g.staff_id))} <small class="muted">${g.n}回</small></span>`).join('')||'<span class="muted">なし</span>';
+  const good=(cur.good||[]).slice().sort((a,b)=>b.n-a.n||jaCmp(sname(a.staff_id),sname(b.staff_id))).slice(0,3)/* v1.28・SQL 066：全員を受け取り、多い順・同じ回数は名前順で3名（POS と同じ） */.map(g=>`<span style="margin-right:14px;white-space:nowrap;display:inline-block">${esc(sname(g.staff_id))} <small class="muted">${g.n}回</small></span>`).join('')||'<span class="muted">なし</span>';
   const reqs=(cur.requests||[]).map(q=>`<div class="req"><div class="who">${md(q.business_date)}　${esc(sname(q.author_staff_id))}　申請中</div><div style="white-space:pre-wrap">${esc(q.body)}</div></div>`).join('');
   const keep=(boot.keep_products||[]);
   $('detail').innerHTML=`
