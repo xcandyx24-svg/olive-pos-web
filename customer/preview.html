@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.28 -->
+<title>OLIVE 顧客</title><!-- customer v1.29 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -127,6 +127,7 @@
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
 <script>
 'use strict';
 const SUPABASE_URL='https://gjqaxenwvvazhjtziusf.supabase.co', SUPABASE_KEY='sb_publishable_pPfJUvJd6iJeHBNiD7XkWA_2RKF7JYw';
@@ -182,7 +183,13 @@ async function start(){ if(!token){ showLogin(); return; }
   try{ boot=await rpc('cs_boot',{p_token:token}); }catch(e){ if(e.code==='CS_AUTH'){ showLogin(); return; } showLogin(e.message); return; }
   $('storeName').textContent=(boot.store&&boot.store.name||'')+'　顧客'; document.title=(boot.store&&boot.store.name||'OLIVE')+' 顧客';
   if(!monthsSel) monthsSel=boot.bottle_keep_months||6;
-  show('vList'); paintEdit(); await loadList(); }
+  show('vList'); paintEdit(); await loadList(); rtSub(); }
+/* v1.29・SQL 067：リアルタイム。店の設定・伝票がほかで変わったら、すぐ読み直す（入力中・確認の画面の間は読み直さない。つながらない時は1分ごとのまま） */
+let rtCh=null, rtT=0;
+function rtSub(){ const sid=boot&&boot.store&&boot.store.id; if(rtCh||!sid||!window.supabase) return;
+  try{ const c=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,storageKey:'olive-cs-rt'}});
+    rtCh=c.channel('olive:'+sid).on('broadcast',{event:'chg'},m=>{ const k=(m.payload||{}).kind; clearTimeout(rtT); rtT=setTimeout(()=>rtRefresh(k),k==='settings'?1500:2500); }).subscribe(); }catch(e){ console.warn('realtime',e); } }
+async function rtRefresh(k){ if(k==='settings'){ try{ const b=await rpc('cs_boot',{p_token:token}); if(b){ boot=b; $('storeName').textContent=(boot.store&&boot.store.name||'')+'　顧客'; document.title=(boot.store&&boot.store.name||'OLIVE')+' 顧客'; } }catch(e){} } csRefresh(true); }
 
 // ---------- 編集モード ----------
 function editing(){ return !!editTok&&editExp>Date.now(); }
