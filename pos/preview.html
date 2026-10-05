@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v11.18 -->
+<title>OLIVE 会計</title><!-- v11.19 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -1092,6 +1092,31 @@ function btMonths(){ return Number(settings?.bottle_keep_months)||6; } /* v10.99
 /* v10.99：1回に1000件までしか返らないので、1000件ずつ全部読む（お客様5000件以上に対応） */
 // v11.01：係は店舗ごと（SQL 048 の customer_kakari）。読み込んだお客様の kakari_staff_id を、この店舗の係に置き換える
 const CUSEL='*,customer_kakari(store_id,staff_id)';
+/* メモを行ごとに合わせる（3者マージ）。base＝書き始めた時のメモ、mine＝自分の入力、theirs＝ほかで変わった今のメモ。同じ所を両方が別々に直した時だけ conflicts に入る */
+function memoMerge(base,mine,theirs){ const L=s=>s?String(s).replace(/\r/g,'').split('\n'):[]; const b=L(base), m=L(mine), t=L(theirs), J=a=>a.join('\n');
+  if(J(m)===J(t)||J(t)===J(b)) return {lines:m,conflicts:[]}; if(J(m)===J(b)) return {lines:t,conflicts:[]};
+  const hunks=(a,o)=>{ const n=a.length, k=o.length, d=Array.from({length:n+1},()=>new Int32Array(k+1)); for(let i=n-1;i>=0;i--) for(let j=k-1;j>=0;j--) d[i][j]=a[i]===o[j]?d[i+1][j+1]+1:Math.max(d[i+1][j],d[i][j+1]);
+    const h=[]; let i=0,j=0,cur=null; const flush=()=>{ if(cur){ h.push(cur); cur=null; } };
+    while(i<n||j<k){ if(i<n&&j<k&&a[i]===o[j]){ flush(); i++; j++; } else if(j<k&&(i>=n||d[i][j+1]>=d[i+1][j])){ cur=cur||{s:i,e:i,lines:[]}; cur.lines.push(o[j]); j++; } else { cur=cur||{s:i,e:i,lines:[]}; cur.e=i+1; i++; } }
+    flush(); return h; };
+  const all=[...hunks(b,m).map(x=>({...x,w:'m'})),...hunks(b,t).map(x=>({...x,w:'t'}))].sort((x,y)=>x.s-y.s||x.e-y.e);
+  const hit=(x,y)=>(x.s===x.e&&y.s===y.e)?x.s===y.s:(x.s===x.e?(x.s>y.s&&x.s<y.e):y.s===y.e?(y.s>x.s&&y.s<x.e):Math.max(x.s,y.s)<Math.min(x.e,y.e));
+  const groups=[]; for(const x of all){ const g=groups[groups.length-1]; if(g&&g.some(y=>y.w!==x.w&&hit(x,y))){ g.push(x); g.S=Math.min(g.S,x.s); g.E=Math.max(g.E,x.e); } else { const ng=[x]; ng.S=x.s; ng.E=x.e; groups.push(ng); } }
+  const side=(g,w)=>{ const out=[]; let p=g.S; for(const x of g.filter(y=>y.w===w)){ out.push(...b.slice(p,x.s),...x.lines); p=x.e; } out.push(...b.slice(p,g.E)); return out; };
+  const out=[], conflicts=[]; let p=0;
+  for(const g of groups){ out.push(...b.slice(p,g.S)); const ws=new Set(g.map(x=>x.w));
+    if(ws.size===1){ out.push(...side(g,g[0].w)); }
+    else { const vm=side(g,'m'), vt=side(g,'t');
+      if(J(vm)===J(vt)) out.push(...vm);
+      else if(g.S===g.E) out.push(...vt,...vm); // 同じ所に両方が書き足した時は、両方残す（先に入っていた方が上）
+      else { conflicts.push({at:out.length,mine:vm,theirs:vt}); } }
+    p=Math.max(p,g.E); }
+  out.push(...b.slice(p)); return {lines:out,conflicts}; }
+/* conflicts の choice（'m'／'t'／'b'）で仕上げる */
+function memoMergeDone(r,choices){ const out=[...r.lines]; for(let i=r.conflicts.length-1;i>=0;i--){ const c=r.conflicts[i], ch=choices[i]; out.splice(c.at,0,...(ch==='m'?c.mine:ch==='t'?c.theirs:[...c.theirs,...c.mine])); } return out.join('\n'); }
+function pickClash(x){ return new Promise(res=>{ const m=document.createElement('div'); m.className='modal on'; m.style.zIndex=60; const bx=t=>`<div style="white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:4px">${esc(t.join('\n'))||'<span class="muted">（消した）</span>'}</div>`;
+  m.innerHTML=`<div class="box" style="width:min(520px,94vw)"><div style="font-size:18px;font-weight:700">同じ所をほかの人も直していました</div><div class="muted" style="font-size:13px">どちらを残しますか？</div><div style="margin-top:10px">あなた${bx(x.mine)}</div><div style="margin-top:8px">ほかの人${bx(x.theirs)}</div><div class="bar" style="justify-content:flex-end;margin-top:12px"><button class="ghost" data-v="x">やめる</button><button class="ghost" data-v="b">両方残す</button><button class="ghost" data-v="t">ほかの人</button><button class="primary" data-v="m">あなた</button></div></div>`;
+  document.body.appendChild(m); m.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{ m.remove(); res(b.dataset.v==='x'?null:b.dataset.v); }); }); }
 function cuK(c){ if(!c||!('customer_kakari' in c)) return c; const k=(c.customer_kakari||[]).find(x=>x.store_id===store?.id); delete c.customer_kakari; c.kakari_staff_id=k?k.staff_id:null; return c; }
 async function cuLoadAll(){ let r=await sbAll(()=>sb.from('customers').select(CUSEL).order('name').order('id')); if(r.error&&/customer_kakari/.test(r.error.message)){ toast((/does not exist|schema cache/.test(r.error.message)?'SQL 048 が未実行です：':'係を読み込めません：')+r.error.message); r=await sbAll(()=>sb.from('customers').select('*').order('name').order('id')); } return r; }
 async function sbAll(mk){ let all=[]; for(let from=0;;from+=1000){ const r=await mk().range(from,from+999); if(r.error) return {data:all.length?all:null,error:r.error}; all=all.concat(r.data||[]); if((r.data||[]).length<1000) return {data:all,error:null}; } }
@@ -1141,13 +1166,18 @@ function renderCuForm(){ const c=customers.find(x=>x.id===cuSel); if(!c){ $('cuF
         const changed=Object.keys(patch).filter(k=>k==='good_cast_ids'?JSON.stringify(c[k]||[])!==JSON.stringify(patch[k]):(c[k]||null)!==patch[k]); if(!changed.length){toast('変更はありません');return;}
     /* v10.99：変えた欄だけ保存する。ほかの端末（顧客サイトなど）で同じ欄が先に変わっていたら上書きしない */
     const now=await sb.from('customers').select(CUSEL).eq('id',c.id).maybeSingle(); if(now.error){ toast(/customer_kakari/.test(now.error.message)?'係を読み込めません：'+now.error.message:now.error.message); return; } cuK(now.data); if(!now.data){ await uiAlert('このお客様は削除されています'); customers=customers.filter(x=>x.id!==c.id); cuSel=null; renderCuList(); renderCuForm(); return; }
-    const clash=changed.filter(k=>JSON.stringify(now.data[k]??null)!==JSON.stringify(c[k]??null));
+    const clash=changed.filter(k=>JSON.stringify(now.data[k]??null)!==JSON.stringify(c[k]??null)); let merged=false;
+    /* v11.19：メモはほかの端末の変更と行ごとに自動で合わせる（同じ行を両方が直した時だけ、どちらを残すか聞く） */
+    if(clash.includes('memo')){ const r=memoMerge(c.memo,patch.memo,now.data.memo), ch=[]; for(const x of r.conflicts){ const v=await pickClash(x); if(v==null) return; ch.push(v); }
+      patch.memo=memoMergeDone(r,ch).replace(/\s+$/,'')||null; clash.splice(clash.indexOf('memo'),1); merged=true; c.memo=now.data.memo; const ta=$('cuForm').querySelector('[data-k=memo]'); if(ta) ta.value=patch.memo||'';
+      if(JSON.stringify(patch.memo)===JSON.stringify(now.data.memo??null)) changed.splice(changed.indexOf('memo'),1); }
     if(clash.length){ const lb=Object.fromEntries(CUF); const keep=changed.filter(k=>!clash.includes(k)); Object.assign(c,now.data); renderCuForm(); keep.forEach(k=>{ const i=$('cuForm').querySelector(`[data-k=${k}]`); if(i) i.value=patch[k]??''; }); renderCuList(); await uiAlert(`ほかの端末で「${clash.map(k=>lb[k]||k).join('・')}」が先に変更されていました。\n最新の内容に入れ替えたので、確かめてからもう一度保存してください。`); return; }
+    if(!changed.length){ Object.assign(c,now.data); renderCuForm(); toast('ほかの人の変更と同じだったので、そのままにしました'); return; }
     const up={}; changed.forEach(k=>up[k]=patch[k]);
     /* v11.01：係はこの店舗の係として customer_kakari に保存（ほかの店舗の係は変わらない） */ const { kakari_staff_id:kk, ...cup }=up;
     if(Object.keys(cup).length){ const { error } = await sb.from('customers').update(cup).eq('id',c.id); if(error){ toast(error.message.includes('column')?'SQL 011 が未適用です：'+error.message:error.message); return; } }
     if('kakari_staff_id' in up){ const kr=kk?await sb.from('customer_kakari').upsert({customer_id:c.id,store_id:store.id,staff_id:kk,updated_at:new Date().toISOString()},{onConflict:'customer_id,store_id'}):await sb.from('customer_kakari').delete().eq('customer_id',c.id).eq('store_id',store.id); if(kr.error){ toast('係を保存できません：'+kr.error.message); return; } }
-    await logOp('顧客変更',{name:c.name,fields:changed},null,true); const other=Object.keys(now.data).some(k=>!changed.includes(k)&&JSON.stringify(now.data[k]??null)!==JSON.stringify(c[k]??null)); Object.assign(c,now.data,up); toast('保存しました'); renderCuList(); if(other) renderCuForm(); /* ほかの端末で変わった欄も最新にする */ };
+    await logOp('顧客変更',{name:c.name,fields:changed},null,true); const other=Object.keys(now.data).some(k=>!changed.includes(k)&&JSON.stringify(now.data[k]??null)!==JSON.stringify(c[k]??null)); Object.assign(c,now.data,up); toast(merged?'ほかの人の変更と合わせて保存しました':'保存しました'); renderCuList(); if(other) renderCuForm(); /* ほかの端末で変わった欄も最新にする */ };
   $('cuInd').onclick=async e=>{ e.preventDefault(); const on=!c.is_industry; const co=($('cuForm').querySelector('[data-k=company]')?.value||'').trim(); if(on){ if(!co){ await uiAlert('店名を会社名に入力してください'); return; } if(!await uiConfirm(`お店の名前は${co}ですね`)) return; } const r=await sb.from('customers').update(on?{is_industry:true,company:co}:{is_industry:false}).eq('id',c.id); if(r.error){ toast(r.error.message); return; } await logOp(on?'同業に登録':'同業の登録を解除',{name:c.name},null,true); c.is_industry=on; if(on) c.company=co; renderCuForm(); renderCuList(); };
   $('cuDel').onclick=async()=>{ /* v10.99：来店履歴があれば先に知らせる。ボトルの記録があれば一緒に消す（英語のエラーを出さない） */
     /* v11.01：ほかの店舗に来店・ボトルの記録があるお客様は削除できない（SQL 048） */ const ot=await sb.rpc('cust_others',{p_customer:c.id}); if(ot.data?.others_all){ await uiAlert(`「${c.name}」様はほかの店舗に来店・ボトルの記録があるので削除できません`); return; }
