@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.26 -->
+<title>OLIVE 管理</title><!-- admin v0.27 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -93,6 +93,11 @@
     table.perm tr.pr td{border:none;padding:0 6px;text-align:left!important}
     table.perm .seg{display:flex}table.perm .seg button{flex:1}
   }
+  /* 15番：長い説明は1行＋「？」で詳しく（押すとその場で下に開く）。入力欄の高さは全部 44px */
+  .hint .qm{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px!important;min-height:0!important;min-width:0;padding:0!important;margin:0 0 0 6px;border:1px solid var(--line);border-radius:50%;background:#fff;color:var(--muted);font-size:12px;line-height:1;vertical-align:middle;cursor:pointer}
+  .hint .more{display:none;margin-top:4px}.hint.open .more{display:block}.hint.open .qm{background:var(--line)}
+  input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),select{height:44px!important;min-height:44px;box-sizing:border-box;padding-top:0!important;padding-bottom:0!important}
+  table.cs button.sm,table.fn button,.row button.sm{height:44px} /* 入力欄の横のボタンも 44px */
 </style>
 </head>
 <body>
@@ -122,6 +127,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
 <script>
+document.addEventListener('click',e=>{ const q=e.target.closest&&e.target.closest('.hint .qm'); if(q){ e.preventDefault(); e.stopPropagation(); q.closest('.hint').classList.toggle('open'); } },true); /* 15番：「？」で詳しい説明を開く・閉じる */
 const SUPABASE_URL='https://gjqaxenwvvazhjtziusf.supabase.co', SUPABASE_KEY='sb_publishable_pPfJUvJd6iJeHBNiD7XkWA_2RKF7JYw';
 // POS・タイムカードと同じサイト上にあるので、ログイン情報は別の場所にしまう（POSのログインを横取りしない）
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{storageKey:'olive-admin-auth'}});
@@ -460,7 +466,7 @@ function stSection(tbls,rows,terms,ed){ const cur=csNowMonth(), by={};
   terms.forEach(x=>{ if(x.month<=cur&&(x.month===cur||!x.only_month)){ const p=by[x.staff_id]; if(!p||x.month>p.month) by[x.staff_id]=x; } });
   const users=id=>Object.values(by).filter(x=>(x.slide_ids||[]).includes(id)).length;
   return `<div class="card"><h2>スライド表<br><small class="muted" style="font-weight:400">キャストごとに使う表は「スタッフ設定」で選びます</small></h2>
-    <div class="muted" style="font-size:13px;line-height:1.6">その人が選んだ表と保証時給のうち、一番高い金額になります。時給の人は時給の表、日給の人は日給の表だけ選べます<br>表の行は「○○以上 → 金額」。今月の数字が、その行の数字以上になっている行のうち一番下の行を使います</div>
+    <div class="muted hint" style="font-size:13px;line-height:1.6">その人が選んだ表と保証時給のうち、一番高い金額になります<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">時給の人は時給の表、日給の人は日給の表だけ選べます<br>表の行は「○○以上 → 金額」。今月の数字が、その行の数字以上になっている行のうち一番下の行を使います</div></div>
     ${ed?'<div class="row" style="margin-top:10px"><button class="ghost" id="stAdd">＋ スライド表を追加</button></div>':''}</div>
   <div class="slgrid" id="stGrid">${tbls.map(t=>stCard(t,rows.filter(r=>r.table_id===t.id),users(t.id),ed)).join('')||'<div class="card muted">スライド表がありません</div>'}</div>`; }
 function stWire(st){ const grid=$('stGrid'); if(!grid) return;
@@ -495,7 +501,7 @@ PAGES.set_pay=async()=>{
   ${afterCard(ax,ed)}
   ${payNumCard(pos,ed)}
   ${stb.error?`<div class="card err">${esc(/slide_tables/.test(stb.error.message)&&/does not exist|schema cache/.test(stb.error.message)?'SQL 058 が未実行です：':'スライド表を読み込めません：')}${esc(stb.error.message)}</div>`:stSection(stb.data||[],srw.data||[],ctm.data||[],ed)}
-  ${slideCard('hall',hb.data||[],ed,`<div class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.6">単位は万円。月の総売上が、その行の売上以上になっている行のうち、一番下の行を使います。一番上の行より売上が少ない月は0円です。<br>人件費比率（キャストの給与＋黒服の月給＋体験の報酬 ÷ 総売上）が 目標比率以内／＋2%まで／＋5%まで／5%超 で金額が決まり、売上ボーナスを足した総額を、黒服の売上シェアで分けます</div>`)}
+  ${slideCard('hall',hb.data||[],ed,`<div class="muted hint" style="font-size:13px;margin-bottom:8px;line-height:1.6">単位は万円。月の総売上が、その行の売上以上になっている行のうち、一番下の行を使います<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">一番上の行より売上が少ない月は0円です。<br>人件費比率（キャストの給与＋黒服の月給＋体験の報酬 ÷ 総売上）が 目標比率以内／＋2%まで／＋5%まで／5%超 で金額が決まり、売上ボーナスを足した総額を、黒服の売上シェアで分けます</div></div>`)}
   ${ft.error?`<div class="card err">${esc(/fine_types/.test(ft.error.message)&&/does not exist|schema cache/.test(ft.error.message)?'SQL 052 が未実行です：':'罰金の種類を読み込めません：')}${esc(ft.error.message)}</div>`:fineCard(ft.data||[],ed,pos.data?.daily_hours)}`;
   $('main').querySelectorAll('tr[data-fr]').forEach(tr=>fineRowWire(tr,ed));
   if(!ed) return;
@@ -536,7 +542,7 @@ function fineRowWire(tr,ed){ for(const k of ['h','d']){ const q=f=>tr.querySelec
     const upd=()=>{ const c=cl.value; u.textContent=c==='yen'?'円':(c===''||c==='input')?'':'%'; v.disabled=!ed||c===''||c==='input'; if(c===''||c==='input') v.value=''; v.placeholder=FINE_TIME(c)?'足す％':''; pu.disabled=!ed||c!=='yen'; if(c!=='yen') pu.checked=false; }; cl.onchange=upd; upd(); }
   const d=tr.querySelector('[data-fdel]'); if(d) d.onclick=()=>tr.remove(); }
 function fineCard(rows,ed,hours){ const gs=fineGroup(rows); return `<div class="card" data-fines><h2>罰金の種類<br><small class="muted" style="font-weight:400">POS の在籍リストの「＋罰金」で選びます</small></h2>
-  <div class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.6">時給の人・日給の人のそれぞれで決め方を選びます（かからない方は「なし」）<br>％：時給は月末に決まった時給の％、日給はその人の日給の％<br>円：選ぶとその金額で登録します（「個数」にすると 金額×個数）<br>その都度：選んだ時に金額を入れます<br>遅刻・早上がり（時間分）：決まった時刻と打刻（15分丸め）の差 × 時間給（日給 ÷ 下の所定時間）。「足す％」を入れると日給のその％を足します（無断の時など）<br>時給と日給が同じ「円」か「その都度」の罰金は、黒服にもかかります<br>一覧にないものは、POS で「その他」を選んで理由と金額を入れられます</div>
+  <div class="muted hint" style="font-size:13px;margin-bottom:8px;line-height:1.6">時給の人・日給の人のそれぞれで決め方を選びます（かからない方は「なし」）<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">％：時給は月末に決まった時給の％、日給はその人の日給の％<br>円：選ぶとその金額で登録します（「個数」にすると 金額×個数）<br>その都度：選んだ時に金額を入れます<br>遅刻・早上がり（時間分）：決まった時刻と打刻（15分丸め）の差 × 時間給（日給 ÷ 下の所定時間）。「足す％」を入れると日給のその％を足します（無断の時など）<br>時給と日給が同じ「円」か「その都度」の罰金は、黒服にもかかります<br>一覧にないものは、POS で「その他」を選んで理由と金額を入れられます</div></div>
   <div class="row" style="margin-bottom:10px;font-size:14px">日給の人の所定時間<input id="dHours" inputmode="decimal" value="${hours??''}" ${ed&&hours!=null?'':'disabled'} style="width:80px;text-align:right">時間${ed&&hours!=null?'<button class="ghost sm" id="dHoursSave">保存</button>':''}${hours==null?'<span class="muted" style="font-size:13px">SQL 053 が未実行です</span>':''}</div>
   <div class="slw"><table class="fn"><tr><th rowspan="2" style="vertical-align:bottom">名前</th><th colspan="3" class="gh">時給</th><th class="sep"></th><th colspan="3" class="gh">日給</th>${ed?'<th></th>':''}</tr>
   <tr><th>決め方</th><th>金額・％</th><th></th><th class="sep"></th><th>決め方</th><th>金額・％</th><th></th>${ed?'<th></th>':''}</tr>${gs.map(r=>fineRowHtml(r,ed)).join('')}</table>${gs.length?'':'<div class="muted" data-fempty style="padding:8px 4px">まだ入っていません</div>'}</div>
@@ -562,7 +568,7 @@ function afterCard(ax,ed){ const h='<h2>アフターの延長<br><small class="m
   const on=!!a.on, dis=ed?'':'disabled', cl=closeTxt(a.close);
   return `<div class="card" data-after>${h}<div class="row"><span class="seg" id="afOn">${[[true,'する'],[false,'しない']].map(([v,n])=>`<button data-v="${v}" class="${on===v?'on':''}" ${dis}>${n}</button>`).join('')}</span></div>
     <div class="row" style="margin-top:10px;font-size:14px">閉店（${esc(cl)}）の<input id="afM" inputmode="numeric" value="${esc(String(a.minutes))}" ${dis} style="width:80px;text-align:right">分前を過ぎたアフターは、閉店（${esc(cl)}）まで働いたことにする${ed?'<button class="primary sm" id="afSave">保存</button>':''}</div>
-    <div class="muted" style="font-size:13px;margin-top:8px;line-height:1.6">時給の人・日給の人の両方。タイムカードで打刻した時に決まります（変えても、前の打刻はそのまま）<br>閉店時間は「POS設定」で変えます。退勤・アフターの打刻は閉店より後になりません</div></div>`; }
+    <div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">時給の人・日給の人の両方。タイムカードで打刻した時に決まります<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">（変えても、前の打刻はそのまま）<br>閉店時間は「POS設定」で変えます。退勤・アフターの打刻は閉店より後になりません</div></div></div>`; }
 
 // ---------- キャスト設定 v0.15・SQL 056：一人ずつの給与条件（月ごと。その月以降／その月のみ）・その人だけの条件・メモ ----------
 // 担当・給与（時給／日給）・日給・日払い・契約書は staff に入れる（月で変わらない。POS と同じ欄）
@@ -783,7 +789,7 @@ async function csDetailPage(){ const st=storeId, s=csDetail.s, ed=perm('set_cast
       <div class="row"><input id="spT" maxlength="50" placeholder="内容（50字まで）" style="flex:1;min-width:200px"><input id="spA" inputmode="numeric" placeholder="金額" style="width:120px;text-align:right">
       <select id="spF" style="width:auto">${mo.map(x=>`<option value="${x}" ${x===cur?'selected':''}>${csMLabel(x)}から</option>`).join('')}</select>
       <select id="spTo" style="width:auto"><option value="">ずっと</option>${mo.map(x=>`<option value="${x}">${csMLabel(x)}まで</option>`).join('')}</select><button class="primary" id="spAdd">追加</button></div>
-      <div class="muted" style="font-size:13px;margin-top:8px">特別な支給・特別な控除は、その期間の毎月の給料に足す／引く金額です。罰金の免除は一覧の「罰金の免除」で決めます</div></div>`:''}`;
+      <div class="muted hint" style="font-size:13px;margin-top:8px">特別な支給・特別な控除は、その期間の毎月の給料に足す／引く金額です<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">罰金の免除は一覧の「罰金の免除」で決めます</div></div></div>`:''}`;
     wire(); if(!ed) return;
     let kind='pay'; const kb=$('spK').querySelectorAll('button'); kb.forEach(b=>b.onclick=()=>{ kind=b.dataset.v; kb.forEach(x=>x.classList.toggle('on',x===b)); $('spA').disabled=kind==='text'; if(kind==='text') $('spA').value=''; });
     $('main').querySelectorAll('[data-del]').forEach(b=>b.onclick=guard(b,async()=>{ if(!await uiConfirm('この条件を消しますか？','消す','danger')) return; const x=await rpc('admin_void_cast_special',{p_id:b.dataset.del}); if(!x.ok) return; toast('消しました'); csDetailPage(); }));
@@ -856,7 +862,7 @@ async function siRender(){ const st=storeId, ed=perm('set_pos')==='edit', dis=ed
     ${f('siRcpt','領収書メールの宛先',d.receipt_mail,{type:'email'})}
   </div>
   ${ed?'<div class="row" style="margin-top:12px"><button class="primary" id="siSave">保存</button></div>':''}
-  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">店名は POS・顧客サイト・タイムカード・管理サイトに出ます。住所・電話番号・インボイス番号は POS の領収書に出ます。領収書メールの宛先は POS の閉店作業「領収書をメールで送る」で使います。開店時間は登録だけです<br>閉店時間：タイムカードの退勤・アフターの打刻は、閉店より後になりません（時給は閉店まで）<br>0:00〜6:00 は日付が変わった後として扱います（例：1:00 ＝ 翌1:00、23:00 ＝ その日の23:00）<br>アフターの延長（給与項目）も、この閉店時間から数えます。変えても、前の打刻はそのまま</div></div>`;
+  <div class="muted hint" style="font-size:13px;margin-top:10px;line-height:1.6">店名は POS・顧客サイト・タイムカード・管理サイトに出ます<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">住所・電話番号・インボイス番号は POS の領収書に出ます。領収書メールの宛先は POS の閉店作業「領収書をメールで送る」で使います。開店時間は登録だけです<br>閉店時間：タイムカードの退勤・アフターの打刻は、閉店より後になりません（時給は閉店まで）<br>0:00〜6:00 は日付が変わった後として扱います（例：1:00 ＝ 翌1:00、23:00 ＝ その日の23:00）<br>アフターの延長（給与項目）も、この閉店時間から数えます。変えても、前の打刻はそのまま</div></div></div>`;
   if(!ed) return;
   const sv=$('siSave'); sv.onclick=guard(sv,async()=>{ const v=id=>$(id).value.trim(), name=v('siName'), op=v('siOpen'), cl=v('siClose');
     if(!name){ await uiAlert('店名を入れてください'); return; } if(!cl){ await uiAlert('閉店時間を入れてください'); return; } if(cl>'06:00'&&cl<'18:00'){ await uiAlert('閉店時間は 18:00〜翌6:00 の間にしてください'); return; }
@@ -898,7 +904,7 @@ PAGES.set_pos=async()=>{ const st=storeId, ed=perm('set_pos')==='edit', dis=ed?'
     <table class="t vip"><tr><th>卓</th><th>VIP代（円）</th><th>VIP延長（円）</th></tr>
     ${tables.map(t=>`<tr data-tb="${t.id}"><td>${esc(t.name)}</td><td><input inputmode="numeric" data-v="set" value="${esc(String(t.vip_set_fee||0))}" ${dis}></td><td><input inputmode="numeric" data-v="ext" value="${esc(String(t.vip_ext_fee||0))}" ${dis}></td></tr>`).join('')||'<tr><td class="muted" colspan="3">卓がありません</td></tr>'}</table></div>
   ${ed?'<div class="row"><button class="primary" id="psSave">保存</button></div>':''}
-  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">保存すると、POS の次の伝票から変わります（今開いている伝票はそのまま）。日払（立替）の上限・体験の源泉・ポイント・同伴の準備時間は「給与項目」で変えます</div>`;
+  <div class="muted hint" style="font-size:13px;margin-top:10px;line-height:1.6">保存すると、POS の次の伝票から変わります（今開いている伝票はそのまま）<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">日払（立替）の上限・体験の源泉・ポイント・同伴の準備時間は「給与項目」で変えます</div></div>`;
   if(keep) $('siBox').replaceWith(keep); else siRender();
   if(!ed) return;
   const sv=$('psSave'); sv.onclick=guard(sv,async()=>{
@@ -923,7 +929,7 @@ function payNumCard(pos,ed){ const d=pos.data||{}, dis=ed?'':'disabled'; const n
     ${num('pnSp','セット1名のポイント',d.set_point)}${num('pnEp','延長1回1名のポイント',d.ext_point)}
     ${num('pnDh','同伴の準備時間（分・0＝警告なし）',d.douhan_punch_limit_min)}
     ${ed?'<div><button class="primary" id="pnSave" style="width:100%">保存</button></div>':''}</div>
-    <div class="muted" style="font-size:13px;margin-top:8px;line-height:1.6">ポイントは人数分かけて、係で同じに分けます。同伴の準備時間：伝票の立ち上げから出勤の打刻までがこれを超えると、タイムカードで本人に警告します</div></div>`; }
+    <div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">ポイントは人数分かけて、係で同じに分けます<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">同伴の準備時間：伝票の立ち上げから出勤の打刻までがこれを超えると、タイムカードで本人に警告します</div></div></div>`; }
 function payNumWire(st){ const sv=$('pnSave'); if(!sv) return; sv.onclick=guard(sv,async()=>{
   const g=id=>slNum($(id).value), v={advance_cap_cast:g('pnCapC'),advance_cap_hall:g('pnCapH'),trial_withholding_rate:g('pnTw'),set_point:g('pnSp'),ext_point:g('pnEp'),douhan_punch_limit_min:g('pnDh')};
   if(Object.values(v).some(x=>x==null||!Number.isFinite(x)||x<0)){ await uiAlert('全部の欄に0以上の数を入れてください'); return; }
@@ -960,7 +966,7 @@ async function tcCard(){ const box=$('tcBox'); if(!box) return; const st=storeId
   const r=await sb.rpc('admin_tc_list',{p_store:st}); if(page!=='pw'||storeId!==st||!$('tcBox')) return;
   if(r.error){ box.innerHTML=`<h2>タイムカードの端末</h2><div class="err">${esc(/admin_tc_list/.test(r.error.message)?'SQL 063 が未実行です：':'読み込めません：')}${esc(r.error.message)}</div>`; return; }
   const L=r.data||[];
-  box.innerHTML=`<h2>タイムカードの端末</h2><div class="muted" style="font-size:14px;margin-bottom:8px">ここで登録した端末だけ打刻できます。「登録コードを出す」で出た6けたを、その端末のタイムカードで入れます（30分有効）</div>
+  box.innerHTML=`<h2>タイムカードの端末</h2><div class="muted hint" style="font-size:14px;margin-bottom:8px">ここで登録した端末だけ打刻できます<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">「登録コードを出す」で出た6けたを、その端末のタイムカードで入れます（30分有効）</div></div>
     <table class="t"><tr><th>端末</th><th>状態</th><th>最後の打刻</th><th></th></tr>
     ${L.map(x=>`<tr><td>${esc(x.label)}</td><td>${x.registered?'<span class="badge k">登録済み</span>':x.code_expires_at?`<span class="badge warnb">コード待ち</span><br><small class="muted">${esc(fmtDT(x.code_expires_at))} まで</small>`:'<span class="badge gray">未登録</span>'}</td>
       <td>${x.last_used_at?esc(fmtDT(x.last_used_at)):'—'}</td><td style="text-align:right;white-space:nowrap"><button class="ghost sm" data-tcre="${x.id}" data-l="${esc(x.label)}">登録し直す</button> <button class="ghost sm" data-tcdel="${x.id}" data-l="${esc(x.label)}">消す</button></td></tr>`).join('')||'<tr><td class="muted" colspan="4">まだありません</td></tr>'}</table>
@@ -997,7 +1003,7 @@ PAGES.o_perms=()=>{
 PAGES.o_share=()=>{
   const on=id=>!!me?.settings?.[id]?.cust_share;
   $('main').innerHTML=`<h1>顧客情報の共有</h1>
-  <div class="card"><div class="muted" style="font-size:14px;margin-bottom:8px">「共有する」にした店舗どうしで、お客様の基本情報（見る・変える）・来店履歴・キープ中のボトル（見るだけ）を見せ合います。係はそれぞれの店舗で決めます。<br>「しない」に戻しても、データは消えません（ほかの店舗から見えなくなるだけです）</div>
+  <div class="card"><div class="muted hint" style="font-size:14px;margin-bottom:8px">「共有する」にした店舗どうしで、お客様の情報を見せ合います<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">「共有する」にした店舗どうしで、お客様の基本情報（見る・変える）・来店履歴・キープ中のボトル（見るだけ）を見せ合います。係はそれぞれの店舗で決めます。<br>「しない」に戻しても、データは消えません（ほかの店舗から見えなくなるだけです）</div></div>
   <table class="t">${stores().map(st=>`<tr><td>${esc(st.name)}</td><td style="text-align:right"><span class="seg" data-st="${st.id}">${[[true,'共有する'],[false,'しない']].map(([v,n])=>`<button data-v="${v}" class="${on(st.id)===v?'on':''}">${n}</button>`).join('')}</span></td></tr>`).join('')}</table></div>`;
   $('main').querySelectorAll('.seg').forEach(g=>g.querySelectorAll('button').forEach(b=>b.onclick=guard(b,async()=>{
     const v=b.dataset.v==='true', st=stores().find(x=>x.id===g.dataset.st); if(on(st.id)===v) return;
@@ -1028,7 +1034,7 @@ PAGES.o_ids=async()=>{
       <label>最初のパスワード（8文字以上）<input id="nPw" autocapitalize="off" spellcheck="false"></label>
     </div>
     <div class="row" style="margin-top:10px"><button class="ghost" id="nGen">パスワードを自動で作る</button><button class="primary" id="nSave">作る</button></div>
-    <div class="muted" style="font-size:14px;margin-top:8px">黒服と結びつけると、POSでその黒服を削除した時に、このIDも自動で使えなくなります。店舗は上で選んでいる「${esc(curStore()?.name||'')}」になります</div>
+    <div class="muted hint" style="font-size:14px;margin-top:8px">黒服と結びつけると、POSでその黒服を削除した時に、このIDも自動で使えなくなります<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">店舗は上で選んでいる「${esc(curStore()?.name||'')}」になります</div></div>
   </div>`;
   $('nGen').onclick=()=>{ $('nPw').value=genPw(10); };
   $('nSave').onclick=guard($('nSave'),async()=>{
@@ -1067,7 +1073,7 @@ PAGES.pw=async()=>{
   const O=true; // v0.21：この画面はオーナーだけ（SQL 061 で関数もオーナーだけにする）
   const row=(label,sub,key,pw)=>`<tr><td>${label}${sub?`<br><small class="muted">${sub}</small>`:''}</td><td>${pwCell(pw)}</td><td style="text-align:right">${O?`<button class="ghost sm" data-pw="${esc(key)}" data-label="${esc(label.replace(/<[^>]*>/g,''))}">変える</button>`:''}</td></tr>`;
   $('main').lastElementChild.outerHTML=(O?`
-  <div class="card"><h2>全部まとめて新しくする</h2><div class="muted" style="font-size:14px;margin-bottom:10px">POS・タイムカードの端末と顧客サイトのパスワードを、自動で作った新しいものに一度に変えます。黒服が辞めた時に使ってください</div><button class="danger" id="rotAll">全部のパスワードを新しくする</button></div>`:'')+`
+  <div class="card"><h2>全部まとめて新しくする</h2><div class="muted hint" style="font-size:14px;margin-bottom:10px">黒服が辞めた時に使ってください<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">POS・タイムカードの端末と顧客サイトのパスワードを、自動で作った新しいものに一度に変えます</div></div><button class="danger" id="rotAll">全部のパスワードを新しくする</button></div>`:'')+`
   <div class="card"><h2>今のパスワード</h2><div class="muted" style="font-size:14px;margin-bottom:6px">「変える」で、好きなパスワードを入れて変えられます（自動で作ることもできます）</div><table class="t">
     <tr><th>どこの</th><th>パスワード</th><th></th></tr>
     ${(d.devices||[]).map(x=>row(`POS・タイムカード：${esc(x.label||'端末')}`,`ログイン用メール ${esc(x.email||'')}`,`dev:${x.user_id}`,x.pw)).join('')||'<tr><td class="muted" colspan="3">POS・タイムカードの端末がありません</td></tr>'}
