@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.30 -->
+<title>OLIVE 顧客</title><!-- customer v1.31 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -85,6 +85,9 @@
 /* v1.14：v1.13 の枠・［戻す］をやめ、期限切れ・移動は飲み切り済みと同じ小さな文字で1本1行（［戻す］なし） */
 .vis .fit1{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #btSel,#btRem,#btAdd{height:40px;box-sizing:border-box;padding-top:0;padding-bottom:0}
+  /* 15番：入力欄の高さは全部 44px */
+  input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),select{height:44px!important;min-height:44px;box-sizing:border-box;padding-top:0!important;padding-bottom:0!important}
+  .bt .ops button,.bt .b3 button,#btAdd{height:44px!important;box-sizing:border-box;padding-top:0;padding-bottom:0} /* 入力欄の横のボタンも 44px */
 </style>
 </head>
 <body>
