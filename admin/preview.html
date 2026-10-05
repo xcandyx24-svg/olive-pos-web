@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.27 -->
+<title>OLIVE 管理</title><!-- admin v0.28 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -98,6 +98,7 @@
   .hint .more{display:none;margin-top:4px}.hint.open .more{display:block}.hint.open .qm{background:var(--line)}
   input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),select{height:44px!important;min-height:44px;box-sizing:border-box;padding-top:0!important;padding-bottom:0!important}
   table.cs button.sm,table.fn button,.row button.sm{height:44px} /* 入力欄の横のボタンも 44px */
+  table.ks td,table.ks th{text-align:right;white-space:nowrap}table.ks th.nm,table.ks td.nm{text-align:left}table.ks th.ksg{text-align:center;color:var(--ink);font-weight:700;border-left:1px solid var(--line)}table.ks tr.kst td{border-top:2px solid var(--line);font-weight:700}
 </style>
 </head>
 <body>
@@ -818,6 +819,39 @@ async function csDetailPage(){ const st=storeId, s=csDetail.s, ed=perm('set_cast
     const ok=md.querySelector('[data-k=ok]'); ok.onclick=guard(ok,async()=>{ const ns=md.querySelector('#nCT').value.split('\n').map(x=>x.trim()).filter(Boolean); if(!ns.length){ await uiAlert('分類を1つ以上入れてください'); return; }
       const x=await rpc('admin_save_note_cats',{p_store:st,p_names:ns}); if(!x.ok) return; md.remove(); toast('保存しました'); csDetailPage(); }); };
 }
+
+// ---------- 集計「キャスト」 v0.28・SQL 068：成績 → 支給 → 罰金 → 控除 → 支払う額（見るだけ。計算はデータベースの admin_cast_month） ----------
+// 決定時給：選んだスライド表と保証時給（日給の人は日給）の高い方。時間報酬＝決定時給×勤務時間（日給の人は 日給×出勤日数）。会計済みの伝票だけ。体験は入れない
+// 同伴ノルマ罰金＝足りない回数×時間給×4時間。源泉＝（課税対象額−5,000円×その月の日数）×10.21%（罰金は引かずに計算）。厚生費「いつもの決まり」＝出勤 1〜3日 5,000円／4〜10日 10,000円／11日以上 15,000円
+let ksMonth=null;
+const KS_COLS=[
+  ['成績',[['manager','担当','t'],['days','出勤日数','d'],['hours','勤務時間','h'],['sales','係小計','y'],['points','ポイント','p'],['douhan','同伴','dq'],['reactions','反応','n']]],
+  ['支給',[['wage','決定時給','w'],['time_pay','時間報酬','y'],['kakari_back','小計バック','y'],['item_back','商品バック','y'],['allowance','手当','y'],['special_pay','特別な支給','y']]],
+  ['罰金',[['fines','罰金','m'],['quota_fine','同伴ノルマ','m']]],
+  ['控除',[['ctax','消費税','m'],['welfare','厚生費','m'],['special_deduct','特別な控除','m'],['advance','日払（立替）','m'],['withholding','源泉','m']]],
+  ['支払う額',[['taxable','課税対象額','y'],['net','残り支給額','net']]]];
+PAGES.cast_sales=async()=>{ const st=storeId, now=csNowMonth(); if(!ksMonth) ksMonth=now; const m=ksMonth;
+  const mOpts=Array.from({length:13},(_,i)=>csAddMonth(now,-i));
+  const head=`<h1>キャスト <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="row" style="margin-bottom:12px"><select id="ksM" style="width:auto">${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select></div>`;
+  $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>'; const wire=()=>{ const e=$('ksM'); if(e) e.onchange=()=>{ ksMonth=e.value; PAGES.cast_sales(); }; }; wire();
+  const r=await sb.rpc('admin_cast_month',{p_store:st,p_month:m}); if(page!=='cast_sales'||storeId!==st||ksMonth!==m) return;
+  if(r.error){ $('main').innerHTML=head+`<div class="card err">${esc(/admin_cast_month/.test(r.error.message)?'SQL 068 が未実行です：':'読み込めません：')}${esc(r.error.message)}</div>`; wire(); return; }
+  const rows=r.data?.rows||[], n=v=>Number(v||0), yen0=v=>v?yen(v):'—', neg=v=>v?`<span style="color:#c0392b">−${yen(v).replace(/^-/,'')}</span>`:'—';
+  const fmt=(k,typ,x)=>{ const v=x[k]; if(typ==='t') return esc(v||'—'); if(typ==='d') return n(v)?n(v)+'日':'—'; if(typ==='h') return n(v)?n(v).toLocaleString('ja-JP',{maximumFractionDigits:2})+'時間':'—';
+    if(typ==='p') return n(v)?n(v).toLocaleString('ja-JP',{maximumFractionDigits:1}):'—'; if(typ==='n') return n(v)?n(v)+'回':'—';
+    if(typ==='dq') return `${n(x.douhan)}回${x.quota!=null?` <small class="muted">／${x.quota}</small>`:''}`;
+    if(typ==='w') return x.seppan?'<small class="muted">折半</small>':v==null?'<span class="badge warnb">未設定</span>':yen(v)+(x.pay_type==='daily'?' <small class="muted">日給</small>':'');
+    if(typ==='m') return neg(n(v)); if(typ==='net') return n(v)<0?`<b style="color:#c0392b">${yen(v)}</b>`:`<b>${yen(v)}</b>`; return yen0(n(v)); };
+  const sumKeys=['days','hours','sales','points','douhan','reactions','time_pay','kakari_back','item_back','allowance','special_pay','fines','quota_fine','ctax','welfare','special_deduct','advance','withholding','taxable','net'];
+  const tot={}; sumKeys.forEach(k=>tot[k]=rows.reduce((a,x)=>a+n(x[k]),0));
+  const cols=KS_COLS.flatMap(([g,cs])=>cs.map(c=>[g,...c]));
+  const totCell=([g,k,l,typ])=>{ if(!sumKeys.includes(k)) return '<td></td>'; if(typ==='dq') return `<td>${tot.douhan}回</td>`; return `<td>${fmt(k,typ,tot)}</td>`; };
+  $('main').innerHTML=head+(rows.length?`<div class="cs-w"><table class="t cs ks"><thead><tr><th class="nm" rowspan="2">名前</th>${KS_COLS.map(([g,cs])=>`<th colspan="${cs.length}" class="ksg">${g}</th>`).join('')}</tr>
+    <tr>${cols.map(([g,k,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>
+    ${rows.map(x=>`<tr><td class="nm">${esc(x.name)}${x.active?'':' <small class="muted">（退店）</small>'}${x.seppan?' <small class="muted">折半</small>':''}</td>${cols.map(([g,k,l,typ])=>`<td>${fmt(k,typ,x)}</td>`).join('')}</tr>`).join('')}
+    <tr class="kst"><td class="nm"><b>合計</b></td>${cols.map(totCell).join('')}</tr></tbody></table></div>`:'<div class="card muted">この月のキャストはいません</div>')
+    +`<div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">会計済みの伝票と、タイムカードの打刻（丸めた時刻）で計算します<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">決定時給：選んだスライド表と保証時給（日給の人は日給）のうち一番高い金額。時間報酬＝決定時給×勤務時間（日給の人は 日給×出勤日数）<br>小計バック＝係小計×スタッフ設定のバック％。商品バック・手当・日払（立替）・罰金は POS で入れたもの。％の罰金は月末の時給で計算します<br>同伴ノルマ罰金＝足りない回数×時給×4時間（日給の人の時給は 日給÷所定時間）<br>課税対象額＝支給の合計。源泉＝（課税対象額−5,000円×その月の日数）×10.21%（罰金は引かずに計算。スタッフ設定で「しない」の人は0円）<br>厚生費「いつもの決まり」：出勤 1〜3日 5,000円／4〜10日 10,000円／11日以上 15,000円<br>残り支給額＝課税対象額−罰金−控除。体験の人はその日に払っているので入れていません。折半の人の計算はまだです<br>新調日罰金・名刺代は、キャストのマイページを作る時に入れます</div></div>`;
+  wire(); };
 
 // ---------- 請求書の未入金 v0.26・SQL 067：売上は会計した日のまま。振り込まれたら入金日を入れて「入金済み」にする（ここだけ。POS は見るだけ）。間違えた時は理由を入れて未入金に戻す。操作ログに残る ----------
 let invTab='unpaid';
