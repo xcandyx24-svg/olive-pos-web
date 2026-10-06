@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.29 -->
+<title>OLIVE 管理</title><!-- admin v0.30 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -99,6 +99,7 @@
   input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),select{height:44px!important;min-height:44px;box-sizing:border-box;padding-top:0!important;padding-bottom:0!important}
   table.cs button.sm,table.fn button,.row button.sm{height:44px} /* 入力欄の横のボタンも 44px */
   table.ks td,table.ks th{text-align:right;white-space:nowrap}table.ks th.nm,table.ks td.nm{text-align:left}table.ks th.ksg{text-align:center;color:var(--ink);font-weight:700;border-left:1px solid var(--line)}table.ks tr.kst td{border-top:2px solid var(--line);font-weight:700}
+  .plg{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px;align-items:start}.plg .card{margin:0}table.pl td.r,table.pl th.r{text-align:right}table.pl tr.sep td{padding:2px;border-bottom:2px solid var(--line)}table.pl tr.kst td{font-weight:700;border-top:2px solid var(--line)}table.pl td,table.pl th{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -281,12 +282,81 @@ const PAGES={};
 // 見られる画面が1つもない時
 PAGES.none=()=>{ $('main').innerHTML=`<div class="card muted">見られる画面がありません。オーナーに「表示設定」で選んでもらってください</div>`; };
 
-// ---------- 収支（月次・日次を画面の中で切り替える） ----------
-let plTab='month';
-PAGES.pl=()=>{
-  $('main').innerHTML=`<h1>収支</h1><div class="row" style="margin-bottom:14px"><span class="seg">${[['month','月次'],['day','日次']].map(([v,n])=>`<button data-pt="${v}" class="${plTab===v?'on':''}">${n}</button>`).join('')}</span></div><div class="card muted">${plTab==='month'?'月次':'日次'}の画面はこれから作ります</div>`;
-  $('main').querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>{ plTab=b.dataset.pt; PAGES.pl(); });
-};
+// ---------- 収支 v0.30・SQL 070：月次（1日1行）→ 日付を押すと日次（営業日報・現金管理・入出金・伝票一覧・勤怠）。d-system の収支と同じ形 ----------
+// 売上は会計済みの伝票の入金を売上日で（置きは入金した日、売掛＝請求書）。女子給与は日ごと＝その日の時間報酬＋商品バック＋手当−日払。月で決まるものは合計の行だけ（合計＝集計「キャスト」の残り支給額）
+// 経費計＝女子給与＋女子日払い＋男子日払い＋出金。粗利＝売上計＋入金−経費計。給率＝（女子給与＋女子日払い）÷売上計。勤怠の時刻は「収支」を変えられる人が直せる（理由は必須・操作ログ）
+let plMonth=null, plDate=null;
+const plYen=v=>Number(v||0)?yen(v).replace(/^-/,'−'):'—';
+const plRate=(a,b)=>Number(b||0)?(Math.round(Number(a||0)/Number(b)*10000)/100).toFixed(2)+'%':'—%';
+const plExp=x=>Number(x.cast_pay||0)+Number(x.cast_adv||0)+Number(x.hall_adv||0)+Number(x.cash_out||0);
+function plTotals(d){ const D=d.days||[], S=k=>D.reduce((a,x)=>a+Number(x[k]||0),0); const t={date:'合計',cash:S('cash'),invoice:S('invoice'),card:S('card'),sales:S('sales'),kakari_sub:S('kakari_sub'),douhan_sub:S('douhan_sub'),groups:S('groups'),guests:S('guests'),
+  cast_pay:Number(d.cast_net||0),cast_adv:S('cast_adv'),hall_adv:S('hall_adv'),bonus:Number(d.cast_bonus||0),minus:Number(d.cast_minus||0),cash_in:S('cash_in'),cash_out:S('cash_out')}; t.cast_gross=t.cast_pay+t.cast_adv; return t; }
+const PL_COLS=[['売上',[['cash','現金'],['invoice','売掛'],['card','カード'],['sales','売上計']]],['女子売上',[['kakari_sub','係小計'],['douhan_sub','同伴小計']]],
+  ['経費',[['cast_pay','女子給与'],['rate','給率'],['hall_adv','男子日払い'],['cast_adv','女子日払い'],['bonus','ボーナス'],['minus','マイナス'],['cash_in','入金'],['cash_out','出金'],['exp','経費計']]],['',[['gp','粗利']]]];
+const plCell=(k,x)=>k==='rate'?plRate(x.cast_gross,x.sales):k==='exp'?plYen(plExp(x)):k==='gp'?plYen(Number(x.sales||0)+Number(x.cash_in||0)-plExp(x)):plYen(x[k]);
+PAGES.pl=()=>plDate?plDayPage():plMonthPage();
+async function plMonthPage(){ const st=storeId, now=csNowMonth(); if(!plMonth) plMonth=now; const m=plMonth, mOpts=Array.from({length:13},(_,i)=>csAddMonth(now,-i));
+  const head=`<h1>収支 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="row" style="margin-bottom:12px;justify-content:space-between"><select id="plM" style="width:auto">${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select><button class="ghost" id="plXls" disabled>Excel</button></div>`;
+  $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>'; let data=null;
+  const wire=()=>{ $('plM').onchange=()=>{ plMonth=$('plM').value; PAGES.pl(); }; const x=$('plXls'); if(x&&data){ x.disabled=false; x.onclick=guard(x,()=>plExcel(data)); } $('main').querySelectorAll('[data-pld]').forEach(e=>e.onclick=()=>{ plDate=e.dataset.pld; PAGES.pl(); }); }; wire();
+  const r=await sb.rpc('admin_pl_month',{p_store:st,p_month:m}); if(page!=='pl'||storeId!==st||plMonth!==m||plDate) return;
+  if(r.error){ $('main').innerHTML=head+`<div class="card err">${esc(/admin_pl_month|cast_month_calc/.test(r.error.message)?'SQL 070 が未実行です：':'読み込めません：')}${esc(r.error.message)}</div>`; wire(); return; }
+  data=r.data; const T=plTotals(data), gp=T.sales+T.cash_in-plExp(T), cols=PL_COLS.flatMap(([g,cs])=>cs);
+  const box=(l,v,c)=>`<div style="display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;flex:1 1 220px"><span style="background:${c};padding:12px 16px;font-weight:700;white-space:nowrap">${l}</span><b style="flex:1;text-align:right;padding:12px 16px;font-size:20px">${v}</b></div>`;
+  $('main').innerHTML=head+`<div class="row" style="gap:10px;margin-bottom:12px;flex-wrap:wrap">${box('売上',plYen(T.sales),'#e3eef8')}${box('入金',plYen(T.cash_in),'#fbf1dc')}${box('経費',plYen(plExp(T)),'#f8e1e1')}${box('粗利',plYen(gp),'#e2f2e2')}</div>
+    <div class="muted" style="font-size:13px;margin-bottom:6px">日付を押すと、その日の収支（日次）を開きます</div>
+    <div class="cs-w"><table class="t cs ks"><thead><tr><th class="nm" rowspan="2">${csMLabel(m)}</th>${PL_COLS.map(([g,cs])=>`<th colspan="${cs.length}" class="ksg">${g}</th>`).join('')}</tr><tr>${cols.map(([,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>
+    <tr class="kst"><td class="nm"><b>合計</b></td>${cols.map(([k])=>`<td>${plCell(k,T)}</td>`).join('')}</tr>
+    ${(data.days||[]).map(x=>{ const wd=new Date(x.date+'T00:00:00').getDay(); return `<tr><td class="nm"><a data-pld="${x.date}" style="color:var(--blue);cursor:pointer">${md(x.date)}</a> <span style="color:${wd===0?'#c0392b':wd===6?'#2a6fdb':'var(--muted)'}">${WJ[wd]}</span></td>${cols.map(([k])=>`<td>${plCell(k,x)}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
+    <div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">売上は会計済みの伝票の入金を売上日で数えます<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">置きは入金した日に、入金した方法（現金・カード）で入ります。売掛は請求書です<br>女子給与：日ごとは その日の時間報酬（月の決定時給×勤務時間、日給の人は日給）＋商品バック＋手当 − その日の日払。小計バック・特別な支給・罰金・控除・源泉など月で決まるものは、合計の行だけに入ります（合計は集計「キャスト」の残り支給額の合計）<br>給率＝（女子給与＋女子日払い）÷売上計。経費計＝女子給与＋女子日払い＋男子日払い＋出金。粗利＝売上計＋入金−経費計<br>ボーナス＝手当（合計の行は 手当＋特別な支給）。マイナス＝罰金（合計の行は 同伴ノルマも）。どちらも女子給与の中に入っているので、経費計には足しません</div></div>`;
+  wire(); }
+async function plExcel(d){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'); }catch(e){ await uiAlert(e.message); return; }
+  const T=plTotals(d), cols=PL_COLS.flatMap(([g,cs])=>cs.map(c=>[g,...c])), [y,mo]=String(d.month).split('-').map(Number);
+  const val=(k,x)=>k==='rate'?(Number(x.sales||0)?Math.round(Number(x.cast_gross||0)/Number(x.sales)*10000)/100:0):k==='exp'?plExp(x):k==='gp'?Number(x.sales||0)+Number(x.cash_in||0)-plExp(x):Number(x[k]||0);
+  const aoa=[[`収支明細（月次）${y}年${mo}月`],['日付',...cols.map(c=>c[1])],['',...cols.map(c=>c[2]+(c[1]==='rate'?'(%)':''))],['合計',...cols.map(c=>val(c[1],T))],...(d.days||[]).map(x=>[x.date,...cols.map(c=>val(c[1],x))])];
+  aoa[1]=['日付',...cols.map((c,i)=>i>0&&cols[i-1][0]===c[0]?null:c[0]||c[2])]; aoa[2]=['',...cols.map(c=>c[0]?c[2]+(c[1]==='rate'?'(%)':''):null)];
+  const ws=XLSX.utils.aoa_to_sheet(aoa), mg=[{s:{r:1,c:0},e:{r:2,c:0}}]; let j=0; while(j<cols.length){ let k=j; while(k+1<cols.length&&cols[k+1][0]===cols[j][0]) k++; if(cols[j][0]) mg.push({s:{r:1,c:j+1},e:{r:1,c:k+1}}); else mg.push({s:{r:1,c:j+1},e:{r:2,c:j+1}}); j=k+1; }
+  ws['!merges']=mg; ws['!cols']=[{wch:12},...cols.map(()=>({wch:11}))]; const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'収支'); XLSX.writeFile(wb,`sales-${y}-${String(mo).padStart(2,'0')}${ksCode()}.xlsx`); toast('ダウンロードしました'); }
+async function plDayPage(){ const st=storeId, d=plDate, ed=perm('pl')==='edit', m=d.slice(0,7)+'-01';
+  const jd=x=>{ const t=new Date(x+'T00:00:00'); return `${t.getFullYear()}年${t.getMonth()+1}月${t.getDate()}日(${WJ[t.getDay()]})`; };
+  const head=`<h1>収支 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="row" style="margin-bottom:12px"><button class="ghost" id="plBack">◀ 月次へ</button><button class="ghost" id="plPrev">前の日</button><input type="date" id="plDate" value="${d}" style="width:auto"><button class="ghost" id="plNext">次の日</button>${ed?'':'<span class="muted" style="font-size:13px">見るだけ</span>'}</div>`;
+  $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>';
+  const wire=()=>{ $('plBack').onclick=()=>{ plMonth=m; plDate=null; PAGES.pl(); }; $('plPrev').onclick=()=>{ plDate=dayAdd(d,-1); PAGES.pl(); }; $('plNext').onclick=()=>{ plDate=dayAdd(d,1); PAGES.pl(); }; $('plDate').onchange=()=>{ if($('plDate').value){ plDate=$('plDate').value; PAGES.pl(); } }; }; wire();
+  const [rm,rd]=await Promise.all([sb.rpc('admin_pl_month',{p_store:st,p_month:m}), sb.rpc('admin_pl_day',{p_store:st,p_date:d})]); if(page!=='pl'||storeId!==st||plDate!==d) return;
+  const er=rm.error||rd.error; if(er){ $('main').innerHTML=head+`<div class="card err">${esc(/admin_pl_|cast_month_calc/.test(er.message)?'SQL 070 が未実行です：':'読み込めません：')}${esc(er.message)}</div>`; wire(); return; }
+  const D=(rm.data.days||[]).filter(x=>x.date<=d), today=D.find(x=>x.date===d)||{}, S=k=>D.reduce((a,x)=>a+Number(x[k]||0),0), open=D.filter(x=>Number(x.sales||0)>0||Number(x.groups||0)>0).length||1, X=rd.data;
+  const rep=[['総売上','sales'],['現金売上','cash'],['カード売上','card'],['売掛','invoice'],null,['女子売上','kakari_sub'],['女子給料','cast_gross'],null];
+  const repRows=rep.map(r=>r?`<tr><td>${r[0]}</td><td>${plYen(today[r[1]])}</td><td>${plYen(S(r[1]))}</td><td>${plYen(Math.round(S(r[1])/open))}</td></tr>`:'<tr class="sep"><td colspan="4"></td></tr>').join('')
+    +`<tr><td>客組人数</td><td>${Number(today.groups||0)}組 ${Number(today.guests||0)}名</td><td>${S('groups')}組 ${S('guests')}名</td><td>${Math.round(S('groups')/open*10)/10}組 ${Math.round(S('guests')/open*10)/10}名</td></tr>
+     <tr><td>客単価</td><td>${Number(today.guests||0)?plYen(Math.round(Number(today.sales||0)/Number(today.guests))):'—'}</td><td>${S('guests')?plYen(Math.round(S('sales')/S('guests'))):'—'}</td><td>—</td></tr>`;
+  const adv=X.advances||[], fAdv=adv.filter(a=>a.kind!=='hall').reduce((a,x)=>a+Number(x.amount||0),0), mAdv=adv.filter(a=>a.kind==='hall').reduce((a,x)=>a+Number(x.amount||0),0);
+  const mv=X.moves||[], inS=mv.filter(x=>x.kind==='in').reduce((a,x)=>a+Number(x.amount||0),0), outS=mv.filter(x=>x.kind==='out').reduce((a,x)=>a+Number(x.amount||0),0);
+  const cl=X.closing, opening=cl?cl.opening_float:X.prev_float, recv=Number(today.cash||0)+inS, paid=fAdv+mAdv+outS;
+  const cashRows=[['本日釣銭',plYen(opening),'',''],['現金売上',plYen(today.cash),'',''],['入金',plYen(inS),'',''],['日払報酬（女子）','',plYen(fAdv),''],['日払報酬（男子）','',plYen(mAdv),''],['出金','',plYen(outS),''],['合計',plYen(recv),plYen(paid),plYen(recv-paid)],
+    ['現金過不足','','',cl?plYen(cl.diff):'<span class="badge warnb">未精算</span>'],['預金額','','',cl?plYen(cl.deposit):'—'],['翌日釣銭','','',cl?plYen(cl.next_float):'—'],['現金過不足 当月累計','','',plYen(X.month_closings?.diff)],['預金額 当月累計','','',plYen(X.month_closings?.deposit)]];
+  const list=(k,l)=>{ const rows=mv.filter(x=>x.kind===k); return `<div class="card"><h2>${l} - ${jd(d)}</h2><table class="t pl"><tr><th>摘要</th><th class="r">金額</th></tr>${rows.map(x=>`<tr><td>${esc(x.memo||'')}</td><td class="r">${plYen(x.amount)}</td></tr>`).join('')}<tr class="kst"><td>合計</td><td class="r">${plYen(rows.reduce((a,x)=>a+Number(x.amount||0),0))}</td></tr></table></div>`; };
+  const hm=t=>t?new Date(t).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false}):''; // 時刻は日本時間で出す（直す時も日本時間で送る）
+  const bills=X.bills||[], bt=k=>bills.reduce((a,b)=>a+Number(b[k]||0),0);
+  const billRows=bills.map((b,i)=>`<tr><td>${i+1}</td><td>${hm(b.opened_at)}</td><td>${b.closed_at?hm(b.closed_at):'<span class="badge">来店中</span>'}</td><td>${esc(b.table||'')}</td><td class="r">${b.guests}</td><td>${esc(b.customers||'')}</td><td>${esc(b.kakari||'')}</td><td>${esc(b.douhan||'')}</td><td class="r">${plYen(b.sub)}</td><td class="r">${plYen(b.cash)}</td><td class="r">${plYen(b.card)}</td><td class="r">${plYen(b.invoice)}</td><td class="r">${b.oki?plYen(b.oki):'—'}</td><td class="r"><b>${plYen(b.due)}</b></td></tr>`).join('');
+  // 勤怠：一人1行（同伴・出勤・退勤またはアフター）。時刻は打刻した時刻、小さく丸めた時刻（計算に使う時刻）
+  const EV={douhan:'同伴',clock_in:'出勤',clock_out:'退勤',after:'アフター'}, ppl=[]; (X.events||[]).forEach(e=>{ let p=ppl.find(z=>z.id===e.staff_id); if(!p){ p={id:e.staff_id,name:e.name,kind:e.kind,ev:{}}; ppl.push(p); } p.ev[e.type]=e; });
+  const tcell=e=>e?`<span${e.corrected?' style="color:#c0392b"':''}>${hm(e.at)}</span>${e.rounded_at&&hm(e.rounded_at)!==hm(e.at)?` <small class="muted">→${hm(e.rounded_at)}</small>`:''}${ed?` <button class="ghost sm" data-pfx="${e.id}">直す</button>`:''}`:'—';
+  const attRows=ppl.map(p=>`<tr><td>${esc(p.name)}${p.kind==='hall'?' <small class="muted">黒服</small>':''}</td><td>${tcell(p.ev.douhan)}</td><td>${tcell(p.ev.clock_in)}</td><td>${tcell(p.ev.clock_out||p.ev.after)}${p.ev.after?' <small class="muted">アフター</small>':''}</td></tr>`).join('');
+  $('main').innerHTML=head+`<div class="plg">
+    <div class="card"><h2>営業日報 - ${jd(d)}</h2><table class="t pl"><tr><th></th><th class="r">${md(d)}(${WJ[new Date(d+'T00:00:00').getDay()]})</th><th class="r">累計（${Number(d.slice(8))}日時点）</th><th class="r">平均（${open}営業日）</th></tr>${repRows}</table></div>
+    <div class="card"><h2>現金管理 - ${jd(d)}</h2><table class="t pl"><tr><th>摘要</th><th class="r">収入金額</th><th class="r">支払金額</th><th class="r">差引残高</th></tr>${cashRows.map(r=>`<tr><td>${r[0]}</td><td class="r">${r[1]}</td><td class="r">${r[2]}</td><td class="r">${r[3]}</td></tr>`).join('')}</table>
+      <div class="row" style="margin-top:8px"><button class="ghost sm" id="plReg">この日の現金管理を開く</button></div></div>
+    ${list('out','出金')}${list('in','入金')}</div>
+    <div class="card"><h2>伝票一覧 - ${jd(d)}</h2><div class="cs-w" style="border:none"><table class="t pl"><tr><th>No</th><th>入店</th><th>退店</th><th>卓</th><th class="r">客数</th><th>お客様</th><th>係</th><th>同伴</th><th class="r">係小計</th><th class="r">現金</th><th class="r">カード</th><th class="r">売掛</th><th class="r">置き</th><th class="r">合計</th></tr>
+      ${billRows||'<tr><td colspan="14" class="muted">伝票はありません</td></tr>'}${bills.length?`<tr class="kst"><td colspan="4">合計</td><td class="r">${bt('guests')}</td><td colspan="3"></td><td class="r">${plYen(bt('sub'))}</td><td class="r">${plYen(bt('cash'))}</td><td class="r">${plYen(bt('card'))}</td><td class="r">${plYen(bt('invoice'))}</td><td class="r">${plYen(bt('oki'))}</td><td class="r">${plYen(bt('due'))}</td></tr>`:''}</table></div></div>
+    <div class="card"><h2>勤怠 - ${jd(d)}</h2><table class="t pl"><tr><th>名前</th><th>同伴</th><th>出勤</th><th>退勤</th></tr>${attRows||'<tr><td colspan="4" class="muted">打刻はありません</td></tr>'}</table>
+      <div class="muted" style="font-size:13px;margin-top:6px">→の後は計算に使う時刻（丸めた時刻）。赤は直した時刻</div></div>`;
+  wire(); $('plReg').onclick=()=>{ regDate=d; regTab='day'; go('register'); };
+  $('main').querySelectorAll('[data-pfx]').forEach(bn=>bn.onclick=guard(bn,async()=>{ const e=(X.events||[]).find(z=>z.id===bn.dataset.pfx); if(!e) return;
+    const mdl=modal(`<h2 style="margin:0">${esc(e.name)}　${EV[e.type]||''}の時刻を直す</h2><div class="muted">今：${hm(e.at)}</div><label>時刻<input type="time" id="pfT" value="${hm(e.at)}"></label><label>理由（必須・操作ログに残ります）<input id="pfR" maxlength="100"></label><div class="bar"><button class="ghost" data-k="no">キャンセル</button><button class="primary" data-k="ok">直す</button></div>`);
+    const v=await new Promise(res=>{ mdl.querySelector('[data-k=no]').onclick=()=>{ mdl.remove(); res(null); }; mdl.querySelector('[data-k=ok]').onclick=()=>{ const t=mdl.querySelector('#pfT').value, rs=mdl.querySelector('#pfR').value.trim(); mdl.remove(); res({t,rs}); }; });
+    if(!v) return; if(!v.t){ await uiAlert('時刻を入れてください'); return; } if(!v.rs){ await uiAlert('理由を入れてください'); return; }
+    const day=v.t<'08:00'?dayAdd(d,1):d; const z=await rpc('admin_punch_fix',{p_event:e.id,p_at:`${day}T${v.t}:00+09:00`,p_reason:v.rs}); if(!z.ok) return; toast('直しました'); PAGES.pl(); })); }
 
 // ---------- レジ精算（v0.07：月次・日次を1つの画面で切り替える）----------
 // POS の閉店作業と同じ計算。管理サイトでは見るだけ（精算の保存は POS で行う）
