@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.43 -->
+<title>OLIVE 管理</title><!-- admin v0.44 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -282,7 +282,7 @@ PAGES.none=()=>{ $('main').innerHTML=`<div class="card muted">見られる画面
 
 // ---------- 収支 v0.30・SQL 070：月次（1日1行）→ 日付を押すと日次（営業日報・現金管理・入出金・伝票一覧・勤怠）。d-system の収支と同じ形 ----------
 // 売上は会計済みの伝票の入金を売上日で（置きは入金した日、売掛＝請求書）。女子給与は日ごと＝その日の時間報酬＋商品バック＋手当−日払。月で決まるものは合計の行だけ（合計＝集計「キャスト」の残り支給額）
-// v0.32・SQL 072：総人件費＝女子給与＋日払い（女子・男子）。合計の行は 黒服の給与（月給・日給・時給）も入る（男子日払いは黒服の給与の先払いなので二重にしない）。給率＝総人件費÷売上計。経費＝出金。勤怠の時刻は「収支」を変えられる人が直せる（理由は必須・操作ログ）
+// v0.32・SQL 072：総人件費＝女子給与＋日払い（女子・男子）。合計の行は 黒服の給与（月給・日給・時給）も入る（男子日払いは黒服の給与の先払いなので二重にしない）。人件費比率＝総人件費÷売上計。経費＝出金。勤怠の時刻は「収支」を変えられる人が直せる（理由は必須・操作ログ）
 let plMonth=null, plDate=null;
 const plYen=v=>Number(v||0)?yen(v).replace(/^-/,'−'):'—';
 const plRate=(a,b)=>Number(b||0)?(Math.round(Number(a||0)/Number(b)*10000)/100).toFixed(2)+'%':'—%';
@@ -290,7 +290,7 @@ const plLabor=x=>Number(x.cast_pay||0)+Number(x.cast_adv||0)+(x.hall_pay==null?N
 function plTotals(d){ const D=d.days||[], S=k=>D.reduce((a,x)=>a+Number(x[k]||0),0); const t={date:'合計',cash:S('cash'),invoice:S('invoice'),card:S('card'),sales:S('sales'),kakari_sub:S('kakari_sub'),douhan_sub:S('douhan_sub'),groups:S('groups'),guests:S('guests'),
   cast_pay:Number(d.cast_net||0),cast_adv:S('cast_adv'),hall_adv:S('hall_adv'),hall_pay:Number(d.hall_pay||0),cash_in:S('cash_in'),cash_out:S('cash_out')}; t.cast_gross=t.cast_pay+t.cast_adv; return t; }
 const PL_COLS=[['売上',[['cash','現金'],['invoice','売掛'],['card','カード'],['sales','売上計']]],['女子売上',[['kakari_sub','係小計']]],
-  ['経費',[['cast_pay','女子給与'],['adv','日払い'],['labor','総人件費'],['rate','給率'],['cash_in','入金'],['cash_out','出金']]]];
+  ['経費',[['cast_pay','女子給与'],['adv','日払い'],['labor','総人件費'],['rate','人件費比率'],['cash_in','入金'],['cash_out','出金']]]];
 const plCell=(k,x)=>k==='rate'?plRate(plLabor(x),x.sales):k==='labor'?plYen(plLabor(x)):k==='adv'?plYen(Number(x.cast_adv||0)+Number(x.hall_adv||0)):plYen(x[k]);
 PAGES.pl=()=>plDate?plDayPage():plMonthPage();
 async function plMonthPage(){ const st=storeId, now=csNowMonth(); if(!plMonth) plMonth=now; const m=plMonth, mOpts=Array.from({length:13},(_,i)=>csAddMonth(now,-i));
@@ -307,7 +307,7 @@ async function plMonthPage(){ const st=storeId, now=csNowMonth(); if(!plMonth) p
     <div class="cs-w"><table class="t cs ks"><thead><tr><th class="nm" rowspan="2">${csMLabel(m)}</th>${PL_COLS.map(([g,cs])=>`<th colspan="${cs.length}" class="ksg">${g}</th>`).join('')}</tr><tr>${cols.map(([,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>
     <tr class="kst"><td class="nm"><b>合計</b></td>${cols.map(([k])=>`<td>${plCell(k,T)}</td>`).join('')}</tr>
     ${(data.days||[]).map(x=>{ const wd=new Date(x.date+'T00:00:00').getDay(); return `<tr><td class="nm"><a data-pld="${x.date}" style="color:var(--blue);cursor:pointer">${md(x.date)}</a> <span style="color:${wd===0?'#c0392b':wd===6?'#2a6fdb':'var(--muted)'}">${WJ[wd]}</span></td>${cols.map(([k])=>`<td>${plCell(k,x)}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
-    <div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">売上は会計済みの伝票の入金を売上日で数えます<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">置きは入金した日に、入金した方法（現金・カード）で入ります。売掛は請求書です<br>女子給与：日ごとは その日の時間報酬（月の決定時給×勤務時間、日給の人は日給）＋商品バック＋手当 − その日の日払。小計バック・特別な支給・罰金・控除・源泉など月で決まるものは、合計の行だけに入ります（合計は集計「キャスト」の残り支給額の合計）<br>総人件費＝女子給与＋日払い（女子・男子）。合計の行は 黒服の給与（基本給−遅刻・早退＋ボーナス＋手当など。スタッフ設定の「黒服の給料」と同じ）も入ります。男子日払いは黒服の給与の先払いなので、二重には数えません<br>給率＝総人件費÷売上計。上の「経費」は出金（領収書精算・支払いなど）の合計</div></div>`;
+    <div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">売上は会計済みの伝票の入金を売上日で数えます<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">置きは入金した日に、入金した方法（現金・カード）で入ります。売掛は請求書です<br>女子給与：日ごとは その日の時間報酬（月の決定時給×勤務時間、日給の人は日給）＋商品バック＋手当 − その日の日払。小計バック・特別な支給・罰金・控除・源泉など月で決まるものは、合計の行だけに入ります（合計は集計「キャスト」の残り支給額の合計）<br>総人件費＝女子給与＋日払い（女子・男子）。合計の行は 黒服の給与（基本給−遅刻・早退＋ボーナス＋手当など。スタッフ設定の「黒服の給料」と同じ）も入ります。男子日払いは黒服の給与の先払いなので、二重には数えません<br>人件費比率＝総人件費÷売上計。上の「経費」は出金（領収書精算・支払いなど）の合計</div></div>`;
   wire(); invRender(st); }
 async function plExcel(d){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'); }catch(e){ await uiAlert(e.message); return; }
   const T=plTotals(d), cols=PL_COLS.flatMap(([g,cs])=>cs.map(c=>[g,...c])), [y,mo]=String(d.month).split('-').map(Number);
@@ -803,7 +803,7 @@ function afterCard(ax,ed){ const h='<h2>アフターの延長<br><small class="m
 const CS_PUNCH='打刻の手入力'; // v0.24・SQL 064：POS で打刻を手で入れた時に自動で付く罰金
 const CS_FOREVER='9999-12-31', CS_CATS=['性格','体調','お客様','勤怠','良かったこと','その他'];
 const CS_SP={pay:'支給',deduct:'控除',text:'文字だけ'}; // v0.43：文字だけは新しく入れない（メモを使う。前に入れたものは出す）
-let csMonth=null, csEdit=false, csDetail=null, csTab='sp', csKind='cast', csOrdM=null;
+let csMonth=null, csEdit=false, csDetail=null, csTab='memo', csKind='cast', csOrdM=null;
 // v0.24：キャスト設定 → スタッフ設定（キャスト・黒服のタブ）
 const csKindTabs=()=>`<div class="cs-tabs">${[['cast','キャスト'],['hall','黒服']].map(([k,n])=>`<button data-kind="${k}" class="${csKind===k?'on':''}" ${csEdit?'disabled':''}>${n}</button>`).join('')}</div>`;
 const csKindWire=()=>$('main').querySelectorAll('[data-kind]').forEach(b=>b.onclick=()=>{ if(csEdit) return; csKind=b.dataset.kind; PAGES.set_cast(); });
@@ -874,9 +874,9 @@ PAGES.set_cast=async()=>{
   ${rows.length?`<div class="cs-w ${E?'editing':''}"><table class="reg cs"><tr><th class="nm">名前</th>${HD.map(h=>`<th>${h}</th>`).join('')}</tr>
   ${rows.map(r=>`<tr data-sid="${r.s.id}"><td class="nm">${E?esc(r.s.display_name):`<a data-open="${r.s.id}">${esc(r.s.display_name)}</a>`}${r.t.month===m&&r.t.only_month?`<br><small class="muted">${csMShort(m)}のみ</small>`:''}</td>${cell(r).map(c=>`<td>${c}</td>`).join('')}<td>${nc[r.s.id]?nc[r.s.id]+'件':'—'}</td></tr>`).join('')}</table></div>`
   :'<div class="card muted">在籍のキャストがいません</div>'}
-  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">${E?'表の中で直して「保存」。給与・日給・スライド表・保証時給・期限・同伴ノルマ・バック・源泉徴収・消費税・厚生費・罰金の免除を変えた時は「以降／のみ」を聞きます':'名前を押すと、個別設定とメモが開きます'}${ed&&!E?'。直す時は「編集」':''}</div>`;
+  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">${E?'表の中で直して「保存」。給与・日給・スライド表・保証時給・期限・同伴ノルマ・バック・源泉徴収・消費税・厚生費・罰金の免除を変えた時は「以降／のみ」を聞きます':'名前を押すと、メモと個別設定が開きます'}${ed&&!E?'。直す時は「編集」':''}</div>`;
   $('csM').onchange=()=>{ csMonth=$('csM').value; PAGES.set_cast(); }; csKindWire();
-  $('main').querySelectorAll('[data-open]').forEach(a=>a.onclick=()=>{ const s=casts.find(x=>x.id===a.dataset.open); csDetail={store:st,s}; csTab='sp'; PAGES.set_cast(); });
+  $('main').querySelectorAll('[data-open]').forEach(a=>a.onclick=()=>{ const s=casts.find(x=>x.id===a.dataset.open); csDetail={store:st,s}; csTab='memo'; PAGES.set_cast(); }); // v0.44：メモを最初に開く
   if(!ed) return;
   if(!E){ $('csEd').onclick=()=>{ csEdit=true; PAGES.set_cast(); }; return; }
   $('csCancel').onclick=()=>{ csEdit=false; PAGES.set_cast(); };
@@ -1009,7 +1009,7 @@ async function csHallPage(){ const st=storeId, ed=perm('set_cast')==='edit', cur
 // 名前を押した時：その人だけの条件・メモ
 async function csDetailPage(){ const st=storeId, s=csDetail.s, ed=perm('set_cast')==='edit';
   const head=`<div class="row" style="margin-bottom:12px"><button class="ghost" id="csBack">← 一覧に戻る</button><h1 style="margin:0">${esc(s.display_name)}</h1></div>
-   <div class="cs-tabs"><button data-t="sp" class="${csTab==='sp'?'on':''}">個別設定</button><button data-t="memo" class="${csTab==='memo'?'on':''}">メモ</button><button data-t="ord" class="${csTab==='ord'?'on':''}">注文集計</button></div>`;
+   <div class="cs-tabs"><button data-t="memo" class="${csTab==='memo'?'on':''}">メモ</button><button data-t="sp" class="${csTab==='sp'?'on':''}">個別設定</button><button data-t="ord" class="${csTab==='ord'?'on':''}">注文集計</button></div>`;
   $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>';
   const wire=()=>{ $('csBack').onclick=()=>{ csDetail=null; PAGES.set_cast(); }; $('main').querySelectorAll('.cs-tabs button').forEach(b=>b.onclick=()=>{ csTab=b.dataset.t; csDetailPage(); }); };
   wire();
