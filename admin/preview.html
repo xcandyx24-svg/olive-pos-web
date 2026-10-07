@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.36 -->
+<title>OLIVE 管理</title><!-- admin v0.37 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -152,10 +152,8 @@ const SCREENS=[
   {k:'pl',n:'収支'},
   {k:'cast_sales',n:'スタッフ'},
   {k:'register',n:'現金管理'},
-  {k:'invoice',n:'請求書の未入金'},
-  {k:'nippo',n:'日報登録'},
   {k:'punches',n:'打刻一覧'},
-  {k:'cust',n:'お客様分析'},
+  {k:'cust',n:'顧客サイト'},
   {grp:'設定'},
   {k:'set_cast',n:'スタッフ設定'},
   {k:'set_pay',n:'給与項目'},
@@ -218,7 +216,7 @@ function firstPage(){ return SCREENS.find(s=>s.k&&visible(s.k))?.k||(me.is_owner
 // ---------- リアルタイム v0.26・SQL 067：この店の設定・伝票がほかで変わったら、今の画面を読み直す ----------
 // 入力の途中・確認の画面が出ている時は読み直さず、上に「最新にする」を出す。自分で保存した直後（5秒）は読み直さない。つながらない時も、これまでどおり使える
 let rtCh=null, rtSt=null, rtT=0, rtOwn=0, mainDirty=false, rtWait=false;
-const RT_SKIP=new Set(['o_perms','o_share','o_ids','pw','none']);
+const RT_SKIP=new Set(['o_perms','o_share','o_ids','pw','none','cust']); // v0.37：顧客サイトは中の画面が自分で読み直す
 function rtSub(){ if(rtCh&&rtSt===storeId) return; if(rtCh){ sb.removeChannel(rtCh); rtCh=null; } rtSt=storeId; if(!storeId) return;
   try{ rtCh=sb.channel('olive:'+storeId).on('broadcast',{event:'chg'},m=>rtKick(m.payload)).subscribe(); }catch(e){ console.warn('realtime',e); } }
 function rtKick(p){ if(!page||RT_SKIP.has(page)) return; clearTimeout(rtT); rtT=setTimeout(rtRefresh,p?.kind==='bill'?4000:1200); }
@@ -304,12 +302,13 @@ async function plMonthPage(){ const st=storeId, now=csNowMonth(); if(!plMonth) p
   data=r.data; const T=plTotals(data), cols=PL_COLS.flatMap(([g,cs])=>cs);
   const box=(l,v,c)=>`<div style="display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;flex:1 1 220px"><span style="background:${c};padding:12px 16px;font-weight:700;white-space:nowrap">${l}</span><b style="flex:1;text-align:right;padding:12px 16px;font-size:20px">${v}</b></div>`;
   $('main').innerHTML=head+`<div class="row" style="gap:10px;margin-bottom:12px;flex-wrap:wrap">${box('売上',plYen(T.sales),'#e3eef8')}${box('総人件費',plYen(plLabor(T)),'#fbf1dc')}${box('経費',plYen(T.cash_out),'#f8e1e1')}</div>
+    <div id="invBox" style="margin-bottom:14px"><div class="card muted">請求書の未入金を読み込み中…</div></div>
     <div class="muted" style="font-size:13px;margin-bottom:6px">日付を押すと、その日の収支（日次）を開きます</div>
     <div class="cs-w"><table class="t cs ks"><thead><tr><th class="nm" rowspan="2">${csMLabel(m)}</th>${PL_COLS.map(([g,cs])=>`<th colspan="${cs.length}" class="ksg">${g}</th>`).join('')}</tr><tr>${cols.map(([,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>
     <tr class="kst"><td class="nm"><b>合計</b></td>${cols.map(([k])=>`<td>${plCell(k,T)}</td>`).join('')}</tr>
     ${(data.days||[]).map(x=>{ const wd=new Date(x.date+'T00:00:00').getDay(); return `<tr><td class="nm"><a data-pld="${x.date}" style="color:var(--blue);cursor:pointer">${md(x.date)}</a> <span style="color:${wd===0?'#c0392b':wd===6?'#2a6fdb':'var(--muted)'}">${WJ[wd]}</span></td>${cols.map(([k])=>`<td>${plCell(k,x)}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
     <div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">売上は会計済みの伝票の入金を売上日で数えます<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">置きは入金した日に、入金した方法（現金・カード）で入ります。売掛は請求書です<br>女子給与：日ごとは その日の時間報酬（月の決定時給×勤務時間、日給の人は日給）＋商品バック＋手当 − その日の日払。小計バック・特別な支給・罰金・控除・源泉など月で決まるものは、合計の行だけに入ります（合計は集計「キャスト」の残り支給額の合計）<br>総人件費＝女子給与＋日払い（女子・男子）。合計の行は 黒服の給与（基本給−遅刻・早退＋ボーナス＋手当など。スタッフ設定の「黒服の給料」と同じ）も入ります。男子日払いは黒服の給与の先払いなので、二重には数えません<br>給率＝総人件費÷売上計。上の「経費」は出金（領収書精算・支払いなど）の合計</div></div>`;
-  wire(); }
+  wire(); invRender(st); }
 async function plExcel(d){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'); }catch(e){ await uiAlert(e.message); return; }
   const T=plTotals(d), cols=PL_COLS.flatMap(([g,cs])=>cs.map(c=>[g,...c])), [y,mo]=String(d.month).split('-').map(Number);
   const val=(k,x)=>k==='rate'?(Number(x.sales||0)?Math.round(plLabor(x)/Number(x.sales)*10000)/100:0):k==='labor'?plLabor(x):k==='adv'?Number(x.cast_adv||0)+Number(x.hall_adv||0):Number(x[k]||0);
@@ -1171,31 +1170,43 @@ function hallPayDraw(r,st,m){ const box=$('hpBox'); if(!box) return;
     if((l!=null&&!(Number.isInteger(l)&&l>=0))||(bb!=null&&!(Number.isInteger(bb)&&bb>=0))){ await uiAlert('金額は0以上の整数で入れてください'); return; }
     const z=await rpc('admin_save_hall_adjust',{p_staff:x.id,p_month:m,p_late:l,p_bonus:bb,p_memo:v.m}); if(!z.ok) return; toast('直しました'); PAGES.cast_sales(); })); }
 
+// ---------- 顧客サイト v0.37・SQL 076：顧客サイト（preview）をそのまま中に出す。顧客サイトのパスワードは聞かない（管理サイトのログインで入場券をもらう）。編集は「顧客サイト」を編集できる人だけ ----------
+let csFrameMsg=null;
+PAGES.cust=()=>{ const st=storeId;
+  $('main').innerHTML=`<h1>顧客サイト <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>
+  <iframe id="csFrame" src="../customer/preview.html#admin" title="顧客サイト" style="width:100%;height:calc(100vh - 150px);min-height:480px;border:1px solid var(--line);border-radius:12px;background:#fff"></iframe>`;
+  if(csFrameMsg) window.removeEventListener('message',csFrameMsg);
+  csFrameMsg=async e=>{ const f=$('csFrame'); if(!f||e.source!==f.contentWindow||e.origin!==location.origin||!e.data||e.data.type!=='olive-cs-need') return;
+    const r=await sb.rpc('admin_cs_session',{p_store:st}); if(!$('csFrame')||storeId!==st) return;
+    const d=r.error?{error:/admin_cs_session/.test(r.error.message)?'SQL 076 が未実行です':r.error.message}:(r.data||{});
+    f.contentWindow.postMessage({type:'olive-cs-auth',...d},location.origin); };
+  window.addEventListener('message',csFrameMsg); };
+
 // ---------- 請求書の未入金 v0.26・SQL 067：売上は会計した日のまま。振り込まれたら入金日を入れて「入金済み」にする（ここだけ。POS は見るだけ）。間違えた時は理由を入れて未入金に戻す。操作ログに残る ----------
 let invTab='unpaid';
 const mdj=d=>{ const m=String(d||'').match(/^\d{4}-(\d{2})-(\d{2})/); return m?`${+m[1]}/${+m[2]}`:''; };
 const todayJst=()=>{ const x=new Date(Date.now()+9*3600000); return x.toISOString().slice(0,10); };
-PAGES.invoice=async()=>{ const st=storeId, ed=perm('invoice')==='edit';
-  const head=`<h1>請求書の未入金 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}`;
-  $('main').innerHTML=head+`<div class="card muted">読み込み中…</div>`;
-  const r=await sb.rpc('admin_invoice_list',{p_store:st}); if(page!=='invoice'||storeId!==st) return;
-  if(r.error){ $('main').innerHTML=head+`<div class="card err">${esc(/admin_invoice_list/.test(r.error.message)?'SQL 067 が未実行です：':'読み込めません：')}${esc(r.error.message)}</div>`; return; }
+// v0.37・SQL 076：収支の画面（月次）の中に出す。見る・直すの権限は収支と同じ
+async function invRender(st){ const ed=perm('pl')==='edit', box=()=>$('invBox'), again=()=>invRender(st);
+  const r=await sb.rpc('admin_invoice_list',{p_store:st}); if(page!=='pl'||storeId!==st||plDate||!box()) return;
+  const head='<h2 style="margin:0 0 8px">請求書の未入金</h2>';
+  if(r.error){ box().innerHTML=head+`<div class="card err">${esc(/権限/.test(r.error.message)?'SQL 076 が未実行です：':'読み込めません：')}${esc(r.error.message)}</div>`; return; }
   const all=r.data||[], un=all.filter(x=>!x.paid_on), pd=all.filter(x=>x.paid_on), list=invTab==='paid'?pd:un, sum=a=>a.reduce((t,x)=>t+Number(x.amount||0),0);
-  $('main').innerHTML=head+`<div class="cs-tabs"><button data-it="unpaid" class="${invTab==='unpaid'?'on':''}">未入金（${un.length}件 ${yen(sum(un))}）</button><button data-it="paid" class="${invTab==='paid'?'on':''}">入金済み（${pd.length}件）</button></div>
-  <div class="card"><table class="t"><tr><th>会計した日</th><th>卓</th><th>お客様</th><th>係</th><th style="text-align:right">金額</th>${invTab==='paid'?'<th>入金日</th>':''}${ed?'<th></th>':''}</tr>
+  box().innerHTML=head+`<div class="cs-tabs"><button data-it="unpaid" class="${invTab==='unpaid'?'on':''}">未入金（${un.length}件 ${yen(sum(un))}）</button><button data-it="paid" class="${invTab==='paid'?'on':''}">入金済み（${pd.length}件）</button></div>
+  <div class="card" style="margin-bottom:0"><table class="t"><tr><th>会計した日</th><th>卓</th><th>お客様</th><th>係</th><th style="text-align:right">金額</th>${invTab==='paid'?'<th>入金日</th>':''}${ed?'<th></th>':''}</tr>
   ${list.map(x=>`<tr><td>${esc(x.business_date)}</td><td>${esc(x.table_name||'')}</td><td>${esc(x.customers||'')}</td><td>${esc(x.kakari||'')}</td><td style="text-align:right">${yen(x.amount)}</td>${invTab==='paid'?`<td>${esc(x.paid_on)}</td>`:''}${ed?`<td style="text-align:right">${invTab==='paid'?`<button class="ghost sm" data-iu="${x.id}">未入金に戻す</button>`:`<button class="primary sm" data-ip="${x.id}">入金済みにする</button>`}</td>`:''}</tr>`).join('')||`<tr><td class="muted" colspan="7">${invTab==='paid'?'入金済みの請求書はありません':'未入金の請求書はありません'}</td></tr>`}</table></div>`;
-  $('main').querySelectorAll('[data-it]').forEach(b=>b.onclick=()=>{ invTab=b.dataset.it; PAGES.invoice(); });
+  box().querySelectorAll('[data-it]').forEach(b=>b.onclick=()=>{ invTab=b.dataset.it; again(); });
   const row=id=>all.find(x=>x.id===id), what=x=>`${x.business_date}　${x.table_name||''}${x.customers?'　'+x.customers+' 様':''}　${yen(x.amount)}`;
-  $('main').querySelectorAll('[data-ip]').forEach(b=>b.onclick=guard(b,async()=>{ const x=row(b.dataset.ip); if(!x) return;
+  box().querySelectorAll('[data-ip]').forEach(b=>b.onclick=guard(b,async()=>{ const x=row(b.dataset.ip); if(!x) return;
     const t=todayJst(), m=modal(`<h2 style="margin:0">入金済みにする</h2><div>${esc(what(x))}</div><label>入金日<input type="date" id="ipDate" value="${t}" min="${esc(x.business_date)}" max="${t}"></label><div class="bar"><button class="ghost" data-k="no">キャンセル</button><button class="primary" data-k="ok">入金済みにする</button></div>`);
     const d=await new Promise(res=>{ m.querySelector('[data-k=no]').onclick=()=>{ m.remove(); res(null); }; m.querySelector('[data-k=ok]').onclick=()=>{ const v=m.querySelector('#ipDate').value; m.remove(); res(v||''); }; });
     if(d===null) return; if(!d){ await uiAlert('入金日を入れてください'); return; }
-    const z=await rpc('admin_invoice_paid',{p_payment:x.id,p_date:d}); if(!z.ok) return; toast(`${mdj(d)} 入金済みにしました`); PAGES.invoice(); }));
-  $('main').querySelectorAll('[data-iu]').forEach(b=>b.onclick=guard(b,async()=>{ const x=row(b.dataset.iu); if(!x) return;
+    const z=await rpc('admin_invoice_paid',{p_payment:x.id,p_date:d}); if(!z.ok) return; toast(`${mdj(d)} 入金済みにしました`); again(); }));
+  box().querySelectorAll('[data-iu]').forEach(b=>b.onclick=guard(b,async()=>{ const x=row(b.dataset.iu); if(!x) return;
     const m=modal(`<h2 style="margin:0">未入金に戻す</h2><div>${esc(what(x))}<br>入金日 ${esc(x.paid_on)}</div><label>理由（必須・操作ログに残ります）<input id="iuWhy" maxlength="100"></label><div class="bar"><button class="ghost" data-k="no">キャンセル</button><button class="danger" data-k="ok">未入金に戻す</button></div>`);
     const w=await new Promise(res=>{ m.querySelector('[data-k=no]').onclick=()=>{ m.remove(); res(null); }; m.querySelector('[data-k=ok]').onclick=()=>{ const v=m.querySelector('#iuWhy').value.trim(); m.remove(); res(v); }; });
     if(w===null) return; if(!w){ await uiAlert('理由を入れてください'); return; }
-    const z=await rpc('admin_invoice_unpaid',{p_payment:x.id,p_reason:w}); if(!z.ok) return; toast('未入金に戻しました'); PAGES.invoice(); })); };
+    const z=await rpc('admin_invoice_unpaid',{p_payment:x.id,p_reason:w}); if(!z.ok) return; toast('未入金に戻しました'); again(); })); }
 
 // ---------- POS設定の「店の情報」 v0.26・SQL 067：前の「店舗設定」を POS設定にまとめた（権限も POS設定）。v0.14・SQL 055：閉店時間（タイムカードの打ち止め。アフターの延長もここから数える） ----------
 // v0.20・SQL 060：店の情報（店名・営業時間・住所・電話・メール・インボイス番号・領収書メールの宛先）。書き換えはここだけ

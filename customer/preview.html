@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.31 -->
+<title>OLIVE 顧客</title><!-- customer v1.32 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -137,9 +137,16 @@ const SUPABASE_URL='https://gjqaxenwvvazhjtziusf.supabase.co', SUPABASE_KEY='sb_
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const yen=n=>Number(n||0).toLocaleString('ja-JP')+'円'; /* v1.16：金額は POS と同じ「78,000円」 */
-const LS={ get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v); }catch(e){} } };
-const SS={ get(k){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ v==null?sessionStorage.removeItem(k):sessionStorage.setItem(k,v); }catch(e){} } };
+/* v1.32・SQL 076：管理サイトの「顧客サイト」の中で開いた時（#admin）は、パスワードを聞かずに管理サイトから入場券をもらう。この端末の顧客サイトのログインには触らない（覚えるのはこの画面の中だけ） */
+const EMB=window.parent!==window&&location.hash==='#admin', MEM={};
+const LS0={ get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v); }catch(e){} } };
+const SS0={ get(k){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ v==null?sessionStorage.removeItem(k):sessionStorage.setItem(k,v); }catch(e){} } };
 
+const MEMS={ get(k){ return MEM[k]??null; }, set(k,v){ if(v==null) delete MEM[k]; else MEM[k]=String(v); } }, LS=EMB?MEMS:LS0, SS=EMB?MEMS:SS0;
+let embWait=null, embEdit=null, embEditExp=0; // 管理サイトに入場券をたのむ（返事が来るまで待つ）
+function embAsk(){ if(!embWait) embWait=new Promise(res=>{ const on=e=>{ if(e.origin!==location.origin||e.source!==window.parent||!e.data||e.data.type!=='olive-cs-auth') return;
+    window.removeEventListener('message',on); embWait=null; const d=e.data; token=d.token||null; embEdit=d.edit_token||null; embEditExp=d.edit_expires_at?new Date(d.edit_expires_at).getTime():0; res(d); };
+  window.addEventListener('message',on); window.parent.postMessage({type:'olive-cs-need'},location.origin); }); return embWait; }
 let token=LS.get('olive_cs_token'), editTok=SS.get('olive_cs_edit'), editExp=Number(SS.get('olive_cs_edit_exp')||0);
 let boot=null, custs=[], mode='all', monthsSel=null, curId=null, cur=null;
 
@@ -171,7 +178,8 @@ async function fail(e){ if(e&&e.code==='CS_AUTH'){ showLogin(e.message); return;
 
 // ---------- 画面切り替え ----------
 function show(v){ ['vLogin','vList','vDetail'].forEach(x=>$(x).classList.toggle('hide',x!==v)); window.scrollTo(0,0); }
-function showLogin(msg){ show('vLogin'); $('loginErr').textContent=msg||''; $('pw').value=''; }
+let embTry=0;
+function showLogin(msg){ if(EMB){ if(++embTry>3){ show('vLogin'); $('loginErr').textContent='顧客サイトを開けません。管理サイトを読み込み直してください'; return; } embAsk().then(d=>{ if(d&&d.token) start(); else { show('vLogin'); $('loginErr').textContent=d&&d.error||'顧客サイトを開けません'; } }); return; } show('vLogin'); $('loginErr').textContent=msg||''; $('pw').value=''; }
 function logoutLocal(){ token=null; LS.set('olive_cs_token',null); endEdit(true); boot=null; custs=[]; }
 
 // ---------- ログイン ----------
@@ -203,12 +211,14 @@ function paintEdit(){ const on=editing(); ['editBar1','editBar2'].forEach(id=>$(
   clearTimeout(editTimer); if(on) editTimer=setTimeout(()=>{ if(!editing()){ endEdit(); toast('編集モードを終了しました'); } else paintEdit(); },30000); }
 document.querySelectorAll('.editEnd').forEach(b=>b.onclick=()=>{ endEdit(); toast('編集モードを終了しました'); });
 async function needEdit(){ if(editing()) return true;
+  if(EMB){ let d=null; if(!embEdit||embEditExp<Date.now()+60000) d=await embAsk(); if(embEdit&&embEditExp>Date.now()){ editTok=embEdit; editExp=Math.min(embEditExp,Date.now()+30*60000); paintEdit(); toast('編集モードにしました（30分）'); return true; }
+    await uiAlert(d&&d.error||'顧客サイトを編集する権限がありません'); return false; } // 編集モードは普通の時と同じ30分
   const pw=await uiPrompt('編集パスワード','',{pw:true,ok:'編集する'}); if(pw==null) return false; if(!pw){ toast('パスワードを入力してください'); return false; }
   try{ const r=await rpc('cs_edit_login',{p_token:token,p_pw:pw}); if(r&&r.error){ await uiAlert('編集パスワードが違います'); return false; }
     editTok=r.edit_token; editExp=new Date(r.expires_at).getTime(); SS.set('olive_cs_edit',editTok); SS.set('olive_cs_edit_exp',String(editExp)); paintEdit(); toast('編集モードにしました（30分）'); return true; }
   catch(e){ await fail(e); return false; } }
 
-$('menuBtn').onclick=()=>sheet(`<h3>メニュー</h3><div style="display:flex;flex-direction:column;gap:8px">${editing()?'<button class="ghost" data-a="end">編集モードを終了</button>':'<button class="edit" data-a="edit">編集パスワードを入力</button>'}<button class="ghost" data-a="reload">最新に更新</button><button class="ghost" data-a="out" style="color:var(--warn)">ログアウト</button></div><div class="btns"><button class="ghost" data-x>閉じる</button></div>`,(s,done)=>{
+$('menuBtn').onclick=()=>sheet(`<h3>メニュー</h3><div style="display:flex;flex-direction:column;gap:8px">${editing()?'<button class="ghost" data-a="end">編集モードを終了</button>':`<button class="edit" data-a="edit">${EMB?'編集モードにする':'編集パスワードを入力'}</button>`}<button class="ghost" data-a="reload">最新に更新</button>${EMB?'':'<button class="ghost" data-a="out" style="color:var(--warn)">ログアウト</button>'}</div><div class="btns"><button class="ghost" data-x>閉じる</button></div>`,(s,done)=>{
   s.querySelector('[data-x]').onclick=()=>done(); s.querySelectorAll('[data-a]').forEach(b=>b.onclick=async()=>{ const a=b.dataset.a; done();
     if(a==='edit') await needEdit(); else if(a==='end'){ endEdit(); toast('編集モードを終了しました'); } else if(a==='reload') await loadList();
     else if(a==='out'){ if(!await uiConfirm('ログアウトしますか？\n次に開く時はパスワードが必要です。','ログアウト','danger')) return; try{ await rpc('cs_logout',{p_token:token}); }catch(e){} logoutLocal(); showLogin(); } }); });
@@ -386,7 +396,7 @@ async function csRefresh(listToo){ if(!token||document.visibilityState!=='visibl
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ paintEdit(); csRefresh(true); } });
 setInterval(()=>csRefresh(true),60000); /* v1.27：一覧の画面でも1分ごとに読み直す（パスワードが変わったらログアウト） */
 
-start();
+if(EMB){ token=null; editTok=null; editExp=0; embAsk().then(d=>{ if(d&&d.token) start(); else { show('vLogin'); $('loginErr').textContent=d&&d.error||'顧客サイトを開けません'; } }); } else start();
 </script>
 </body>
 </html>
