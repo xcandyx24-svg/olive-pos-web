@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.41 -->
+<title>OLIVE 管理</title><!-- admin v0.42 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -874,7 +874,7 @@ PAGES.set_cast=async()=>{
   ${rows.length?`<div class="cs-w ${E?'editing':''}"><table class="reg cs"><tr><th class="nm">名前</th>${HD.map(h=>`<th>${h}</th>`).join('')}</tr>
   ${rows.map(r=>`<tr data-sid="${r.s.id}"><td class="nm">${E?esc(r.s.display_name):`<a data-open="${r.s.id}">${esc(r.s.display_name)}</a>`}${r.t.month===m&&r.t.only_month?`<br><small class="muted">${csMShort(m)}のみ</small>`:''}</td>${cell(r).map(c=>`<td>${c}</td>`).join('')}<td>${nc[r.s.id]?nc[r.s.id]+'件':'—'}</td></tr>`).join('')}</table></div>`
   :'<div class="card muted">在籍のキャストがいません</div>'}
-  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">${E?'表の中で直して「保存」。給与・日給・スライド表・保証時給・期限・同伴ノルマ・バック・源泉徴収・消費税・厚生費・罰金の免除を変えた時は「以降／のみ」を聞きます':'名前を押すと、その人だけの条件とメモが開きます'}${ed&&!E?'。直す時は「編集」':''}</div>`;
+  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">${E?'表の中で直して「保存」。給与・日給・スライド表・保証時給・期限・同伴ノルマ・バック・源泉徴収・消費税・厚生費・罰金の免除を変えた時は「以降／のみ」を聞きます':'名前を押すと、個別設定とメモが開きます'}${ed&&!E?'。直す時は「編集」':''}</div>`;
   $('csM').onchange=()=>{ csMonth=$('csM').value; PAGES.set_cast(); }; csKindWire();
   $('main').querySelectorAll('[data-open]').forEach(a=>a.onclick=()=>{ const s=casts.find(x=>x.id===a.dataset.open); csDetail={store:st,s}; csTab='sp'; PAGES.set_cast(); });
   if(!ed) return;
@@ -1009,7 +1009,7 @@ async function csHallPage(){ const st=storeId, ed=perm('set_cast')==='edit', cur
 // 名前を押した時：その人だけの条件・メモ
 async function csDetailPage(){ const st=storeId, s=csDetail.s, ed=perm('set_cast')==='edit';
   const head=`<div class="row" style="margin-bottom:12px"><button class="ghost" id="csBack">← 一覧に戻る</button><h1 style="margin:0">${esc(s.display_name)}</h1></div>
-   <div class="cs-tabs"><button data-t="sp" class="${csTab==='sp'?'on':''}">その人だけの条件</button><button data-t="memo" class="${csTab==='memo'?'on':''}">メモ</button><button data-t="ord" class="${csTab==='ord'?'on':''}">注文集計</button></div>`;
+   <div class="cs-tabs"><button data-t="sp" class="${csTab==='sp'?'on':''}">個別設定</button><button data-t="memo" class="${csTab==='memo'?'on':''}">メモ</button><button data-t="ord" class="${csTab==='ord'?'on':''}">注文集計</button></div>`;
   $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>';
   const wire=()=>{ $('csBack').onclick=()=>{ csDetail=null; PAGES.set_cast(); }; $('main').querySelectorAll('.cs-tabs button').forEach(b=>b.onclick=()=>{ csTab=b.dataset.t; csDetailPage(); }); };
   wire();
