@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.37 -->
+<title>OLIVE 管理</title><!-- admin v0.38 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -357,7 +357,7 @@ async function plDayPage(){ const st=storeId, d=plDate, ed=perm('pl')==='edit', 
   const list=(k,l)=>{ const rows=mv.filter(x=>x.kind===k); return `<div class="card"><h2>${l} - ${jd(d)}</h2><table class="t pl"><tr><th>摘要</th><th class="r">金額</th></tr>${rows.map(x=>`<tr><td>${esc(x.memo||'')}</td><td class="r">${plYen(x.amount)}</td></tr>`).join('')}<tr class="kst"><td>合計</td><td class="r">${plYen(rows.reduce((a,x)=>a+Number(x.amount||0),0))}</td></tr></table></div>`; };
   const hm=t=>t?new Date(t).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false}):''; // 時刻は日本時間で出す（直す時も日本時間で送る）
   const own=!!me?.is_owner, bills=X.bills||[], bt=k=>bills.reduce((a,b)=>a+Number(b[k]||0),0);
-  const billRows=bills.map((b,i)=>`<tr><td>${i+1}</td><td>${hm(b.opened_at)}</td><td>${b.closed_at?hm(b.closed_at):'<span class="badge">来店中</span>'}</td><td>${esc(b.table||'')}</td><td class="r">${b.guests}</td><td>${esc(b.customers||'')}</td><td>${esc(b.kakari||'')}</td><td>${esc(b.douhan||'')}</td><td class="r">${plYen(b.sub)}</td><td class="r">${plYen(b.cash)}</td><td class="r">${plYen(b.card)}</td><td class="r">${plYen(b.invoice)}</td><td class="r">${b.oki?plYen(b.oki):'—'}</td><td class="r"><b>${plYen(b.due)}</b></td>${own?`<td>${b.closed_at&&b.status==='closed'?`<button class="ghost sm" data-bed="${b.id}">直す</button>`:''}</td>`:''}</tr>`).join('');
+  const billRows=bills.map((b,i)=>`<tr><td><a data-bvw="${b.id}" style="color:var(--blue);cursor:pointer;text-decoration:underline">${i+1}</a></td><td>${hm(b.opened_at)}</td><td>${b.closed_at?hm(b.closed_at):'<span class="badge">来店中</span>'}</td><td>${esc(b.table||'')}</td><td class="r">${b.guests}</td><td>${esc(b.customers||'')}</td><td>${esc(b.kakari||'')}</td><td>${esc(b.douhan||'')}</td><td class="r">${plYen(b.sub)}</td><td class="r"><b>${plYen(b.due)}</b></td><td class="r">${plYen(b.cash)}</td><td class="r">${plYen(b.card)}</td><td class="r">${plYen(b.invoice)}</td><td class="r">${b.oki?plYen(b.oki):'—'}</td>${own?`<td>${b.closed_at&&b.status==='closed'?`<button class="ghost sm" data-bed="${b.id}">直す</button>`:''}</td>`:''}</tr>`).join('');
   // 勤怠：一人1行（同伴・出勤・退勤またはアフター）。時刻は打刻した時刻、小さく丸めた時刻（計算に使う時刻）
   const EV={douhan:'同伴',clock_in:'出勤',clock_out:'退勤',after:'アフター'}, ppl=[]; (X.events||[]).forEach(e=>{ let p=ppl.find(z=>z.id===e.staff_id); if(!p){ p={id:e.staff_id,name:e.name,kind:e.kind,ev:{}}; ppl.push(p); } p.ev[e.type]=e; });
   const tcell=e=>e?`<span${e.corrected?' style="color:#c0392b"':''}>${hm(e.at)}</span>${e.rounded_at&&hm(e.rounded_at)!==hm(e.at)?` <small class="muted">→${hm(e.rounded_at)}</small>`:''}${ed?` <button class="ghost sm" data-pfx="${e.id}">直す</button>`:''}`:'—';
@@ -367,12 +367,13 @@ async function plDayPage(){ const st=storeId, d=plDate, ed=perm('pl')==='edit', 
     <div class="card"><h2>現金管理 - ${jd(d)}</h2><table class="t pl"><tr><th>摘要</th><th class="r">収入金額</th><th class="r">支払金額</th><th class="r">差引残高</th></tr>${cashRows.map(r=>`<tr><td>${r[0]}</td><td class="r">${r[1]}</td><td class="r">${r[2]}</td><td class="r">${r[3]}</td></tr>`).join('')}</table>
       <div class="row" style="margin-top:8px"><button class="ghost sm" id="plReg">この日の現金管理を開く</button></div></div>
     ${list('out','出金')}${list('in','入金')}</div>
-    <div class="card"><h2>伝票一覧 - ${jd(d)}</h2><div class="cs-w" style="border:none"><table class="t pl"><tr><th>No</th><th>入店</th><th>退店</th><th>卓</th><th class="r">客数</th><th>お客様</th><th>係</th><th>同伴</th><th class="r">係小計</th><th class="r">現金</th><th class="r">カード</th><th class="r">売掛</th><th class="r">置き</th><th class="r">合計</th>${own?'<th></th>':''}</tr>
-      ${billRows||`<tr><td colspan="${own?15:14}" class="muted">伝票はありません</td></tr>`}${bills.length?`<tr class="kst"><td colspan="4">合計</td><td class="r">${bt('guests')}</td><td colspan="3"></td><td class="r">${plYen(bt('sub'))}</td><td class="r">${plYen(bt('cash'))}</td><td class="r">${plYen(bt('card'))}</td><td class="r">${plYen(bt('invoice'))}</td><td class="r">${plYen(bt('oki'))}</td><td class="r">${plYen(bt('due'))}</td>${own?'<td></td>':''}</tr>`:''}</table></div></div>
+    <div class="card"><h2>伝票一覧 - ${jd(d)}</h2><div class="cs-w" style="border:none"><table class="t pl"><tr><th>No</th><th>入店</th><th>退店</th><th>卓</th><th class="r">客数</th><th>お客様</th><th>係</th><th>同伴</th><th class="r">係小計</th><th class="r">合計</th><th class="r">現金</th><th class="r">カード</th><th class="r">売掛</th><th class="r">置き</th>${own?'<th></th>':''}</tr>
+      ${billRows||`<tr><td colspan="${own?15:14}" class="muted">伝票はありません</td></tr>`}${bills.length?`<tr class="kst"><td colspan="4">合計</td><td class="r">${bt('guests')}</td><td colspan="3"></td><td class="r">${plYen(bt('sub'))}</td><td class="r">${plYen(bt('due'))}</td><td class="r">${plYen(bt('cash'))}</td><td class="r">${plYen(bt('card'))}</td><td class="r">${plYen(bt('invoice'))}</td><td class="r">${plYen(bt('oki'))}</td>${own?'<td></td>':''}</tr>`:''}</table></div></div>
     <div class="card"><h2>勤怠 - ${jd(d)}</h2><table class="t pl"><tr><th>名前</th><th>同伴</th><th>出勤</th><th>退勤</th></tr>${attRows||'<tr><td colspan="4" class="muted">打刻はありません</td></tr>'}</table>
       <div class="muted" style="font-size:13px;margin-top:6px">→の後は計算に使う時刻（丸めた時刻）。赤は直した時刻</div></div>`;
   wire(); $('plReg').onclick=()=>{ regDate=d; regTab='day'; go('register'); };
   $('main').querySelectorAll('[data-bed]').forEach(bn=>bn.onclick=guard(bn,()=>billEdit(bn.dataset.bed)));
+  $('main').querySelectorAll('[data-bvw]').forEach(a=>a.onclick=()=>billView(a.dataset.bvw,own&&!!bills.find(b=>b.id===a.dataset.bvw&&b.closed_at&&b.status==='closed')));
   $('main').querySelectorAll('[data-pfx]').forEach(bn=>bn.onclick=guard(bn,async()=>{ const e=(X.events||[]).find(z=>z.id===bn.dataset.pfx); if(!e) return;
     const mdl=modal(`<h2 style="margin:0">${esc(e.name)}　${EV[e.type]||''}の時刻を直す</h2><div class="muted">今：${hm(e.at)}</div><label>時刻<input type="time" id="pfT" value="${hm(e.at)}"></label><label>理由（必須・操作ログに残ります）<input id="pfR" maxlength="100"></label><div class="bar"><button class="ghost" data-k="no">キャンセル</button><button class="primary" data-k="ok">直す</button></div>`);
     const v=await new Promise(res=>{ mdl.querySelector('[data-k=no]').onclick=()=>{ mdl.remove(); res(null); }; mdl.querySelector('[data-k=ok]').onclick=()=>{ const t=mdl.querySelector('#pfT').value, rs=mdl.querySelector('#pfR').value.trim(); mdl.remove(); res({t,rs}); }; });
@@ -387,6 +388,28 @@ const beDh=r=>r==='douhan'||r==='douhan1'||r==='douhan2';
 const beUid=()=>crypto.randomUUID?crypto.randomUUID():'10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16));
 const beHm=t=>t?new Date(t).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false}):'';
 function beRole(ts){ const x=new Date(new Date(ts||Date.now()).toLocaleString('en-US',{timeZone:'Asia/Tokyo'})), m=x.getHours()*60+x.getMinutes(); if(m<8*60) return 'douhan'; if(m<=20*60+30) return 'douhan1'; if(m<=21*60) return 'douhan2'; return 'douhan'; } // POS と同じ決め方
+// v0.38：伝票の No を押すと、その伝票の中身を全部見る（見るだけ。オーナーは「直す」へ）
+async function billView(id,canEdit){
+  const r=await sb.rpc('admin_bill_get',{p_bill:id}); if(r.error){ await uiAlert(/admin_bill_get/.test(r.error.message)?'SQL 071 が未実行です：'+r.error.message:r.error.message); return; }
+  const O=r.data||{}, B=O.bill||{}, C=O.calc||{}, ST=O.staff||[], sn=sid=>ST.find(x=>x.id===sid)?.name||'（不明）', pn=pid=>(O.products||[]).find(p=>p.id===pid)?.name||'';
+  const N=v=>Number(v||0), items=(O.items||[]).filter(i=>!i.is_void), voids=(O.items||[]).filter(i=>i.is_void), exts=O.exts||[], adjs=O.adjs||[], pays=O.pays||[];
+  const dur=(a,b)=>{ if(!a||!b) return ''; const m=Math.max(0,Math.round((new Date(b)-new Date(a))/60000)); return `${Math.floor(m/60)}時間${String(m%60).padStart(2,'0')}分`; };
+  const ks=(O.casts||[]).filter(c=>c.is_kakari).map(c=>sn(c.staff_id)), ds=(O.casts||[]).filter(c=>beDh(c.role)).map(c=>sn(c.staff_id)), gd=(O.goods||[]).map(g=>sn(g.staff_id));
+  // POS の会計済みの伝票（明細書）と同じ形
+  const L=(l,v,c)=>`<div class="bv-ln ${c||''}"><span>${l}</span><span style="white-space:nowrap">${v}</span></div>`, extMin=exts.reduce((t,e)=>t+N(e.minutes),0);
+  const its=items.map(i=>{ const bk=(i.splits||[]).filter(z=>N(z.back_amount)||N(z.back_points)).map(z=>sn(z.staff_id)); return L(`${esc(i.name||pn(i.product_id))} <small>× ${i.qty}</small>${bk.length?` <small>（バック：${esc(bk.join('・'))}）</small>`:''}`,yen(N(i.unit_price)*N(i.qty))); }).join('');
+  const box=modal(`<style>.bv-ln{display:flex;justify-content:space-between;gap:12px;padding:6px 2px;font-size:16px}.bv-ln small{color:var(--muted);font-size:13px}.bv-ln.sm,.bv-sm{font-size:14px;color:var(--muted)}.bv hr{border:0;border-top:1px solid var(--line);margin:8px 0}</style>
+    <div class="bv"><div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><b style="font-size:22px">${esc(B.table||'')}</b><span>${md(B.business_date)}　${beHm(B.opened_at)}〜${B.closed_at?beHm(B.closed_at):''}${B.closed_at?`（${dur(B.opened_at,B.closed_at)}）`:''}　${N(B.guest_count)}名</span>${B.closed_at?'':'<span class="badge" style="margin-left:auto">来店中</span>'}</div>
+    <div class="bv-sm" style="margin-top:6px">お客様：${B.customers?esc(String(B.customers).split('・').map(n=>n+' 様').join('・')):'未登録'}　　係：${ks.length?esc(ks.join('・')):'なし'}${ds.length?'　　同伴：'+esc(ds.join('・')):''}${gd.length?'　　反応<span style="color:var(--gold)">◎</span>：'+esc(gd.join('・')):''}</div><hr>
+    ${N(C.set)?L(`セット${C.set_guests!=null?` <small>× ${C.set_guests}</small>`:''}`,yen(C.set)):''}${N(C.vip_set)?L('VIPルーム料金',yen(C.vip_set)):''}${N(C.extension)?L(`延長 <small>${exts.length}回・計${extMin}分</small>`,yen(C.extension)):''}${N(C.vip_ext)?L('VIPルーム延長',yen(C.vip_ext)):''}${its||'<div class="bv-sm">注文はありません</div>'}
+    ${voids.length?`<div class="bv-sm" style="margin-top:4px">取消：${voids.map(i=>esc(i.name||pn(i.product_id))+' × '+i.qty).join('、')}</div>`:''}<hr>
+    ${C.subtotal!=null?L('小計',yen(C.subtotal),'sm'):''}${C.service!=null?L('サービス料'+(C.service_rate!=null?' '+C.service_rate+'%':''),yen(C.service),'sm'):''}${C.tax!=null?L('消費税',yen(C.tax),'sm'):''}${adjs.map(a=>L((a.kind==='discount'?'値引':'値増')+(a.reason?` <small>${esc(a.reason)}</small>`:''),(a.kind==='discount'?'−':'')+yen(a.amount),'sm')).join('')}
+    <div class="bv-ln" style="font-size:24px;font-weight:800;padding-top:10px"><span>請求額</span><span>${yen(C.amount_due)}</span></div><hr>
+    <div class="bv-ln"><span>お支払い</span><span style="white-space:normal;text-align:right">${pays.filter(p=>N(p.amount)>0).map(p=>`${BE_M[p.method]||esc(p.method)} ${yen(p.amount)}${p.method==='invoice'?`<small>（${p.invoice_paid_on?mdj(p.invoice_paid_on)+'入金':'未入金'}）</small>`:''}`).join('／')||'入金の記録はありません'}</span></div></div>
+    <div class="bar">${canEdit?'<button class="ghost" data-k="ed">直す</button>':''}<button class="primary" data-k="ok">閉じる</button></div>`);
+  box.querySelector('.box').style.width='min(640px,100%)';
+  box.querySelector('[data-k=ok]').onclick=()=>box.remove();
+  const e=box.querySelector('[data-k=ed]'); if(e) e.onclick=()=>{ box.remove(); billEdit(id); }; }
 async function billEdit(id){
   const r=await sb.rpc('admin_bill_get',{p_bill:id}); if(r.error){ await uiAlert(/admin_bill_get/.test(r.error.message)?'SQL 071 が未実行です：'+r.error.message:r.error.message); return; }
   const O=r.data, S=JSON.parse(JSON.stringify(O)), st=O.settings||{}, B=S.bill, att=new Set(O.attended||[]), bd=O.bill.business_date;
