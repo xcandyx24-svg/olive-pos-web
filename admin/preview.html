@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.32 -->
+<title>OLIVE 管理</title><!-- admin v0.33 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -316,7 +316,27 @@ async function plExcel(d){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/xlsx@
   const aoa=[[`収支明細（月次）${y}年${mo}月`],['日付',...cols.map(c=>c[1])],['',...cols.map(c=>c[2]+(c[1]==='rate'?'(%)':''))],['合計',...cols.map(c=>val(c[1],T))],...(d.days||[]).map(x=>[x.date,...cols.map(c=>val(c[1],x))])];
   aoa[1]=['日付',...cols.map((c,i)=>i>0&&cols[i-1][0]===c[0]?null:c[0]||c[2])]; aoa[2]=['',...cols.map(c=>c[0]?c[2]+(c[1]==='rate'?'(%)':''):null)];
   const ws=XLSX.utils.aoa_to_sheet(aoa), mg=[{s:{r:1,c:0},e:{r:2,c:0}}]; let j=0; while(j<cols.length){ let k=j; while(k+1<cols.length&&cols[k+1][0]===cols[j][0]) k++; if(cols[j][0]) mg.push({s:{r:1,c:j+1},e:{r:1,c:k+1}}); else mg.push({s:{r:1,c:j+1},e:{r:2,c:j+1}}); j=k+1; }
-  ws['!merges']=mg; ws['!cols']=[{wch:12},...cols.map(()=>({wch:11}))]; const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'収支'); XLSX.writeFile(wb,`sales-${y}-${String(mo).padStart(2,'0')}${ksCode()}.xlsx`); toast('ダウンロードしました'); }
+  ws['!merges']=mg; ws['!cols']=[{wch:12},...cols.map(()=>({wch:11}))]; const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'月次収支明細');
+  // v0.33・SQL 073：d-system と同じく ZIP（フォルダの中に 月次1つ＋日次をその月の全部の日。日次のタブは 出金・入金・伝票一覧・メモ）
+  const ym=`${y}-${String(mo).padStart(2,'0')}`, base=`${curStore()?.name||'OLIVE'}_収支明細-${ym}`.replace(/[\\/:*?"<>|]/g,'_');
+  try{ await ksLoad('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'); }catch(e){ await uiAlert(e.message); return; }
+  const ex=await sb.rpc('admin_pl_export',{p_store:storeId,p_month:d.month}); if(ex.error){ await uiAlert((/admin_pl_export/.test(ex.error.message)?'SQL 073 が未実行です：':'')+ex.error.message); return; }
+  const E=ex.data||{}, zip=new JSZip(), dir=zip.folder(base), out=w=>XLSX.write(w,{bookType:'xlsx',type:'array'});
+  dir.file(`月次収支明細-${ym}.xlsx`,out(wb));
+  const hm=t=>t?new Date(t).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false}):'';
+  const dur=(a,b)=>{ if(!a||!b) return ''; const m=Math.max(0,Math.round((new Date(b)-new Date(a))/60000)); return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`; };
+  const sheet=(aoa,w,mg)=>{ const x=XLSX.utils.aoa_to_sheet(aoa); x['!cols']=w.map(n=>({wch:n})); if(mg) x['!merges']=mg; return x; };
+  const last=new Date(y,mo,0).getDate();
+  for(let i=1;i<=last;i++){ const dd=`${ym}-${String(i).padStart(2,'0')}`, w=XLSX.utils.book_new();
+    const mv=k=>(E.moves||[]).filter(x=>x.date===dd&&x.kind===k), mvs=(k,l)=>{ const r=mv(k); return sheet([['摘要',l,'備考'],...r.map(x=>[x.memo||'',Number(x.amount||0),'']),['合計',r.reduce((a,x)=>a+Number(x.amount||0),0),'']],[24,12,24]); };
+    XLSX.utils.book_append_sheet(w,mvs('out','支払金額'),'出金'); XLSX.utils.book_append_sheet(w,mvs('in','収入金額'),'入金');
+    const bs=(E.bills||[]).filter(b=>b.date===dd), N=k=>bs.reduce((a,b)=>a+Number(b[k]||0),0);
+    XLSX.utils.book_append_sheet(w,sheet([['№','入店','退店','時間','領収書','卓番号','客数','顧客','係','同伴','注文','係小計','現金','カード','売掛','置き','合計'],
+      ...bs.map((b,j)=>[j+1,hm(b.opened_at),b.closed_at?hm(b.closed_at):'来店中',dur(b.opened_at,b.closed_at),b.receipt?'◯':'',b.table||'',Number(b.guests||0),b.customers||'',b.kakari||'',b.douhan||'',b.items||'',Number(b.sub||0),Number(b.cash||0),Number(b.card||0),Number(b.invoice||0),Number(b.oki||0),Number(b.due||0)]),
+      ['計','','','',bs.filter(b=>b.receipt).length,'',N('guests'),'','','','',N('sub'),N('cash'),N('card'),N('invoice'),N('oki'),N('due')]],[5,7,7,7,7,9,6,16,14,14,40,10,10,10,10,10,10]),'伝票一覧');
+    const memo=(E.memos||[]).find(x=>x.date===dd)?.memo||''; XLSX.utils.book_append_sheet(w,sheet([['メモ'],[memo]],[80]),'メモ');
+    dir.file(`日次収支明細-${dd}.xlsx`,out(w)); }
+  const blob=await zip.generateAsync({type:'blob'}), a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${base}.zip`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); toast('ダウンロードしました'); }
 async function plDayPage(){ const st=storeId, d=plDate, ed=perm('pl')==='edit', m=d.slice(0,7)+'-01';
   const jd=x=>{ const t=new Date(x+'T00:00:00'); return `${t.getFullYear()}年${t.getMonth()+1}月${t.getDate()}日(${WJ[t.getDay()]})`; };
   const head=`<h1>収支 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="row" style="margin-bottom:12px"><button class="ghost" id="plBack">◀ 月次へ</button><button class="ghost" id="plPrev">前の日</button><input type="date" id="plDate" value="${d}" style="width:auto"><button class="ghost" id="plNext">次の日</button>${ed?'':'<span class="muted" style="font-size:13px">見るだけ</span>'}</div>`;
@@ -760,7 +780,7 @@ function afterCard(ax,ed){ const h='<h2>アフターの延長<br><small class="m
 const CS_PUNCH='打刻の手入力'; // v0.24・SQL 064：POS で打刻を手で入れた時に自動で付く罰金
 const CS_FOREVER='9999-12-31', CS_CATS=['性格','体調','お客様','勤怠','良かったこと','その他'];
 const CS_SP={pay:'特別な支給',deduct:'特別な控除',text:'文字だけ'};
-let csMonth=null, csEdit=false, csDetail=null, csTab='sp', csKind='cast';
+let csMonth=null, csEdit=false, csDetail=null, csTab='sp', csKind='cast', csOrdM=null;
 // v0.24：キャスト設定 → スタッフ設定（キャスト・黒服のタブ）
 const csKindTabs=()=>`<div class="cs-tabs">${[['cast','キャスト'],['hall','黒服']].map(([k,n])=>`<button data-kind="${k}" class="${csKind===k?'on':''}" ${csEdit?'disabled':''}>${n}</button>`).join('')}</div>`;
 const csKindWire=()=>$('main').querySelectorAll('[data-kind]').forEach(b=>b.onclick=()=>{ if(csEdit) return; csKind=b.dataset.kind; PAGES.set_cast(); });
@@ -957,7 +977,7 @@ async function csHallPage(){ const st=storeId, ed=perm('set_cast')==='edit', cur
 // 名前を押した時：その人だけの条件・メモ
 async function csDetailPage(){ const st=storeId, s=csDetail.s, ed=perm('set_cast')==='edit';
   const head=`<div class="row" style="margin-bottom:12px"><button class="ghost" id="csBack">← 一覧に戻る</button><h1 style="margin:0">${esc(s.display_name)}</h1></div>
-   <div class="cs-tabs"><button data-t="sp" class="${csTab==='sp'?'on':''}">その人だけの条件</button><button data-t="memo" class="${csTab==='memo'?'on':''}">メモ</button></div>`;
+   <div class="cs-tabs"><button data-t="sp" class="${csTab==='sp'?'on':''}">その人だけの条件</button><button data-t="memo" class="${csTab==='memo'?'on':''}">メモ</button><button data-t="ord" class="${csTab==='ord'?'on':''}">注文集計</button></div>`;
   $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>';
   const wire=()=>{ $('csBack').onclick=()=>{ csDetail=null; PAGES.set_cast(); }; $('main').querySelectorAll('.cs-tabs button').forEach(b=>b.onclick=()=>{ csTab=b.dataset.t; csDetailPage(); }); };
   wire();
@@ -982,6 +1002,14 @@ async function csDetailPage(){ const st=storeId, s=csDetail.s, ed=perm('set_cast
       if(kind!=='text'&&(a==null||!Number.isInteger(a)||a<=0)){ await uiAlert('金額を1以上の整数で入れてください'); return; }
       if(to&&to<f){ await uiAlert('「まで」が「から」より前になっています'); return; }
       const x=await rpc('admin_add_cast_special',{p_store:st,p_staff:s.id,p_kind:kind,p_title:title,p_amount:kind==='text'?null:a,p_from:f,p_to:to}); if(!x.ok) return; toast('追加しました'); csDetailPage(); });
+    return; }
+  if(t==='ord'){ // v0.33・SQL 073：注文集計（その月、この人にバックが付いた注文を商品ごとに。取消は除く）
+    const now=csNowMonth(); if(!csOrdM) csOrdM=now; const om=csOrdM, mOpts=Array.from({length:13},(_,i)=>csAddMonth(now,-i));
+    $('main').innerHTML=head+`<div class="card"><select id="coM" style="width:auto">${mOpts.map(x=>`<option value="${x}" ${x===om?'selected':''}>${csMLabel(x)}</option>`).join('')}</select><div id="coBox" class="muted" style="margin-top:10px">読み込み中…</div></div>`; wire();
+    $('coM').onchange=()=>{ csOrdM=$('coM').value; csDetailPage(); };
+    const r=await sb.rpc('admin_cast_orders',{p_staff:s.id,p_month:om}); if(page!=='set_cast'||csDetail?.s!==s||csTab!==t||csOrdM!==om) return;
+    if(r.error){ $('coBox').innerHTML=`<span class="err">${esc(/admin_cast_orders/.test(r.error.message)?'SQL 073 が未実行です：':'読み込めません：')}${esc(r.error.message)}</span>`; return; }
+    const L=r.data||[]; $('coBox').className=''; $('coBox').innerHTML=L.length?`<table class="t"><tr><th>商品</th><th style="text-align:right">数</th><th style="text-align:right">注文額</th></tr>${L.map(x=>`<tr><td>${esc(x.name)}</td><td style="text-align:right">${Number(x.qty)}</td><td style="text-align:right">${yen(x.amount)}</td></tr>`).join('')}<tr class="kst"><td>合計</td><td style="text-align:right">${L.reduce((a,x)=>a+Number(x.qty),0)}</td><td style="text-align:right">${yen(L.reduce((a,x)=>a+Number(x.amount),0))}</td></tr></table><div class="muted" style="font-size:13px;margin-top:6px">この人にバックが付いた注文（会計済み）。何人かで分けた注文も、それぞれの人に全部の数が入ります（d-system と同じ）</div>`:'<div class="muted">この月の注文はありません</div>';
     return; }
   const [nr,cr]=await Promise.all([sb.from('cast_notes').select('*').eq('staff_id',s.id).eq('is_void',false).order('created_at',{ascending:false}), sb.from('cast_note_cats').select('names').eq('store_id',st).maybeSingle()]);
   if(page!=='set_cast'||storeId!==st||csDetail?.s!==s||csTab!==t) return;
