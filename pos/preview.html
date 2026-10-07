@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE 会計</title><!-- v11.21 -->
+<title>OLIVE 会計</title><!-- v11.22 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -1329,6 +1329,9 @@ async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=
       <span>翌日釣銭準備金</span><span class="right" id="clNext"></span>
     </div></div>
   <div class="bar" style="margin-top:12px">${saved||future?'':later?'<span class="muted">後の日の精算があるため保存できません</span>':`<button class="primary" id="clSave">精算を保存</button>`}</div>
+  ${H('⑦ その日のメモ')}<div class="muted" style="font-size:14px;margin-bottom:6px">管理サイトの収支の Excel（日次の「メモ」）に入ります。精算の後でも書き直せます</div>
+  <textarea id="clDayMemo" rows="3" maxlength="1000" placeholder="例：カード売上照合 コウ ¥384,200" style="width:100%;min-height:96px;flex-shrink:0;box-sizing:border-box;font:inherit;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:8px"></textarea>
+  <div class="bar" style="margin-top:8px"><button class="primary" id="clDayMemoSave">メモを保存</button></div>
   ${H('月間一覧')}<div style="margin-bottom:8px"><input type="month" id="clMonthIn" value="${clMonth}"></div><div id="clMonthBox" style="overflow-x:auto;flex-shrink:0"></div>`;
   $('clDateIn').onchange=e=>{ if(e.target.value){ clDate=e.target.value; clCounts={}; clDeposit=0; renderClosing(); } };
   $('clMonthIn').onchange=e=>{ if(e.target.value){ clMonth=e.target.value; clRenderMonth(); } };
@@ -1341,6 +1344,9 @@ async function renderClosing(){ const today=businessDate(); if(!clDate){ clDate=
   box.querySelectorAll('[data-mvdel]').forEach(x=>x.onclick=async()=>{ const m=moves.find(z=>z.id===x.dataset.mvdel); if(!m||!await uiConfirm(`${m.kind==='out'?'出金':'入金'} ${yen(m.amount)}（${m.memo}）を削除しますか？`))return; const r=await sb.from('cash_movements').delete().eq('id',m.id); if(r.error){ toast(r.error.message); return; } await logOp('レジ入出金の削除',{date:d,kind:m.kind,amount:m.amount,memo:m.memo},null,true); renderClosing(); });
   box.querySelectorAll('[data-clrem]').forEach(x=>x.onchange=async()=>{ const b=bottles.find(z=>z.id===x.dataset.clrem); const v=Number(x.value); const r=await sb.from('customer_bottles').update({remaining:v,updated_at:new Date().toISOString()}).eq('id',b.id); if(r.error){ toast(r.error.message); return; } await logOp('ボトル残量変更',{customer:cn(b.customer_id),bottle:b.name,before:b.remaining,after:v},null,true); b.remaining=v; toast('残量を保存しました'); });
   clChkRender(d); // v10.61
+  // v11.22・SQL 073：その日のメモ（店・営業日ごとに1つ。管理サイトの収支の Excel の日次「メモ」に入る）
+  sb.from('daily_memos').select('memo').eq('store_id',store.id).eq('business_date',d).maybeSingle().then(r=>{ if(setCur!=='closing'||clDate!==d||!$('clDayMemo')) return; if(r.error){ $('clDayMemo').placeholder=/daily_memos/.test(r.error.message)?'SQL 073 が未実行です':r.error.message; return; } $('clDayMemo').value=r.data?.memo||''; });
+  $('clDayMemoSave').onclick=async()=>{ const b=$('clDayMemoSave'); b.disabled=true; const r=await sb.from('daily_memos').upsert({store_id:store.id,business_date:d,memo:$('clDayMemo').value.trim(),updated_at:new Date().toISOString()},{onConflict:'store_id,business_date'}); b.disabled=false; toast(r.error?(/daily_memos/.test(r.error.message)?'SQL 073 が未実行です：':'')+r.error.message:'メモを保存しました'); };
   box.querySelectorAll('[data-clrqok]').forEach(x=>x.onclick=async()=>{ const q=(rq.data||[]).find(z=>z.id===x.dataset.clrqok); x.disabled=true; if(await reqResolve(q,'applied')) toast('メモに追記しました'); renderClosing(); });
   box.querySelectorAll('[data-clrqno]').forEach(x=>x.onclick=async()=>{ const q=(rq.data||[]).find(z=>z.id===x.dataset.clrqno); if(!await uiConfirm('この申請を却下しますか？')) return; if(await reqResolve(q,'rejected')) toast('却下しました'); renderClosing(); });
   if($('clSave')) $('clSave').onclick=async()=>{ const v=clRecalc(); if(!await uiConfirm(`${d} のレジ精算を保存しますか？\nレジ内現金 ${yen(v.counted)}／過不足 ${v.diff>0?'+':''}${yen(v.diff)}`))return; $('clSave').disabled=true; const r=await sb.from('register_closings').insert({store_id:store.id,business_date:d,counts:clCounts,opening_float:v.opening,cash_sales:cashSales,cash_in:inSum,cash_out:outSum+advSum,expected:v.expected,counted:v.counted,diff:v.diff,deposit:v.deposit,next_float:v.next}); if(r.error){ toast(r.error.message); $('clSave').disabled=false; return; } await logOp('レジ精算を保存',{date:d,expected:v.expected,counted:v.counted,diff:v.diff,deposit:v.deposit,next_float:v.next},null,true); toast('精算を保存しました'); clCounts={}; clDeposit=0; renderClosing(); };
