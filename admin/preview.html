@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.42 -->
+<title>OLIVE 管理</title><!-- admin v0.43 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -802,7 +802,7 @@ function afterCard(ax,ed){ const h='<h2>アフターの延長<br><small class="m
 // 保証時給・期限・同伴ノルマ・バック・源泉徴収・消費税・厚生費・罰金の免除は cast_terms に月ごとに入れる（その月の行があればそれ、なければ前の月の「以降」の行）
 const CS_PUNCH='打刻の手入力'; // v0.24・SQL 064：POS で打刻を手で入れた時に自動で付く罰金
 const CS_FOREVER='9999-12-31', CS_CATS=['性格','体調','お客様','勤怠','良かったこと','その他'];
-const CS_SP={pay:'特別な支給',deduct:'特別な控除',text:'文字だけ'};
+const CS_SP={pay:'支給',deduct:'控除',text:'文字だけ'}; // v0.43：文字だけは新しく入れない（メモを使う。前に入れたものは出す）
 let csMonth=null, csEdit=false, csDetail=null, csTab='sp', csKind='cast', csOrdM=null;
 // v0.24：キャスト設定 → スタッフ設定（キャスト・黒服のタブ）
 const csKindTabs=()=>`<div class="cs-tabs">${[['cast','キャスト'],['hall','黒服']].map(([k,n])=>`<button data-kind="${k}" class="${csKind===k?'on':''}" ${csEdit?'disabled':''}>${n}</button>`).join('')}</div>`;
@@ -1021,15 +1021,14 @@ async function csDetailPage(){ const st=storeId, s=csDetail.s, ed=perm('set_cast
     const cur=csNowMonth(), mo=[]; for(let i=-12;i<=12;i++) mo.push(csAddMonth(cur,i));
     const per=x=>`${csMLabel(x.from_month)}${x.to_month?(x.to_month===x.from_month?'のみ':'〜'+csMLabel(x.to_month)):'〜'}`;
     $('main').innerHTML=head+`<div class="card">${(r.data||[]).map(x=>`<div class="cs-li"><span class="badge gray">${CS_SP[x.kind]}</span><span style="flex:1;min-width:0">${esc(x.title)}${x.amount!=null?`　<b>${yen(x.amount)}</b>`:''}<br><small class="muted">${per(x)}</small></span>${ed?`<button class="ghost sm" data-del="${x.id}" aria-label="消す">✕</button>`:''}</div>`).join('')||'<div class="muted">まだありません</div>'}</div>
-    ${ed?`<div class="card"><h2>追加</h2><div class="row" style="margin-bottom:10px"><span class="seg" id="spK">${Object.entries(CS_SP).map(([k,n],i)=>`<button data-v="${k}" class="${i?'':'on'}">${n}</button>`).join('')}</span></div>
-      <div class="row"><input id="spT" maxlength="50" placeholder="内容（50字まで）" style="flex:1;min-width:200px"><input id="spA" inputmode="numeric" placeholder="金額" style="width:120px;text-align:right">
+    ${ed?`<div class="card"><h2>追加</h2>
+      <div class="row"><select id="spK" style="width:auto"><option value="pay">支給</option><option value="deduct">控除</option></select><input id="spT" maxlength="50" placeholder="内容（50字まで）" style="flex:1;min-width:200px"><input id="spA" inputmode="numeric" placeholder="金額" style="width:120px;text-align:right">
       <select id="spF" style="width:auto">${mo.map(x=>`<option value="${x}" ${x===cur?'selected':''}>${csMLabel(x)}から</option>`).join('')}</select>
       <select id="spTo" style="width:auto"><option value="">ずっと</option>${mo.map(x=>`<option value="${x}">${csMLabel(x)}まで</option>`).join('')}</select><button class="primary" id="spAdd">追加</button></div>
-      <div class="muted hint" style="font-size:13px;margin-top:8px">特別な支給・特別な控除は、その期間の毎月の給料に足す／引く金額です<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">罰金の免除は一覧の「罰金の免除」で決めます</div></div></div>`:''}`;
+      <div class="muted hint" style="font-size:13px;margin-top:8px">支給・控除は、その期間の毎月の給料に足す／引く金額です<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">罰金の免除は一覧の「罰金の免除」で決めます</div></div></div>`:''}`;
     wire(); if(!ed) return;
-    let kind='pay'; const kb=$('spK').querySelectorAll('button'); kb.forEach(b=>b.onclick=()=>{ kind=b.dataset.v; kb.forEach(x=>x.classList.toggle('on',x===b)); $('spA').disabled=kind==='text'; if(kind==='text') $('spA').value=''; });
     $('main').querySelectorAll('[data-del]').forEach(b=>b.onclick=guard(b,async()=>{ if(!await uiConfirm('この条件を消しますか？','消す','danger')) return; const x=await rpc('admin_void_cast_special',{p_id:b.dataset.del}); if(!x.ok) return; toast('消しました'); csDetailPage(); }));
-    const ad=$('spAdd'); ad.onclick=guard(ad,async()=>{ const title=$('spT').value.trim(), a=slNum($('spA').value), f=$('spF').value, to=$('spTo').value||null;
+    const ad=$('spAdd'); ad.onclick=guard(ad,async()=>{ const kind=$('spK').value, title=$('spT').value.trim(), a=slNum($('spA').value), f=$('spF').value, to=$('spTo').value||null;
       if(!title){ await uiAlert('内容を入れてください'); return; }
       if(kind!=='text'&&(a==null||!Number.isInteger(a)||a<=0)){ await uiAlert('金額を1以上の整数で入れてください'); return; }
       if(to&&to<f){ await uiAlert('「まで」が「から」より前になっています'); return; }
