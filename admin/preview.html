@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.40 -->
+<title>OLIVE 管理</title><!-- admin v0.41 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -400,7 +400,7 @@ async function billView(id,canEdit){
   const its=items.map(i=>{ const bk=(i.splits||[]).filter(z=>N(z.back_amount)||N(z.back_points)).map(z=>sn(z.staff_id)); return L(`${esc(i.name||pn(i.product_id))} <small>× ${i.qty}</small>${bk.length?` <small>（バック：${esc(bk.join('・'))}）</small>`:''}`,yen(N(i.unit_price)*N(i.qty))); }).join('');
   const box=modal(`<style>.bv-ln{display:flex;justify-content:space-between;gap:12px;padding:6px 2px;font-size:16px}.bv-ln small{color:var(--muted);font-size:13px}.bv-ln.sm,.bv-sm{font-size:14px;color:var(--muted)}.bv hr{border:0;border-top:1px solid var(--line);margin:8px 0}</style>
     <div class="bv"><div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><b style="font-size:22px">${esc(B.table||'')}</b><span>${md(B.business_date)}　${beHm(B.opened_at)}〜${B.closed_at?beHm(B.closed_at):''}${B.closed_at?`（${dur(B.opened_at,B.closed_at)}）`:''}　${N(B.guest_count)}名</span>${B.closed_at?'':'<span class="badge" style="margin-left:auto">来店中</span>'}</div>
-    <div class="bv-sm" style="margin-top:6px">お客様：${B.customers?esc(String(B.customers).split('・').map(n=>n+' 様').join('・')):'未登録'}　　係：${ks.length?esc(ks.join('・')):'なし'}${ds.length?'　　同伴：'+esc(ds.join('・')):''}${gd.length?'　　反応<span style="color:var(--gold)">◎</span>：'+esc(gd.join('・')):''}</div><hr>
+    <div class="bv-sm" style="margin-top:6px">お客様：${B.customers?esc(String(B.customers).split('・').map(n=>n+' 様').join('・')):'未登録'}　　係：${ks.length?esc(ks.join('・')):'なし'}${ds.length?'　　同伴：'+esc(ds.join('・')):''}　　反応<span style="color:var(--gold)">◎</span>：${gd.length?esc(gd.join('・')):'なし'}</div><hr>
     ${N(C.set)?L(`セット${C.set_guests!=null?` <small>× ${C.set_guests}</small>`:''}`,yen(C.set)):''}${N(C.vip_set)?L('VIPルーム料金',yen(C.vip_set)):''}${N(C.extension)?L(`延長 <small>${exts.length}回・計${extMin}分</small>`,yen(C.extension)):''}${N(C.vip_ext)?L('VIPルーム延長',yen(C.vip_ext)):''}${its||'<div class="bv-sm">注文はありません</div>'}
     ${voids.length?`<div class="bv-sm" style="margin-top:4px">取消：${voids.map(i=>esc(i.name||pn(i.product_id))+' × '+i.qty).join('、')}</div>`:''}<hr>
     ${C.subtotal!=null?L('小計',yen(C.subtotal),'sm'):''}${C.service!=null?L('サービス料'+(C.service_rate!=null?' '+C.service_rate+'%':''),yen(C.service),'sm'):''}${C.tax!=null?L('消費税',yen(C.tax),'sm'):''}${adjs.map(a=>L((a.kind==='discount'?'値引':'値増')+(a.reason?` <small>${esc(a.reason)}</small>`:''),(a.kind==='discount'?'−':'')+yen(a.amount),'sm')).join('')}
