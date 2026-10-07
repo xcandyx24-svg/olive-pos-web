@@ -330,9 +330,10 @@ async function plExcel(d){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/xlsx@
     const mv=k=>(E.moves||[]).filter(x=>x.date===dd&&x.kind===k), mvs=(k,l)=>{ const r=mv(k); return sheet([['摘要',l,'備考'],...r.map(x=>[x.memo||'',Number(x.amount||0),'']),['合計',r.reduce((a,x)=>a+Number(x.amount||0),0),'']],[24,12,24]); };
     XLSX.utils.book_append_sheet(w,mvs('out','支払金額'),'出金'); XLSX.utils.book_append_sheet(w,mvs('in','収入金額'),'入金');
     const bs=(E.bills||[]).filter(b=>b.date===dd), N=k=>bs.reduce((a,b)=>a+Number(b[k]||0),0);
-    XLSX.utils.book_append_sheet(w,sheet([['№','入店','退店','時間','領収書','卓番号','客数','顧客','係','同伴','注文','係小計','現金','カード','売掛','置き','合計'],
-      ...bs.map((b,j)=>[j+1,hm(b.opened_at),b.closed_at?hm(b.closed_at):'来店中',dur(b.opened_at,b.closed_at),b.receipt?'◯':'',b.table||'',Number(b.guests||0),b.customers||'',b.kakari||'',b.douhan||'',b.items||'',Number(b.sub||0),Number(b.cash||0),Number(b.card||0),Number(b.invoice||0),Number(b.oki||0),Number(b.due||0)]),
-      ['計','','','',bs.filter(b=>b.receipt).length,'',N('guests'),'','','','',N('sub'),N('cash'),N('card'),N('invoice'),N('oki'),N('due')]],[5,7,7,7,7,9,6,16,14,14,40,10,10,10,10,10,10]),'伝票一覧');
+    const O=[0,1,2,3,4,5,6,7,8,9,11,16,12,13,14,15,10], ord=r=>O.map(i=>r[i]); // v0.37：列の順番（係小計・合計のあとに現金〜置き、注文は最後）
+    XLSX.utils.book_append_sheet(w,sheet([ord(['№','入店','退店','時間','領収書','卓番号','客数','顧客','係','同伴','注文','係小計','現金','カード','売掛','置き','合計']),
+      ...bs.map((b,j)=>ord([j+1,hm(b.opened_at),b.closed_at?hm(b.closed_at):'来店中',dur(b.opened_at,b.closed_at),b.receipt?'◯':'',b.table||'',Number(b.guests||0),b.customers||'',b.kakari||'',b.douhan||'',b.items||'',Number(b.sub||0),Number(b.cash||0),Number(b.card||0),Number(b.invoice||0),Number(b.oki||0),Number(b.due||0)])),
+      ord(['計','','','',bs.filter(b=>b.receipt).length,'',N('guests'),'','','','',N('sub'),N('cash'),N('card'),N('invoice'),N('oki'),N('due')])],ord([5,7,7,7,7,9,6,16,14,14,40,10,10,10,10,10,10])),'伝票一覧');
     const memo=(E.memos||[]).find(x=>x.date===dd)?.memo||''; XLSX.utils.book_append_sheet(w,sheet([['メモ'],[memo]],[80]),'メモ');
     dir.file(`日次収支明細-${dd}.xlsx`,out(w)); }
   const blob=await zip.generateAsync({type:'blob'}), a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${base}.zip`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); toast('ダウンロードしました'); }
