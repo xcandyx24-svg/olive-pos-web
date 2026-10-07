@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.47 -->
+<title>OLIVE 管理</title><!-- admin v0.48 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -1262,6 +1262,7 @@ async function siRender(){ const st=storeId, ed=perm('set_pos')==='edit', dis=ed
 // ---------- POS設定 v0.22・SQL 062：料金（メニュー以外）はここだけで変える。POS では見るだけ ----------
 // HC・BC は伝票を立ち上げた時に人数分つける。金額だけ選ぶ（伝票の名前は HC／BC）。HC は係にバック100%（振分できる）、BC は誰にもバックなし
 const HCBC_OPTS=[[null,'付けない'],...Array.from({length:10},(_,i)=>[(i+1)*1000,((i+1)*1000).toLocaleString('ja-JP')+'円'])];
+const vipRow=(t,ed,dis)=>`<tr data-tb="${t.id}"><td>${esc(t.name)}</td><td><input inputmode="numeric" data-v="set" value="${esc(String(t.vip_set_fee||0))}" ${dis}></td><td><input inputmode="numeric" data-v="ext" value="${esc(String(t.vip_ext_fee||0))}" ${dis}></td>${ed?'<td style="width:1%"><button class="ghost sm" data-vrm aria-label="外す">×</button></td>':''}</tr>`;
 PAGES.set_pos=async()=>{ const st=storeId, ed=perm('set_pos')==='edit', dis=ed?'':'disabled';
   const keep=$('siBox')?.dataset.st===st?$('siBox'):null; // 料金だけ保存した時は、店の情報の入力中の内容を消さない
   $('main').innerHTML=`<h1>POS設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="card muted">読み込み中…</div>`;
@@ -1288,14 +1289,21 @@ PAGES.set_pos=async()=>{ const st=storeId, ed=perm('set_pos')==='edit', dis=ed?'
     ${'cash_out_items' in d?`<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">${[['in','入金'],['out','出金']].map(([k,l])=>`<div style="flex:1 1 280px;min-width:0"><div style="font-weight:700;margin-bottom:6px">${l}</div><div class="ci-list" data-ci="${k}">${(d['cash_'+k+'_items']||[]).map(x=>`<span class="badge gray ci" style="background:#fff;color:var(--ink);border:1px solid var(--line);font-size:14px;margin:0 6px 6px 0;display:inline-flex;gap:6px;align-items:center"><span>${esc(x)}</span>${ed?'<a data-cirm style="cursor:pointer;color:var(--muted)">×</a>':''}</span>`).join('')}</div>
       ${ed?`<div class="row" style="margin-top:4px"><input data-ciin="${k}" maxlength="20" placeholder="${l}の項目（20字まで）" style="flex:1"><button class="ghost" data-ciadd="${k}">足す</button></div>`:''}</div>`).join('')}</div>
       ${ed?'<div class="row" style="margin-top:10px"><button class="primary" id="ciSave">項目を保存</button></div>':''}`:'<div class="err">SQL 077 が未実行です</div>'}</div>
-  <div class="card"><h2>VIP料金（卓ごと・0＝通常卓）</h2>
-    <div class="muted" style="font-size:13px;margin-bottom:6px">VIP代は部屋に1回、VIP延長は延長ごと。人数は掛けません</div>
-    <table class="t vip"><tr><th>卓</th><th>VIP代（円）</th><th>VIP延長（円）</th></tr>
-    ${tables.map(t=>`<tr data-tb="${t.id}"><td>${esc(t.name)}</td><td><input inputmode="numeric" data-v="set" value="${esc(String(t.vip_set_fee||0))}" ${dis}></td><td><input inputmode="numeric" data-v="ext" value="${esc(String(t.vip_ext_fee||0))}" ${dis}></td></tr>`).join('')||'<tr><td class="muted" colspan="3">卓がありません</td></tr>'}</table></div>
+  <div class="card"><h2>VIP料金</h2>
+    <div class="muted" style="font-size:13px;margin-bottom:6px">VIP代は部屋に1回、VIP延長は延長ごと。人数は掛けません。ここに無い卓は通常卓（0円）です</div>
+    <table class="t vip" id="vipT"><tr><th>卓</th><th>VIP代（円）</th><th>VIP延長（円）</th>${ed?'<th></th>':''}</tr>
+    ${tables.filter(t=>Number(t.vip_set_fee||0)||Number(t.vip_ext_fee||0)).map(t=>vipRow(t,ed,dis)).join('')}</table>
+    <div id="vipNone" class="muted" style="${tables.some(t=>Number(t.vip_set_fee||0)||Number(t.vip_ext_fee||0))?'display:none':''}">VIP の卓はありません</div>
+    ${ed&&tables.length?`<div class="row" style="margin-top:8px"><select id="vipAdd" style="width:auto"><option value="">＋VIP の卓を足す</option>${tables.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div>`:''}</div>
   ${ed?'<div class="row"><button class="primary" id="psSave">保存</button></div>':''}
   <div class="muted hint" style="font-size:13px;margin-top:10px;line-height:1.6">保存すると、POS の次の伝票から変わります（今開いている伝票はそのまま）<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">日払（立替）の上限・体験の源泉・ポイント・同伴の準備時間は「給与項目」で変えます</div></div>`;
   if(keep) $('siBox').replaceWith(keep); else siRender();
   if(!ed) return;
+  // v0.48：VIP料金は VIP の卓だけ出す。「＋VIP の卓を足す」で行を足す、× で外す（保存すると0円＝通常卓）
+  const vipSync=()=>{ const on=new Set([...$('main').querySelectorAll('tr[data-tb]')].map(x=>x.dataset.tb)); $('vipNone').style.display=on.size?'none':''; [...$('vipAdd').options].forEach(o=>{ if(o.value) o.hidden=on.has(o.value); }); };
+  const vipWire=tr=>{ tr.querySelector('[data-vrm]').onclick=()=>{ tr.remove(); vipSync(); }; };
+  $('main').querySelectorAll('tr[data-tb]').forEach(vipWire);
+  if($('vipAdd')){ vipSync(); $('vipAdd').onchange=()=>{ const t=tables.find(x=>x.id===$('vipAdd').value); $('vipAdd').value=''; if(!t) return; const tb=document.createElement('tbody'); tb.innerHTML=vipRow({...t,vip_set_fee:0,vip_ext_fee:0},true,''); const tr=tb.firstElementChild; $('vipT').appendChild(tr); vipWire(tr); vipSync(); tr.querySelector('[data-v=set]').focus(); }; }
   // v0.47・SQL 077：入金・出金の項目（足す・×で消す → 項目を保存）
   const ciChip=x=>{ const c=document.createElement('span'); c.className='badge gray ci'; c.style.cssText='background:#fff;color:var(--ink);border:1px solid var(--line);font-size:14px;margin:0 6px 6px 0;display:inline-flex;gap:6px;align-items:center'; c.innerHTML=`<span>${esc(x)}</span><a data-cirm style="cursor:pointer;color:var(--muted)">×</a>`; c.querySelector('[data-cirm]').onclick=()=>c.remove(); return c; };
   $('main').querySelectorAll('[data-cirm]').forEach(a=>a.onclick=()=>a.closest('.ci').remove());
@@ -1313,8 +1321,9 @@ PAGES.set_pos=async()=>{ const st=storeId, ed=perm('set_pos')==='edit', dis=ed?'
     if(v.service_rate>100||v.tax_rate>100){ await uiAlert('サービス料率・消費税率は100%までです'); return; }
     v.auto_hc_amount=$('psHc').value?Number($('psHc').value):null; v.auto_bc_amount=$('psBc').value?Number($('psBc').value):null;
     v.douhan_is_kakari=$('psDk').checked; v.cust_auto_kakari=$('psCk').checked;
-    const vip=[]; for(const tr of $('main').querySelectorAll('tr[data-tb]')){ const a=slNum(tr.querySelector('[data-v=set]').value)??0, b=slNum(tr.querySelector('[data-v=ext]').value)??0;
-      if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0){ await uiAlert(`${tr.cells[0].textContent} のVIP料金は0以上の整数で入れてください`); return; } vip.push({id:tr.dataset.tb,set:a,ext:b}); }
+    const vip=[]; for(const t of tables){ const tr=$('main').querySelector(`tr[data-tb="${t.id}"]`); if(!tr){ vip.push({id:t.id,set:0,ext:0}); continue; } // 表に無い卓は通常卓（0円）
+      const a=slNum(tr.querySelector('[data-v=set]').value)??0, b=slNum(tr.querySelector('[data-v=ext]').value)??0;
+      if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0){ await uiAlert(`${tr.cells[0].textContent} のVIP料金は0以上の整数で入れてください`); return; } vip.push({id:t.id,set:a,ext:b}); }
     if(!await uiConfirm('POS設定を保存しますか？\nPOS の次の伝票から変わります')) return;
     const r=await rpc('admin_save_pos_settings',{p_store:st,p_vals:v,p_vip:vip}); if(!r.ok) return; toast('保存しました'); PAGES.set_pos(); }); };
 
