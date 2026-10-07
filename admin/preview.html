@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.35 -->
+<title>OLIVE 管理</title><!-- admin v0.36 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -792,7 +792,7 @@ const csMShort=m=>`${Number(m.split('-')[1])}月`;
 const csList=st=>sb.from('staff').select('*').eq('store_id',st).eq('is_active',true).order('sort_order').order('id');
 // v0.23・SQL 063：給与形態（時給・日給）と日給も月ごと。前の行（pay_type が空）は staff の値を使う
 function csTerms(s,rows,m){ const t=rows.filter(r=>r.staff_id===s.id&&r.month<=m&&(r.month===m||!r.only_month)).sort((a,b)=>a.month<b.month?1:-1)[0];
-  const pay=x=>{ const pt=x.pay_type||(s.pay_type==='daily'?'daily':'hourly'); return {...x,pay_type:pt,daily_wage:pt==='daily'?(x.pay_type?x.daily_wage:s.daily_wage)??null:null}; };
+  const pay=x=>{ const pt=x.pay_type||(s.is_seppan?'seppan':s.pay_type==='daily'?'daily':'hourly'); /* v0.36・SQL 075：給与に折半 */ return {...x,pay_type:pt,daily_wage:pt==='daily'?(x.pay_type?x.daily_wage:s.daily_wage)??null:null}; };
   if(t) return pay({...t,exempt_fines:t.exempt_fines||[]});
   return pay({month:null,only_month:false,guaranteed_wage:s.guaranteed_wage??null,guarantee_until:s.guarantee_until??null,douhan_quota:s.douhan_quota??null,back_pct:null,back_mode:'add',withhold:null,ctax_pct:null,welfare_mode:'std',welfare_amount:null,exempt_fines:[],slide_ids:null,pay_type:null,daily_wage:null,seppan_pct:null}); }
 const csNum=v=>v==null||v===''?null:Number(v);
@@ -814,7 +814,7 @@ PAGES.set_cast=async()=>{
   const all=sf.data||[], halls=all.filter(x=>x.kind==='hall'), casts=all.filter(x=>x.kind==='cast'&&!x.is_trial&&!x.kakari_only);
   const nc={}; (nt.data||[]).forEach(x=>nc[x.staff_id]=(nc[x.staff_id]||0)+1);
   const tbls=stb.error?[]:(stb.data||[]); // SQL 058 の前は空
-  const unitOf=(s,t)=>t.pay_type==='daily'?'daily':'hourly'; // v0.34・SQL 074：折半の人も他の人と同じ
+  const unitOf=(s,t)=>t.pay_type==='seppan'?null:t.pay_type==='daily'?'daily':'hourly'; // v0.36・SQL 075：折半＝係小計×小計バック％だけ（スライド・保証時給・同伴ノルマなし）
   const slOk=(ids,u)=>(ids||[]).filter(id=>tbls.some(x=>x.id===id&&x.unit===u));
   const slTxt=(s,t)=>{ const u=unitOf(s,t); if(!u) return '—'; const ok=slOk(t.slide_ids,u); return ok.length?esc(ok.map(id=>slShort(tbls.find(x=>x.id===id).name)).join('・')):'<span class="badge warnb">未選択</span>'; };
   const slShort=n=>String(n).replace(/スライド(表)?$/,'')||n; // v0.35：表の中は短く
@@ -826,31 +826,32 @@ PAGES.set_cast=async()=>{
   const sel=(k,v,os,dis)=>`<select data-k="${k}" ${dis?'disabled':''}>${os.map(([ov,on])=>`<option value="${esc(ov)}" ${String(v??'')===String(ov)?'selected':''}>${esc(on)}</option>`).join('')}</select>`;
   const inp=(k,v,w,dis)=>`<input data-k="${k}" inputmode="decimal" value="${esc(v??'')}" style="width:${w}px" ${dis?'disabled':''}>`;
   const yn=v=>v==null?'—':v;
-  const cell=({s,t})=>{ const sp=s.is_seppan, daily=t.pay_type==='daily', spc=sp?(t.seppan_pct==null?'<span class="badge warnb">未設定</span>':Number(t.seppan_pct)+'%'):'—';
-    const back=t.back_pct==null?'—':`${Number(t.back_pct)}%${t.back_mode==='instead'?'のみ':''}`;
+  const PT={hourly:'時給',daily:'日給',seppan:'折半'};
+  const cell=({s,t})=>{ const sp=t.pay_type==='seppan', daily=t.pay_type==='daily';
+    const back=t.back_pct==null?(sp?'<span class="badge warnb">未設定</span>':'—'):`${Number(t.back_pct)}%`;
     const wf=t.welfare_mode==='amount'?yen(t.welfare_amount):t.welfare_mode==='none'?'なし':'標準';
-    if(!E) return [hallName(s.manager_staff_id), (daily?'日給':'時給')+(sp?' <small class="muted">折半</small>':''), spc, slTxt(s,t), daily&&t.daily_wage!=null?yen(t.daily_wage):'—', t.guaranteed_wage!=null?yen(t.guaranteed_wage):'—',
-      t.guaranteed_wage!=null?csDate(t.guarantee_until):'—', t.douhan_quota!=null?t.douhan_quota+'回':'—', back, t.withhold==null?'—':t.withhold?'する':'しない',
+    if(!E) return [hallName(s.manager_staff_id), PT[t.pay_type]||'時給', slTxt(s,t), daily&&t.daily_wage!=null?yen(t.daily_wage):'—', !sp&&t.guaranteed_wage!=null?yen(t.guaranteed_wage):'—',
+      !sp&&t.guaranteed_wage!=null?csDate(t.guarantee_until):'—', !sp&&t.douhan_quota!=null?t.douhan_quota+'回':'—', back, t.withhold==null?'—':t.withhold?'する':'しない',
       t.ctax_pct==null?'—':Number(t.ctax_pct)+'%', wf, t.exempt_fines.length?esc(t.exempt_fines.join('・')):'—', s.day_pay_ok==null?'—':s.day_pay_ok?'可':'不可',
       s.contract_done==null?'—':s.contract_done?'<span class="badge k">済</span>':'<span class="badge warnb">未</span>'];
     const fe=t.guarantee_until===CS_FOREVER;
     return [sel('mgr',s.manager_staff_id||'',[['','未選択'],...halls.map(h=>[h.id,h.display_name])]),
-      sel('pt',daily?'daily':'hourly',[['hourly','時給'],['daily','日給']]), sp?inp('sp',t.seppan_pct==null?'':Number(t.seppan_pct),50)+' %':'—',
-      `<button class="ghost sm" data-k="sl" data-v="${esc(JSON.stringify(slOk(t.slide_ids,unitOf(s,t))))}">${slTxt(s,t)}</button>`, inp('dw',daily?t.daily_wage:'',80,!daily),
-      inp('g',t.guaranteed_wage,80), `<span class="cs-gu"><input type="date" data-k="gu" value="${fe?'':esc(t.guarantee_until||'')}" ${fe?'disabled':''}><label><input type="checkbox" data-k="gf" ${fe?'checked':''}>永久</label></span>`,
-      inp('q',t.douhan_quota,50)+' 回', inp('bk',t.back_pct==null?'':Number(t.back_pct),50)+' % '+sel('bm',t.back_mode,[['add','上乗'],['instead','代わり']]),
+      sel('pt',t.pay_type,[['hourly','時給'],['daily','日給'],['seppan','折半']]),
+      `<button class="ghost sm" data-k="sl" data-v="${esc(JSON.stringify(slOk(t.slide_ids,unitOf(s,t))))}" ${sp?'disabled':''}>${slTxt(s,t)}</button>`, inp('dw',daily?t.daily_wage:'',80,!daily),
+      inp('g',sp?'':t.guaranteed_wage,80,sp), `<span class="cs-gu"><input type="date" data-k="gu" value="${fe||sp?'':esc(t.guarantee_until||'')}" ${fe||sp?'disabled':''}><label><input type="checkbox" data-k="gf" ${fe&&!sp?'checked':''} ${sp?'disabled':''}>永久</label></span>`,
+      inp('q',sp?'':t.douhan_quota,50,sp)+' 回', inp('bk',t.back_pct==null?'':Number(t.back_pct),50)+' %',
       sel('wh',t.withhold==null?'':String(t.withhold),[['','—'],['true','する'],['false','しない']]), inp('ct',t.ctax_pct==null?'':Number(t.ctax_pct),50)+' %',
       sel('wm',t.welfare_mode,[['std','標準'],['amount','金額'],['none','なし']])+' '+inp('wa',t.welfare_amount,80,t.welfare_mode!=='amount'),
       `<button class="ghost sm" data-k="ex" data-v="${esc(JSON.stringify(t.exempt_fines))}">${t.exempt_fines.length?esc(t.exempt_fines.join('・')):'—'}</button>`,
       sel('dp',s.day_pay_ok==null?'':String(s.day_pay_ok),[['','—'],['true','可'],['false','不可']]), sel('ct2',s.contract_done==null?'':String(s.contract_done),[['','—'],['true','済'],['false','未']])]; };
-  const HD=['担当','給与','折半％','スライド表','日給','保証時給','保証の期限','同伴ノルマ','小計バック','源泉徴収','消費税','厚生費','罰金の免除','日払（立替）','契約書','メモ'];
+  const HD=['担当','給与','スライド表','日給','保証時給','保証の期限','同伴ノルマ','小計バック','源泉徴収','消費税','厚生費','罰金の免除','日払（立替）','契約書','メモ'];
   $('main').innerHTML=head+`${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
   <div class="row" style="margin-bottom:12px"><select id="csM" style="width:auto" ${E?'disabled':''}>${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select>
     <span style="flex:1"></span>${ed?(E?'<button class="ghost" id="csCancel">やめる</button><button class="primary" id="csSave">保存</button>':'<button class="ghost" id="csEd">編集</button>'):''}</div>
   ${rows.length?`<div class="cs-w ${E?'editing':''}"><table class="reg cs"><tr><th class="nm">名前</th>${HD.map(h=>`<th>${h}</th>`).join('')}</tr>
   ${rows.map(r=>`<tr data-sid="${r.s.id}"><td class="nm">${E?esc(r.s.display_name):`<a data-open="${r.s.id}">${esc(r.s.display_name)}</a>`}${r.t.month===m&&r.t.only_month?`<br><small class="muted">${csMShort(m)}のみ</small>`:''}</td>${cell(r).map(c=>`<td>${c}</td>`).join('')}<td>${nc[r.s.id]?nc[r.s.id]+'件':'—'}</td></tr>`).join('')}</table></div>`
   :'<div class="card muted">在籍のキャストがいません</div>'}
-  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">${E?'表の中で直して「保存」。給与・折半の％・日給・スライド表・保証時給・期限・同伴ノルマ・バック・源泉徴収・消費税・厚生費・罰金の免除を変えた時は「以降／のみ」を聞きます':'名前を押すと、その人だけの条件とメモが開きます'}${ed&&!E?'。直す時は「編集」':''}</div>`;
+  <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">${E?'表の中で直して「保存」。給与・日給・スライド表・保証時給・期限・同伴ノルマ・バック・源泉徴収・消費税・厚生費・罰金の免除を変えた時は「以降／のみ」を聞きます':'名前を押すと、その人だけの条件とメモが開きます'}${ed&&!E?'。直す時は「編集」':''}</div>`;
   $('csM').onchange=()=>{ csMonth=$('csM').value; PAGES.set_cast(); }; csKindWire();
   $('main').querySelectorAll('[data-open]').forEach(a=>a.onclick=()=>{ const s=casts.find(x=>x.id===a.dataset.open); csDetail={store:st,s}; csTab='sp'; PAGES.set_cast(); });
   if(!ed) return;
@@ -858,7 +859,9 @@ PAGES.set_cast=async()=>{
   $('csCancel').onclick=()=>{ csEdit=false; PAGES.set_cast(); };
   const tb=$('main').querySelector('table.cs');
   tb.querySelectorAll('tr[data-sid]').forEach(tr=>{ const q=k=>tr.querySelector(`[data-k=${k}]`);
-    if(q('pt')) q('pt').onchange=()=>{ q('dw').disabled=q('pt').value!=='daily'; if(q('dw').disabled) q('dw').value=''; if(q('sl')){ q('sl').dataset.v='[]'; q('sl').innerHTML='<span class="badge warnb">未選択</span>'; } };
+    if(q('pt')) q('pt').onchange=()=>{ const v=q('pt').value, sp=v==='seppan'; q('dw').disabled=v!=='daily'; if(q('dw').disabled) q('dw').value='';
+      if(q('sl')){ q('sl').dataset.v='[]'; q('sl').disabled=sp; q('sl').innerHTML=sp?'—':'<span class="badge warnb">未選択</span>'; }
+      ['g','q','gf'].forEach(k=>{ q(k).disabled=sp; if(sp){ if(k==='gf') q(k).checked=false; else q(k).value=''; } }); q('gu').disabled=sp||q('gf').checked; if(sp) q('gu').value=''; };
     if(q('sl')) q('sl').onclick=()=>{ const u=q('pt')?.value==='daily'?'daily':'hourly', cur=JSON.parse(q('sl').dataset.v||'[]'), opts=tbls.filter(x=>x.unit===u);
       const md=modal(`<h2 style="margin:0">スライド表</h2><div class="muted" style="font-size:14px">${esc(rows.find(r=>r.s.id===tr.dataset.sid).s.display_name)}：使う表を選びます（${u==='daily'?'日給':'時給'}の表）。選んだ表と保証時給のうち一番高い金額になります</div>
         <div style="display:flex;flex-direction:column;gap:8px">${opts.map(o=>`<label style="display:flex;align-items:center;gap:8px;font-size:15px;color:var(--ink)"><input type="checkbox" style="width:auto;height:auto" value="${o.id}" ${cur.includes(o.id)?'checked':''}>${esc(o.name)}</label>`).join('')||`<div class="muted">${u==='daily'?'日給':'時給'}のスライド表がありません（給与項目で作ります）</div>`}</div>
@@ -866,7 +869,7 @@ PAGES.set_cast=async()=>{
       md.querySelector('[data-k=no]').onclick=()=>md.remove();
       md.querySelector('[data-k=ok]').onclick=()=>{ const v=[...md.querySelectorAll('input:checked')].map(x=>x.value); q('sl').dataset.v=JSON.stringify(v); q('sl').innerHTML=v.length?esc(v.map(id=>slShort(tbls.find(x=>x.id===id).name)).join('・')):'<span class="badge warnb">未選択</span>'; md.remove(); }; };
     q('wm').onchange=()=>{ q('wa').disabled=q('wm').value!=='amount'; };
-    q('gf').onchange=()=>{ q('gu').disabled=q('gf').checked; };
+    q('gf').onchange=()=>{ q('gu').disabled=q('gf').checked||q('pt').value==='seppan'; };
     q('ex').onclick=()=>{ const cur=JSON.parse(q('ex').dataset.v||'[]'); const opts=[...new Set([...fines,...cur])];
       const md=modal(`<h2 style="margin:0">罰金の免除</h2><div class="muted" style="font-size:14px">${esc(rows.find(r=>r.s.id===tr.dataset.sid).s.display_name)}：チェックした罰金は付けません</div>
         <div style="display:flex;flex-direction:column;gap:8px">${opts.map(o=>`<label style="display:flex;align-items:center;gap:8px;font-size:15px;color:var(--ink)"><input type="checkbox" style="width:auto;height:auto" value="${esc(o)}" ${cur.includes(o)?'checked':''}>${esc(o)}</label>`).join('')}</div>
@@ -878,22 +881,21 @@ PAGES.set_cast=async()=>{
     for(const {s,t} of rows){ const tr=tb.querySelector(`tr[data-sid="${s.id}"]`), q=k=>tr.querySelector(`[data-k=${k}]`), nm=s.display_name;
       const int=(k,l,max)=>{ const v=slNum(q(k).value); if(v==null) return null; if(!Number.isFinite(v)||v<0||(max!=null&&v>max)) throw `${nm}：${l}が正しくありません`; return v; };
       let so, to;
-      try{ const pt=q('pt').value, dw=pt==='daily'?int('dw','日給'):null, sp=s.is_seppan?int('sp','折半の％',100):null;
-        if(s.is_seppan&&sp==null) throw `${nm}：折半の％を入れてください`;
+      try{ const pt=q('pt').value, dw=pt==='daily'?int('dw','日給'):null, sep=pt==='seppan';
         if(pt==='daily'&&!dw) throw `${nm}：日給を入れてください`;
         const b=v=>v===''?null:v==='true';
         so={manager_staff_id:q('mgr').value||null,day_pay_ok:b(q('dp').value),contract_done:b(q('ct2').value)};
-        const g=int('g','保証時給'), gf=q('gf').checked, gu=gf?CS_FOREVER:(q('gu').value||null), wm=q('wm').value, wa=wm==='amount'?int('wa','厚生費'):null, bk=int('bk','小計バック',100);
+        const g=sep?null:int('g','保証時給'), gf=q('gf').checked, gu=gf?CS_FOREVER:(q('gu').value||null), wm=q('wm').value, wa=wm==='amount'?int('wa','厚生費'):null, bk=int('bk','小計バック',100);
         if(wm==='amount'&&wa==null) throw `${nm}：厚生費の金額を入れてください`;
-        if(q('bm').value==='instead'&&bk==null) throw `${nm}：時給の代わりにする時は、バックの％を入れてください`;
-        to={guaranteed_wage:g==null?null:Math.round(g),guarantee_until:g==null?null:gu,douhan_quota:(v=>v==null?null:Math.round(v))(int('q','同伴ノルマ')),back_pct:bk,back_mode:q('bm').value,
+        if(sep&&bk==null) throw `${nm}：折半の人は、小計バックの％を入れてください`;
+        to={guaranteed_wage:g==null?null:Math.round(g),guarantee_until:g==null?null:gu,douhan_quota:sep?null:(v=>v==null?null:Math.round(v))(int('q','同伴ノルマ')),back_pct:bk,back_mode:'add',
           withhold:b(q('wh').value),ctax_pct:int('ct','消費税',100),welfare_mode:wm,welfare_amount:wa==null?null:Math.round(wa),exempt_fines:JSON.parse(q('ex').dataset.v||'[]'),
-          slide_ids:(v=>v.length?v.sort():null)(q('sl')?JSON.parse(q('sl').dataset.v||'[]'):[]),pay_type:pt,daily_wage:dw==null?null:Math.round(dw),seppan_pct:sp};
+          slide_ids:sep?null:(v=>v.length?v.sort():null)(q('sl')?JSON.parse(q('sl').dataset.v||'[]'):[]),pay_type:pt,daily_wage:dw==null?null:Math.round(dw),seppan_pct:null};
       }catch(e){ if(typeof e==='string'){ await uiAlert(e); return; } throw e; }
       const so0={manager_staff_id:s.manager_staff_id||null,day_pay_ok:s.day_pay_ok??null,contract_done:s.contract_done??null};
-      const to0={guaranteed_wage:t.guaranteed_wage??null,guarantee_until:t.guaranteed_wage==null?null:(t.guarantee_until??null),douhan_quota:t.douhan_quota??null,back_pct:t.back_pct==null?null:Number(t.back_pct),back_mode:t.back_mode||'add',
+      const to0={guaranteed_wage:t.guaranteed_wage??null,guarantee_until:t.guaranteed_wage==null?null:(t.guarantee_until??null),douhan_quota:t.douhan_quota??null,back_pct:t.back_pct==null?null:Number(t.back_pct),back_mode:'add',
         withhold:t.withhold??null,ctax_pct:t.ctax_pct==null?null:Number(t.ctax_pct),welfare_mode:t.welfare_mode||'std',welfare_amount:t.welfare_mode==='amount'?(t.welfare_amount??null):null,exempt_fines:t.exempt_fines||[],
-        slide_ids:(v=>v.length?v.sort():null)(slOk(t.slide_ids,unitOf(s,t))),pay_type:t.pay_type,daily_wage:t.daily_wage==null?null:Number(t.daily_wage),seppan_pct:t.seppan_pct==null?null:Number(t.seppan_pct)};
+        slide_ids:(v=>v.length?v.sort():null)(slOk(t.slide_ids,unitOf(s,t))),pay_type:t.pay_type,daily_wage:t.daily_wage==null?null:Number(t.daily_wage),seppan_pct:null};
       const r={staff_id:s.id}; if(JSON.stringify(so)!==JSON.stringify(so0)) r.staff=so; if(JSON.stringify(to)!==JSON.stringify(to0)){ r.terms=to; needP=true;
         if(to.guaranteed_wage!=null&&!to.guarantee_until){ await uiAlert(`${nm}：保証の期限を入れるか、「永久」を選んでください`); return; } } // v0.24：保証時給の期限は空欄にできない
       if(r.staff||r.terms) out.push(r); }
@@ -1061,7 +1063,7 @@ PAGES.cast_sales=async()=>{ const st=storeId, now=csNowMonth(); if(!ksMonth) ksM
   const fmt=(k,typ,x)=>{ const v=x[k]; if(typ==='t') return esc(v||'—'); if(typ==='d') return n(v)?n(v)+'日':'—'; if(typ==='h') return n(v)?n(v).toLocaleString('ja-JP',{maximumFractionDigits:2})+'時間':'—';
     if(typ==='p') return n(v)?n(v).toLocaleString('ja-JP',{maximumFractionDigits:1}):'—'; if(typ==='n') return n(v)?n(v)+'回':'—';
     if(typ==='dq') return `${n(x.douhan)}回${x.quota!=null?` <small class="muted">／${x.quota}</small>`:''}`;
-    if(typ==='w') return v==null?'<span class="badge warnb">未設定</span>':yen(v)+(x.pay_type==='daily'?' <small class="muted">日給</small>':'');
+    if(typ==='w') return v==null?(x.seppan?'—':'<span class="badge warnb">未設定</span>'):yen(v)+(x.pay_type==='daily'?' <small class="muted">日給</small>':'');
     if(typ==='m') return neg(n(v)); if(typ==='net') return n(v)<0?`<b style="color:#c0392b">${yen(v)}</b>`:`<b>${yen(v)}</b>`; return yen0(n(v)); };
   const sumKeys=['days','hours','sales','points','douhan','reactions','time_pay','kakari_back','seppan_pay','item_back','allowance','special_pay','fines','quota_fine','ctax','welfare','special_deduct','advance','withholding','taxable','net'];
   const tot={}; sumKeys.forEach(k=>tot[k]=rows.reduce((a,x)=>a+n(x[k]),0));
@@ -1071,7 +1073,7 @@ PAGES.cast_sales=async()=>{ const st=storeId, now=csNowMonth(); if(!ksMonth) ksM
     <tr>${cols.map(([g,k,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>
     ${rows.map(x=>`<tr><td class="nm">${esc(x.name)}${x.active?'':' <small class="muted">（退店）</small>'}${x.seppan?' <small class="muted">折半</small>':''}</td>${cols.map(([g,k,l,typ])=>`<td>${fmt(k,typ,x)}</td>`).join('')}</tr>`).join('')}
     <tr class="kst"><td class="nm"><b>合計</b></td>${cols.map(totCell).join('')}</tr></tbody></table></div>`:'<div class="card muted">この月のキャストはいません</div>')
-    +`<div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">会計済みの伝票と、タイムカードの打刻（丸めた時刻）で計算します<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">決定時給：選んだスライド表と保証時給（日給の人は日給）のうち一番高い金額。時間報酬＝決定時給×勤務時間（日給の人は 日給×出勤日数）<br>小計バック＝係小計×スタッフ設定のバック％。折半＝係小計×その人の折半の％（折半の人だけ）。商品バック・手当・日払（立替）・罰金は POS で入れたもの。％の罰金は月末の時給で計算します<br>同伴ノルマ罰金＝足りない回数×時給×4時間（日給の人の時給は 日給÷所定時間）<br>課税対象額＝支給の合計。源泉＝（課税対象額−5,000円×その月の日数）×10.21%（罰金は引かずに計算。スタッフ設定で「しない」の人は0円）<br>厚生費「標準」：出勤 1〜3日 5,000円／4〜10日 10,000円／11日以上 15,000円<br>残り支給額＝課税対象額−罰金−控除。体験の人はその日に払っているので入れていません。折半の人の計算はまだです<br>新調日罰金・名刺代は、キャストのマイページを作る時に入れます</div></div>`+'<div id="hpBox" style="margin-top:22px"></div>';
+    +`<div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">会計済みの伝票と、タイムカードの打刻（丸めた時刻）で計算します<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">決定時給：選んだスライド表と保証時給（日給の人は日給）のうち一番高い金額。時間報酬＝決定時給×勤務時間（日給の人は 日給×出勤日数）<br>小計バック＝係小計×スタッフ設定のバック％（時給・日給に足す）。折半＝係小計×小計バック％（給与が折半の人。時給・保証時給・同伴ノルマ罰金はなし）。商品バック・手当・日払（立替）・罰金は POS で入れたもの。％の罰金は月末の時給で計算します<br>同伴ノルマ罰金＝足りない回数×時給×4時間（日給の人の時給は 日給÷所定時間）<br>課税対象額＝支給の合計。源泉＝（課税対象額−5,000円×その月の日数）×10.21%（罰金は引かずに計算。スタッフ設定で「しない」の人は0円）<br>厚生費「標準」：出勤 1〜3日 5,000円／4〜10日 10,000円／11日以上 15,000円<br>残り支給額＝課税対象額−罰金−控除。体験の人はその日に払っているので入れていません<br>新調日罰金・名刺代は、キャストのマイページを作る時に入れます</div></div>`+'<div id="hpBox" style="margin-top:22px"></div>';
   hallPayDraw(hr,st,m); wire(); };
 
 // v0.29・SQL 069：詳細（Excel）と給料明細（PDF）のダウンロード（d-system の「Excel」「報酬明細PDF」と同じ形）。ライブラリは押した時に読む
