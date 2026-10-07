@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.34 -->
+<title>OLIVE 管理</title><!-- admin v0.35 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -150,7 +150,7 @@ const SCREENS=[
   {grp:'集計'},
   {k:'summary',n:'まとめ'},
   {k:'pl',n:'収支'},
-  {k:'cast_sales',n:'キャスト'},
+  {k:'cast_sales',n:'スタッフ'},
   {k:'register',n:'現金管理'},
   {k:'invoice',n:'請求書の未入金'},
   {k:'nippo',n:'日報登録'},
@@ -816,7 +816,8 @@ PAGES.set_cast=async()=>{
   const tbls=stb.error?[]:(stb.data||[]); // SQL 058 の前は空
   const unitOf=(s,t)=>t.pay_type==='daily'?'daily':'hourly'; // v0.34・SQL 074：折半の人も他の人と同じ
   const slOk=(ids,u)=>(ids||[]).filter(id=>tbls.some(x=>x.id===id&&x.unit===u));
-  const slTxt=(s,t)=>{ const u=unitOf(s,t); if(!u) return '—'; const ok=slOk(t.slide_ids,u); return ok.length?esc(ok.map(id=>tbls.find(x=>x.id===id).name).join('・')):'<span class="badge warnb">未選択</span>'; };
+  const slTxt=(s,t)=>{ const u=unitOf(s,t); if(!u) return '—'; const ok=slOk(t.slide_ids,u); return ok.length?esc(ok.map(id=>slShort(tbls.find(x=>x.id===id).name)).join('・')):'<span class="badge warnb">未選択</span>'; };
+  const slShort=n=>String(n).replace(/スライド(表)?$/,'')||n; // v0.35：表の中は短く
   const fines=[...new Set([...(ft.data||[]).map(x=>x.name),'同伴ノルマ','新調日',CS_PUNCH])];
   const rows=casts.map(s=>({s,t:csTerms(s,tm.data||[],m)}));
   const mOpts=[]; for(let i=1;i>=-12;i--) mOpts.push(csAddMonth(cur,i));
@@ -826,8 +827,8 @@ PAGES.set_cast=async()=>{
   const inp=(k,v,w,dis)=>`<input data-k="${k}" inputmode="decimal" value="${esc(v??'')}" style="width:${w}px" ${dis?'disabled':''}>`;
   const yn=v=>v==null?'—':v;
   const cell=({s,t})=>{ const sp=s.is_seppan, daily=t.pay_type==='daily', spc=sp?(t.seppan_pct==null?'<span class="badge warnb">未設定</span>':Number(t.seppan_pct)+'%'):'—';
-    const back=t.back_pct==null?'—':`${Number(t.back_pct)}%${t.back_mode==='instead'?'（時給なし）':''}`;
-    const wf=t.welfare_mode==='amount'?yen(t.welfare_amount):t.welfare_mode==='none'?'なし':'いつもの決まり';
+    const back=t.back_pct==null?'—':`${Number(t.back_pct)}%${t.back_mode==='instead'?'のみ':''}`;
+    const wf=t.welfare_mode==='amount'?yen(t.welfare_amount):t.welfare_mode==='none'?'なし':'標準';
     if(!E) return [hallName(s.manager_staff_id), (daily?'日給':'時給')+(sp?' <small class="muted">折半</small>':''), spc, slTxt(s,t), daily&&t.daily_wage!=null?yen(t.daily_wage):'—', t.guaranteed_wage!=null?yen(t.guaranteed_wage):'—',
       t.guaranteed_wage!=null?csDate(t.guarantee_until):'—', t.douhan_quota!=null?t.douhan_quota+'回':'—', back, t.withhold==null?'—':t.withhold?'する':'しない',
       t.ctax_pct==null?'—':Number(t.ctax_pct)+'%', wf, t.exempt_fines.length?esc(t.exempt_fines.join('・')):'—', s.day_pay_ok==null?'—':s.day_pay_ok?'可':'不可',
@@ -837,12 +838,12 @@ PAGES.set_cast=async()=>{
       sel('pt',daily?'daily':'hourly',[['hourly','時給'],['daily','日給']]), sp?inp('sp',t.seppan_pct==null?'':Number(t.seppan_pct),50)+' %':'—',
       `<button class="ghost sm" data-k="sl" data-v="${esc(JSON.stringify(slOk(t.slide_ids,unitOf(s,t))))}">${slTxt(s,t)}</button>`, inp('dw',daily?t.daily_wage:'',80,!daily),
       inp('g',t.guaranteed_wage,80), `<span class="cs-gu"><input type="date" data-k="gu" value="${fe?'':esc(t.guarantee_until||'')}" ${fe?'disabled':''}><label><input type="checkbox" data-k="gf" ${fe?'checked':''}>永久</label></span>`,
-      inp('q',t.douhan_quota,50)+' 回', inp('bk',t.back_pct==null?'':Number(t.back_pct),50)+' % '+sel('bm',t.back_mode,[['add','上乗せ'],['instead','時給の代わり']]),
+      inp('q',t.douhan_quota,50)+' 回', inp('bk',t.back_pct==null?'':Number(t.back_pct),50)+' % '+sel('bm',t.back_mode,[['add','上乗'],['instead','代わり']]),
       sel('wh',t.withhold==null?'':String(t.withhold),[['','—'],['true','する'],['false','しない']]), inp('ct',t.ctax_pct==null?'':Number(t.ctax_pct),50)+' %',
-      sel('wm',t.welfare_mode,[['std','いつもの決まり'],['amount','金額'],['none','なし']])+' '+inp('wa',t.welfare_amount,80,t.welfare_mode!=='amount'),
+      sel('wm',t.welfare_mode,[['std','標準'],['amount','金額'],['none','なし']])+' '+inp('wa',t.welfare_amount,80,t.welfare_mode!=='amount'),
       `<button class="ghost sm" data-k="ex" data-v="${esc(JSON.stringify(t.exempt_fines))}">${t.exempt_fines.length?esc(t.exempt_fines.join('・')):'—'}</button>`,
       sel('dp',s.day_pay_ok==null?'':String(s.day_pay_ok),[['','—'],['true','可'],['false','不可']]), sel('ct2',s.contract_done==null?'':String(s.contract_done),[['','—'],['true','済'],['false','未']])]; };
-  const HD=['担当','給与','折半（係小計の％）','スライド表','日給','保証時給','保証の期限','同伴ノルマ','小計バック','源泉徴収','消費税','厚生費','罰金の免除','日払（立替）','契約書','メモ'];
+  const HD=['担当','給与','折半％','スライド表','日給','保証時給','保証の期限','同伴ノルマ','小計バック','源泉徴収','消費税','厚生費','罰金の免除','日払（立替）','契約書','メモ'];
   $('main').innerHTML=head+`${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
   <div class="row" style="margin-bottom:12px"><select id="csM" style="width:auto" ${E?'disabled':''}>${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select>
     <span style="flex:1"></span>${ed?(E?'<button class="ghost" id="csCancel">やめる</button><button class="primary" id="csSave">保存</button>':'<button class="ghost" id="csEd">編集</button>'):''}</div>
@@ -863,7 +864,7 @@ PAGES.set_cast=async()=>{
         <div style="display:flex;flex-direction:column;gap:8px">${opts.map(o=>`<label style="display:flex;align-items:center;gap:8px;font-size:15px;color:var(--ink)"><input type="checkbox" style="width:auto;height:auto" value="${o.id}" ${cur.includes(o.id)?'checked':''}>${esc(o.name)}</label>`).join('')||`<div class="muted">${u==='daily'?'日給':'時給'}のスライド表がありません（給与項目で作ります）</div>`}</div>
         <div class="bar"><button class="ghost" data-k="no">やめる</button><button class="primary" data-k="ok">決める</button></div>`);
       md.querySelector('[data-k=no]').onclick=()=>md.remove();
-      md.querySelector('[data-k=ok]').onclick=()=>{ const v=[...md.querySelectorAll('input:checked')].map(x=>x.value); q('sl').dataset.v=JSON.stringify(v); q('sl').innerHTML=v.length?esc(v.map(id=>tbls.find(x=>x.id===id).name).join('・')):'<span class="badge warnb">未選択</span>'; md.remove(); }; };
+      md.querySelector('[data-k=ok]').onclick=()=>{ const v=[...md.querySelectorAll('input:checked')].map(x=>x.value); q('sl').dataset.v=JSON.stringify(v); q('sl').innerHTML=v.length?esc(v.map(id=>slShort(tbls.find(x=>x.id===id).name)).join('・')):'<span class="badge warnb">未選択</span>'; md.remove(); }; };
     q('wm').onchange=()=>{ q('wa').disabled=q('wm').value!=='amount'; };
     q('gf').onchange=()=>{ q('gu').disabled=q('gf').checked; };
     q('ex').onclick=()=>{ const cur=JSON.parse(q('ex').dataset.v||'[]'); const opts=[...new Set([...fines,...cur])];
@@ -927,14 +928,14 @@ async function csHallPage(){ const st=storeId, ed=perm('set_cast')==='edit', cur
   const sel=(k,v,os)=>`<select data-k="${k}">${os.map(([ov,on])=>`<option value="${esc(ov)}" ${String(v??'')===String(ov)?'selected':''}>${esc(on)}</option>`).join('')}</select>`;
   const inp=(k,v,w,dis)=>`<input data-k="${k}" inputmode="decimal" value="${esc(v??'')}" style="width:${w}px" ${dis?'disabled':''}>`;
   const own=!!me?.is_owner, hm5=v=>v?String(v).slice(0,5):''; // v0.34・SQL 074：出勤・退勤の時刻（遅刻・早退の計算に使う。変えられるのはオーナーだけ）
-  const cell=({s,t})=>{ const wf=t.welfare_mode==='amount'?yen(t.welfare_amount):t.welfare_mode==='none'?'なし':'いつもの決まり';
+  const cell=({s,t})=>{ const wf=t.welfare_mode==='amount'?yen(t.welfare_amount):t.welfare_mode==='none'?'なし':'標準';
     const sh=E&&own?`<span class="row" style="gap:4px;flex-wrap:nowrap"><input type="time" data-k="ss" value="${hm5(s.shift_start)}" style="width:120px">〜<input type="time" data-k="se" value="${hm5(s.shift_end)}" style="width:120px"></span>`:(s.shift_start||s.shift_end?`${hm5(s.shift_start)||'—'}〜${hm5(s.shift_end)||'—'}`:'<span class="badge warnb">未設定</span>');
     if(!E) return [t.pay_type?CS_HPAY[t.pay_type]:'<span class="badge warnb">未設定</span>', t.amount!=null?yen(t.amount):'—', sh, s.day_pay_ok==null?'—':s.day_pay_ok?'可':'不可',
       s.contract_done==null?'—':s.contract_done?'<span class="badge k">済</span>':'<span class="badge warnb">未</span>', t.withhold==null?'—':t.withhold?'する':'しない', t.ctax_pct==null?'—':t.ctax_pct+'%', wf];
     return [sel('pt',t.pay_type||'',[['','未設定'],...Object.entries(CS_HPAY)]), inp('am',t.amount,100,!t.pay_type)+' 円', sh,
       sel('dp',s.day_pay_ok==null?'':String(s.day_pay_ok),[['','—'],['true','可'],['false','不可']]), sel('ct2',s.contract_done==null?'':String(s.contract_done),[['','—'],['true','済'],['false','未']]),
       sel('wh',t.withhold==null?'':String(t.withhold),[['','—'],['true','する'],['false','しない']]), inp('ct',t.ctax_pct??'',50)+' %',
-      sel('wm',t.welfare_mode,[['std','いつもの決まり'],['amount','金額'],['none','なし']])+' '+inp('wa',t.welfare_amount,80,t.welfare_mode!=='amount')]; };
+      sel('wm',t.welfare_mode,[['std','標準'],['amount','金額'],['none','なし']])+' '+inp('wa',t.welfare_amount,80,t.welfare_mode!=='amount')]; };
   const HD=['給与','金額','出勤〜退勤'+(E&&!own?'<br><small class="muted">オーナーだけ</small>':''),'日払（立替）','契約書','源泉徴収','消費税','厚生費'];
   $('main').innerHTML=head+`${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}${sql064?'':'<div class="card err">SQL 064 が未実行です（黒服の月給・時給を保存できません）</div>'}
   <div class="row" style="margin-bottom:12px"><select id="csM" style="width:auto" ${E?'disabled':''}>${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select>
@@ -943,9 +944,8 @@ async function csHallPage(){ const st=storeId, ed=perm('set_cast')==='edit', cur
   ${rows.map(r=>`<tr data-sid="${r.s.id}"><td class="nm">${esc(r.s.display_name)}${r.t.month===m&&r.t.only_month?`<br><small class="muted">${csMShort(m)}のみ</small>`:''}</td>${cell(r).map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table></div>`
   :'<div class="card muted">在籍の黒服がいません</div>'}
   <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">${E?'表の中で直して「保存」。給与・金額・源泉徴収・消費税・厚生費を変えた時は「以降／のみ」を聞きます':'金額は、月給なら1か月、時給なら1時間、日給なら1日の金額です'}${ed&&!E?'。直す時は「編集」':''}</div>
-  ${E?'':'<div id="hpBox" style="margin-top:18px"><div class="card muted">黒服の給料を読み込み中…</div></div>'}`;
+`;
   csKindWire(); $('csM').onchange=()=>{ csMonth=$('csM').value; PAGES.set_cast(); };
-  if(!E) hallPayRender(st,m);
   if(!ed) return;
   if(!E){ $('csEd').onclick=()=>{ csEdit=true; PAGES.set_cast(); }; return; }
   $('csCancel').onclick=()=>{ csEdit=false; PAGES.set_cast(); };
@@ -1040,7 +1040,7 @@ async function csDetailPage(){ const st=storeId, s=csDetail.s, ed=perm('set_cast
 
 // ---------- 集計「キャスト」 v0.28・SQL 068・069：成績 → 支給 → 罰金 → 控除 → 支払う額（見るだけ。計算はデータベースの admin_cast_month） ----------
 // 決定時給：選んだスライド表と保証時給（日給の人は日給）の高い方。時間報酬＝決定時給×勤務時間（日給の人は 日給×出勤日数）。会計済みの伝票だけ。体験は入れない
-// 同伴ノルマ罰金＝足りない回数×時間給×4時間。源泉＝（課税対象額−5,000円×その月の日数）×10.21%（罰金は引かずに計算）。厚生費「いつもの決まり」＝出勤 1〜3日 5,000円／4〜10日 10,000円／11日以上 15,000円
+// 同伴ノルマ罰金＝足りない回数×時間給×4時間。源泉＝（課税対象額−5,000円×その月の日数）×10.21%（罰金は引かずに計算）。厚生費「標準」＝出勤 1〜3日 5,000円／4〜10日 10,000円／11日以上 15,000円
 let ksMonth=null;
 const KS_COLS=[
   ['成績',[['manager','担当','t'],['days','出勤日数','d'],['hours','勤務時間','h'],['sales','係小計','y'],['points','ポイント','p'],['douhan','同伴','dq'],['reactions','反応','n']]],
@@ -1050,10 +1050,12 @@ const KS_COLS=[
   ['支払う額',[['taxable','課税対象額','y'],['net','残り支給額','net']]]];
 PAGES.cast_sales=async()=>{ const st=storeId, now=csNowMonth(); if(!ksMonth) ksMonth=now; const m=ksMonth;
   const mOpts=Array.from({length:13},(_,i)=>csAddMonth(now,-i));
-  const head=`<h1>キャスト <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="row" style="margin-bottom:12px;justify-content:space-between"><select id="ksM" style="width:auto">${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select><span class="row" style="gap:8px"><button class="ghost" id="ksXls" disabled>詳細（Excel）</button><button class="ghost" id="ksPdf" disabled>給料明細（PDF）</button></span></div>`;
-  $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>'; let data=null;
-  const wire=()=>{ const e=$('ksM'); if(e) e.onchange=()=>{ ksMonth=e.value; PAGES.cast_sales(); }; const x=$('ksXls'), pd=$('ksPdf'); if(x&&data){ x.disabled=pd.disabled=!(data.rows||[]).length; x.onclick=guard(x,()=>ksExcel(data)); pd.onclick=guard(pd,()=>ksPdf(data)); } }; wire();
-  const r=await sb.rpc('admin_cast_month',{p_store:st,p_month:m}); if(page!=='cast_sales'||storeId!==st||ksMonth!==m) return;
+  const head=`<h1>スタッフ <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="row" style="margin-bottom:12px;justify-content:space-between"><select id="ksM" style="width:auto">${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select><span class="row" style="gap:8px"><button class="ghost" id="ksXls" disabled>詳細（Excel）</button><button class="ghost" id="ksPdf" disabled>給料明細（PDF）</button></span></div>`;
+  $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>'; let data=null, hall=null;
+  const wire=()=>{ const e=$('ksM'); if(e) e.onchange=()=>{ ksMonth=e.value; PAGES.cast_sales(); }; const x=$('ksXls'), pd=$('ksPdf'); if(x&&data){ x.disabled=pd.disabled=!(data.rows||[]).length&&!(hall?.rows||[]).length; x.onclick=guard(x,()=>ksExcel(data,hall)); pd.onclick=guard(pd,()=>ksPdf(data,hall)); } }; wire();
+  // v0.35：黒服も同じ画面に（キャストの下）。Excel・PDF にも黒服を入れる
+  const [r,hr]=await Promise.all([sb.rpc('admin_cast_month',{p_store:st,p_month:m}), sb.rpc('admin_hall_month',{p_store:st,p_month:m})]); if(page!=='cast_sales'||storeId!==st||ksMonth!==m) return;
+  hall=hr.error?null:(hr.data||{});
   if(r.error){ $('main').innerHTML=head+`<div class="card err">${esc(/admin_cast_month/.test(r.error.message)?'SQL 068・069 が未実行です：':'読み込めません：')}${esc(r.error.message)}</div>`; wire(); return; }
   data=r.data; const rows=r.data?.rows||[], n=v=>Number(v||0), yen0=v=>v?yen(v):'—', neg=v=>v?`<span style="color:#c0392b">−${yen(v).replace(/^-/,'')}</span>`:'—';
   const fmt=(k,typ,x)=>{ const v=x[k]; if(typ==='t') return esc(v||'—'); if(typ==='d') return n(v)?n(v)+'日':'—'; if(typ==='h') return n(v)?n(v).toLocaleString('ja-JP',{maximumFractionDigits:2})+'時間':'—';
@@ -1065,12 +1067,12 @@ PAGES.cast_sales=async()=>{ const st=storeId, now=csNowMonth(); if(!ksMonth) ksM
   const tot={}; sumKeys.forEach(k=>tot[k]=rows.reduce((a,x)=>a+n(x[k]),0));
   const cols=KS_COLS.flatMap(([g,cs])=>cs.map(c=>[g,...c]));
   const totCell=([g,k,l,typ])=>{ if(!sumKeys.includes(k)) return '<td></td>'; if(typ==='dq') return `<td>${tot.douhan}回</td>`; return `<td>${fmt(k,typ,tot)}</td>`; };
-  $('main').innerHTML=head+(rows.length?`<div class="cs-w"><table class="t cs ks"><thead><tr><th class="nm" rowspan="2">名前</th>${KS_COLS.map(([g,cs])=>`<th colspan="${cs.length}" class="ksg">${g}</th>`).join('')}</tr>
+  $('main').innerHTML=head+'<h2 style="margin:4px 0 8px">キャスト</h2>'+(rows.length?`<div class="cs-w"><table class="t cs ks"><thead><tr><th class="nm" rowspan="2">名前</th>${KS_COLS.map(([g,cs])=>`<th colspan="${cs.length}" class="ksg">${g}</th>`).join('')}</tr>
     <tr>${cols.map(([g,k,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>
     ${rows.map(x=>`<tr><td class="nm">${esc(x.name)}${x.active?'':' <small class="muted">（退店）</small>'}${x.seppan?' <small class="muted">折半</small>':''}</td>${cols.map(([g,k,l,typ])=>`<td>${fmt(k,typ,x)}</td>`).join('')}</tr>`).join('')}
     <tr class="kst"><td class="nm"><b>合計</b></td>${cols.map(totCell).join('')}</tr></tbody></table></div>`:'<div class="card muted">この月のキャストはいません</div>')
-    +`<div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">会計済みの伝票と、タイムカードの打刻（丸めた時刻）で計算します<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">決定時給：選んだスライド表と保証時給（日給の人は日給）のうち一番高い金額。時間報酬＝決定時給×勤務時間（日給の人は 日給×出勤日数）<br>小計バック＝係小計×スタッフ設定のバック％。折半＝係小計×その人の折半の％（折半の人だけ）。商品バック・手当・日払（立替）・罰金は POS で入れたもの。％の罰金は月末の時給で計算します<br>同伴ノルマ罰金＝足りない回数×時給×4時間（日給の人の時給は 日給÷所定時間）<br>課税対象額＝支給の合計。源泉＝（課税対象額−5,000円×その月の日数）×10.21%（罰金は引かずに計算。スタッフ設定で「しない」の人は0円）<br>厚生費「いつもの決まり」：出勤 1〜3日 5,000円／4〜10日 10,000円／11日以上 15,000円<br>残り支給額＝課税対象額−罰金−控除。体験の人はその日に払っているので入れていません。折半の人の計算はまだです<br>新調日罰金・名刺代は、キャストのマイページを作る時に入れます</div></div>`;
-  wire(); };
+    +`<div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">会計済みの伝票と、タイムカードの打刻（丸めた時刻）で計算します<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">決定時給：選んだスライド表と保証時給（日給の人は日給）のうち一番高い金額。時間報酬＝決定時給×勤務時間（日給の人は 日給×出勤日数）<br>小計バック＝係小計×スタッフ設定のバック％。折半＝係小計×その人の折半の％（折半の人だけ）。商品バック・手当・日払（立替）・罰金は POS で入れたもの。％の罰金は月末の時給で計算します<br>同伴ノルマ罰金＝足りない回数×時給×4時間（日給の人の時給は 日給÷所定時間）<br>課税対象額＝支給の合計。源泉＝（課税対象額−5,000円×その月の日数）×10.21%（罰金は引かずに計算。スタッフ設定で「しない」の人は0円）<br>厚生費「標準」：出勤 1〜3日 5,000円／4〜10日 10,000円／11日以上 15,000円<br>残り支給額＝課税対象額−罰金−控除。体験の人はその日に払っているので入れていません。折半の人の計算はまだです<br>新調日罰金・名刺代は、キャストのマイページを作る時に入れます</div></div>`+'<div id="hpBox" style="margin-top:22px"></div>';
+  hallPayDraw(hr,st,m); wire(); };
 
 // v0.29・SQL 069：詳細（Excel）と給料明細（PDF）のダウンロード（d-system の「Excel」「報酬明細PDF」と同じ形）。ライブラリは押した時に読む
 const ksLib={}; function ksLoad(u){ return ksLib[u]||(ksLib[u]=new Promise((ok,ng)=>{ const sc=document.createElement('script'); sc.src=u; sc.onload=ok; sc.onerror=()=>{ delete ksLib[u]; ng(new Error('読み込めません：'+u)); }; document.head.appendChild(sc); })); }
@@ -1079,7 +1081,7 @@ const ksFineNames=rows=>[...new Set(rows.flatMap(x=>Object.keys(x.fine_items||{}
 const ksDed=x=>ksN(x.ctax)+ksN(x.fines)+ksN(x.quota_fine)+ksN(x.welfare)+ksN(x.special_deduct);
 const ksHM=h=>{ const t=Math.round(ksN(h)*60); return `${Math.floor(t/60)}時間${String(t%60).padStart(2,'0')}分`; };
 const ksCode=()=>{ const c=curStore()?.code; return c?'_'+c:''; };
-async function ksExcel(d){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'); }catch(e){ await uiAlert(e.message); return; }
+async function ksExcel(d,h){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'); }catch(e){ await uiAlert(e.message); return; }
   const rows=d.rows||[], fn=ksFineNames(rows), [y,mo]=String(d.month).split('-').map(Number);
   // [見出し, 小見出し, 値]。小見出しが無い列は2行を1つにする
   const G=[['No',null,(x,i)=>i+1],['名前',null,x=>x.name+(x.active?'':'（退店）')],['担当',null,x=>x.manager||''],['ポイント',null,x=>ksN(x.points)],['総支給額',null,x=>ksN(x.taxable)],['残り支給額',null,x=>ksN(x.net)],
@@ -1095,9 +1097,16 @@ async function ksExcel(d){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/xlsx@
   const aoa=[['キャスト売上一覧'],[`${y}年${mo}月1日〜${y}年${mo}月${last}日`],G.map((g,j)=>j>0&&G[j-1][0]===g[0]&&g[1]?null:g[0]),G.map(g=>g[1]),tot,...body];
   const ws=XLSX.utils.aoa_to_sheet(aoa), mg=[]; let j=0; while(j<G.length){ if(!G[j][1]){ mg.push({s:{r:2,c:j},e:{r:3,c:j}}); j++; continue; } let k=j; while(k+1<G.length&&G[k+1][0]===G[j][0]&&G[k+1][1]) k++; if(k>j) mg.push({s:{r:2,c:j},e:{r:2,c:k}}); j=k+1; }
   ws['!merges']=mg; ws['!cols']=G.map((g,i)=>({wch:i===1?14:i===0?5:11}));
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'キャスト売上一覧'); XLSX.writeFile(wb,`data-${y}-${String(mo).padStart(2,'0')}${ksCode()}.xlsx`); toast('ダウンロードしました'); }
-async function ksPdf(d){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'); await ksLoad('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'); }catch(e){ await uiAlert(e.message); return; }
-  const rows=d.rows||[], fn=ksFineNames(rows), [y,mo]=String(d.month).split('-').map(Number), sn=curStore()?.name||'', v=n=>ksN(n)?ksN(n).toLocaleString('ja-JP'):'--';
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'キャスト売上一覧');
+  // v0.35：黒服のシート
+  const hr=h?.rows||[]; if(hr.length){ const H=[['No',(x,i)=>i+1],['名前',x=>x.name+(x.active?'':'（退店）')],['給与',x=>CS_HPAY[x.pay_type]||''],['金額',x=>x.amount==null?'':ksN(x.amount)],['出勤日数',x=>ksN(x.days)],['勤務時間',x=>ksN(x.hours)],
+      ['基本給',x=>ksN(x.base)],['遅刻(分)',x=>ksN(x.late_min)],['早退(分)',x=>ksN(x.early_min)],['遅刻・早退',x=>ksN(x.late_deduct)],['ボーナス',x=>ksN(x.bonus)],['手当など、その他',x=>ksN(x.allowance)],['特別な支給',x=>ksN(x.special_pay)],
+      ['課税対象額',x=>ksN(x.taxable)],['罰金',x=>ksN(x.fines)],['消費税',x=>ksN(x.ctax)],['厚生費',x=>ksN(x.welfare)],['特別な控除',x=>ksN(x.special_deduct)],['日払（立替）',x=>ksN(x.advance)],['源泉徴収',x=>ksN(x.withholding)],['残り支給額',x=>ksN(x.net)]];
+    const hb=hr.map((x,i)=>H.map(c=>c[1](x,i))), ht=H.map((c,j)=>j===0?'合計':j<4?null:Math.round(hb.reduce((a,r)=>a+ksN(r[j]),0)*100)/100);
+    const ws2=XLSX.utils.aoa_to_sheet([['黒服 給料一覧'],[`${y}年${mo}月1日〜${y}年${mo}月${last}日`],H.map(c=>c[0]),ht,...hb]); ws2['!cols']=H.map((c,i)=>({wch:i===1?14:i===0?5:11}));
+    XLSX.utils.book_append_sheet(wb,ws2,'黒服'); } XLSX.writeFile(wb,`data-${y}-${String(mo).padStart(2,'0')}${ksCode()}.xlsx`); toast('ダウンロードしました'); }
+async function ksPdf(d,h){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'); await ksLoad('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'); }catch(e){ await uiAlert(e.message); return; }
+  const rows=[...(d.rows||[]),...(h?.rows||[]).map(x=>({...x,hall:true}))], fn=ksFineNames(d.rows||[]), [y,mo]=String(d.month).split('-').map(Number), sn=curStore()?.name||'', v=n=>ksN(n)?ksN(n).toLocaleString('ja-JP'):'--';
   const now=new Date(), pt=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
   // 列は3つ（縦の見出し・項目・金額）。見出しの無い行は最初の2つをまとめる。縦書きは1文字ずつ改行（PDF にする時に縦書きが崩れないように）
   const L=(l,val,c='')=>`<tr class="${c}"><td class="lb" colspan="2">${esc(l)}</td><td class="vl">${val}</td></tr>`, grp=(name,trs)=>trs.map((t,i)=>t.replace('<td class="lb" colspan="2">',(i===0?`<td class="gl" rowspan="${trs.length}">${[...name].join('<br>')}</td>`:'')+'<td class="gi">')).join('');
@@ -1133,24 +1142,22 @@ async function ksPdf(d){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/html2ca
     +pages.map((pg,i)=>`<div class="kp"><div class="pt">print: ${pt}</div><div class="ss">${pg.map(slip).join('')}</div><div class="pg">- ${i+1} / ${total} -</div></div>`).join('')+dPages.map(dPage).join('');
   try{ const { jsPDF }=window.jspdf; const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}); const els=box.querySelectorAll('.kp');
     for(let i=0;i<els.length;i++){ const c=await html2canvas(els[i],{scale:2,backgroundColor:'#ffffff'}); if(i) pdf.addPage(); pdf.addImage(c.toDataURL('image/jpeg',0.92),'JPEG',0,0,297,210); }
-    pdf.save(`${y}${String(mo).padStart(2,'0')}${ksCode()}-${d.hall?'hall-':''}salarylist.pdf`); toast('ダウンロードしました'); }
+    pdf.save(`${y}${String(mo).padStart(2,'0')}${ksCode()}-salarylist.pdf`); toast('ダウンロードしました'); }
   catch(e){ await uiAlert('PDF を作れませんでした：'+e.message); } finally{ box.remove(); } }
 
-// v0.34・SQL 074：黒服の給料（その月）。基本給−遅刻・早退＋ボーナス＋手当＋特別な支給＝課税対象額。直せるのはオーナーだけ（遅刻・早退で引く額とボーナス。操作ログに残る）
-async function hallPayRender(st,m){ const box=$('hpBox'); if(!box) return;
-  const r=await sb.rpc('admin_hall_month',{p_store:st,p_month:m}); if(page!=='set_cast'||storeId!==st||csMonth!==m||csKind!=='hall'||csEdit||!$('hpBox')) return;
+// v0.34・SQL 074（v0.35：集計「スタッフ」のキャストの下に移動）：黒服の給料（その月）。基本給−遅刻・早退＋ボーナス＋手当＋特別な支給＝課税対象額。直せるのはオーナーだけ（遅刻・早退で引く額とボーナス。操作ログに残る）
+function hallPayDraw(r,st,m){ const box=$('hpBox'); if(!box) return;
   if(r.error){ box.innerHTML=`<div class="card err">${esc(/admin_hall_month|hall_month_calc/.test(r.error.message)?'SQL 074 が未実行です：':'黒服の給料を読み込めません：')}${esc(r.error.message)}</div>`; return; }
   const D=r.data||{}, rows=D.rows||[], own=!!me?.is_owner, N=v=>Number(v||0), neg=v=>N(v)?`<span style="color:#c0392b">−${yen(N(v))}</span>`:'—', y0=v=>N(v)?yen(N(v)):'—';
   const sl=D.slide, RK={within:'目標以内',plus2:'＋2%まで',plus5:'＋5%まで',over:'5%超'};
-  box.innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="margin:0">黒服の給料（${csMLabel(m)}）</h2><button class="ghost" id="hpPdf" ${rows.length?'':'disabled'}>給料明細（PDF）</button></div>
+  box.innerHTML=`<h2 style="margin:0 0 8px">黒服</h2>
     <div class="card" style="font-size:14px;line-height:1.7">ボーナス総額 <b>${yen(N(D.pool))}</b>　<span class="muted">売上計 ${yen(N(D.sales))}・人件費比率 ${N(D.ratio).toFixed(2)}%${sl?`（目標 ${N(sl.target).toFixed(2)}%・${RK[sl.rank]||''}・「${N(sl.sales_man)}万円以上」の行）`:'（黒服ボーナススライドに当てはまる行がありません）'}</span></div>
     <div class="cs-w"><table class="t cs ks"><thead><tr><th class="nm">名前</th><th>給与</th><th>出勤日数</th><th>勤務時間</th><th>基本給</th><th>遅刻・早退</th><th>ボーナス</th><th>手当</th><th>特別な支給</th><th>課税対象額</th><th>罰金</th><th>消費税</th><th>厚生費</th><th>特別な控除</th><th>日払（立替）</th><th>源泉</th><th>支払う額</th>${own?'<th></th>':''}</tr></thead><tbody>
     ${rows.map(x=>`<tr><td class="nm">${esc(x.name)}${x.active?'':' <small class="muted">（退店）</small>'}</td><td>${x.pay_type?CS_HPAY[x.pay_type]+(x.amount!=null?' '+yen(N(x.amount)):''):'<span class="badge warnb">未設定</span>'}</td><td>${N(x.days)?N(x.days)+'日':'—'}</td><td>${N(x.hours)?N(x.hours)+'時間':'—'}</td><td>${y0(x.base)}</td>
       <td>${neg(x.late_deduct)}${N(x.late_min)+N(x.early_min)?`<br><small class="muted">遅刻${N(x.late_min)}分・早退${N(x.early_min)}分</small>`:''}${x.late_fixed?' <span class="badge">直した</span>':''}</td>
       <td>${y0(x.bonus)}${x.bonus_fixed!=null?' <span class="badge">直した</span>':''}</td><td>${y0(x.allowance)}</td><td>${y0(x.special_pay)}</td><td>${y0(x.taxable)}</td><td>${neg(x.fines)}</td><td>${neg(x.ctax)}</td><td>${neg(x.welfare)}</td><td>${neg(x.special_deduct)}</td><td>${neg(x.advance)}</td><td>${neg(x.withholding)}</td>
       <td>${N(x.net)<0?`<b style="color:#c0392b">${yen(N(x.net))}</b>`:`<b>${yen(N(x.net))}</b>`}</td>${own?`<td><button class="ghost sm" data-hpfix="${x.id}">直す</button></td>`:''}</tr>`).join('')||`<tr><td colspan="18" class="muted">この月の黒服はいません</td></tr>`}</tbody></table></div>
-    <div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">基本給−遅刻・早退＋ボーナス＋手当＋特別な支給＝課税対象額<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">基本給：月給＝月給の額、日給＝日給×出勤日数、時給＝時給×勤務時間<br>遅刻・早退：上の「出勤〜退勤」とタイムカードをくらべて、15分ごとに時給分を引きます。月給の人の時給＝月給÷（出勤日数×出勤〜退勤の時間）、日給の人の時給＝日給÷出勤〜退勤の時間。時給の人は働いた時間で払うので引きません。出勤・退勤の時刻が両方入っていないと引けません<br>ボーナス：黒服ボーナススライドの総額（売上計で行を選び、人件費比率と目標比率をくらべた額＋売上ボーナス）を、担当キャストの係小計の割合で分けます。人件費比率＝（女子給与＋女子日払い＋黒服の給与〈ボーナスの前〉）÷売上計<br>厚生費・消費税はスタッフ設定のとおり。源泉はスタッフ設定で「する」の人だけ<br>［直す］はオーナーだけ。遅刻・早退で引く額とボーナスを直せます（空にすると自動の計算に戻ります。操作ログに残ります）</div></div>`;
-  const pd=$('hpPdf'); pd.onclick=guard(pd,()=>ksPdf({month:D.month,rows:rows.map(x=>({...x,hall:true})),hall:true}));
+    <div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">基本給−遅刻・早退＋ボーナス＋手当＋特別な支給＝課税対象額<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">基本給：月給＝月給の額、日給＝日給×出勤日数、時給＝時給×勤務時間<br>遅刻・早退：スタッフ設定→黒服の「出勤〜退勤」とタイムカードをくらべて、15分ごとに時給分を引きます。月給の人の時給＝月給÷（出勤日数×出勤〜退勤の時間）、日給の人の時給＝日給÷出勤〜退勤の時間。時給の人は働いた時間で払うので引きません。出勤・退勤の時刻が両方入っていないと引けません<br>ボーナス：黒服ボーナススライドの総額（売上計で行を選び、人件費比率と目標比率をくらべた額＋売上ボーナス）を、担当キャストの係小計の割合で分けます。人件費比率＝（女子給与＋女子日払い＋黒服の給与〈ボーナスの前〉）÷売上計<br>厚生費・消費税はスタッフ設定のとおり。源泉はスタッフ設定で「する」の人だけ<br>［直す］はオーナーだけ。遅刻・早退で引く額とボーナスを直せます（空にすると自動の計算に戻ります。操作ログに残ります）</div></div>`;
   box.querySelectorAll('[data-hpfix]').forEach(b=>b.onclick=guard(b,async()=>{ const x=rows.find(z=>z.id===b.dataset.hpfix); if(!x) return;
     const md=modal(`<h2 style="margin:0">${esc(x.name)}　${csMLabel(m)}の給料を直す</h2><div class="muted" style="font-size:14px">空にすると自動の計算に戻ります（自動：ボーナス ${yen(N(x.bonus_auto))}）</div>
       <label>遅刻・早退で引く額<input id="hfL" inputmode="numeric" value="${x.late_fixed?N(x.late_deduct):''}" placeholder="自動（${yen(N(x.late_deduct))}）"></label>
@@ -1160,7 +1167,7 @@ async function hallPayRender(st,m){ const box=$('hpBox'); if(!box) return;
     const v=await new Promise(res=>{ md.querySelector('[data-k=no]').onclick=()=>{ md.remove(); res(null); }; md.querySelector('[data-k=ok]').onclick=()=>{ const g=id=>md.querySelector(id).value.trim(); const o={l:g('#hfL'),b:g('#hfB'),m:g('#hfM')}; md.remove(); res(o); }; });
     if(!v) return; const num=t=>t===''?null:slNum(t); const l=num(v.l), bb=num(v.b);
     if((l!=null&&!(Number.isInteger(l)&&l>=0))||(bb!=null&&!(Number.isInteger(bb)&&bb>=0))){ await uiAlert('金額は0以上の整数で入れてください'); return; }
-    const z=await rpc('admin_save_hall_adjust',{p_staff:x.id,p_month:m,p_late:l,p_bonus:bb,p_memo:v.m}); if(!z.ok) return; toast('直しました'); hallPayRender(st,m); })); }
+    const z=await rpc('admin_save_hall_adjust',{p_staff:x.id,p_month:m,p_late:l,p_bonus:bb,p_memo:v.m}); if(!z.ok) return; toast('直しました'); PAGES.cast_sales(); })); }
 
 // ---------- 請求書の未入金 v0.26・SQL 067：売上は会計した日のまま。振り込まれたら入金日を入れて「入金済み」にする（ここだけ。POS は見るだけ）。間違えた時は理由を入れて未入金に戻す。操作ログに残る ----------
 let invTab='unpaid';
