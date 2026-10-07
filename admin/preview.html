@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.39 -->
+<title>OLIVE 管理</title><!-- admin v0.40 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -1374,12 +1374,10 @@ PAGES.o_perms=()=>{
   $('main').innerHTML=`<h1>表示設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>
   <div class="card"><h2>オーナー以外の人が使える画面</h2><div class="muted" style="font-size:14px;margin-bottom:8px">この店舗のオーナー以外の人、全員に同じ設定が使われます。オーナーはいつでも全部の画面を使えます</div>
   <table class="t perm">${rows}</table></div>
-  <div class="card"><h2>日報のさかのぼり</h2><div class="row"><span>オーナー以外は、今日から</span><input id="ndays" type="number" inputmode="numeric" min="0" max="366" value="${Number(s.nippo_days??3)}" style="width:100px;text-align:right"><span>日前まで見られる</span></div>
-  <div class="muted" style="font-size:14px;margin-top:6px">例：3 にすると、今日・昨日・2日前・3日前まで。0 にすると今日だけ</div></div>
   <div class="row"><button class="primary" id="permSave">保存</button></div>`;
   $('main').querySelectorAll('.seg').forEach(g=>g.querySelectorAll('button').forEach(b=>b.onclick=()=>{ perms[g.dataset.pk]=b.dataset.v; g.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); }));
   $('permSave').onclick=guard($('permSave'),async()=>{
-    const n=Number($('ndays').value); if(!Number.isInteger(n)||n<0||n>366){ await uiAlert('日数は0〜366の数字にしてください'); return; }
+    const n=Number(s.nippo_days??3); // v0.40：日報登録をなくしたので「日報のさかのぼり」は出さない（前の値をそのまま送る）
     const clean={}; SCREENS.forEach(x=>{ if(x.k&&perms[x.k]&&perms[x.k]!=='none') clean[x.k]=perms[x.k]; });
     const r=await rpc('admin_save_store_settings',{p_store:storeId,p_perms:clean,p_nippo_days:n}); if(!r.ok) return;
     me=await loadMe()||me; toast('保存しました'); renderNav(); });
