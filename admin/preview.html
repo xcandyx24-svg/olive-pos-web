@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.31 -->
+<title>OLIVE 管理</title><!-- admin v0.32 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -284,16 +284,16 @@ PAGES.none=()=>{ $('main').innerHTML=`<div class="card muted">見られる画面
 
 // ---------- 収支 v0.30・SQL 070：月次（1日1行）→ 日付を押すと日次（営業日報・現金管理・入出金・伝票一覧・勤怠）。d-system の収支と同じ形 ----------
 // 売上は会計済みの伝票の入金を売上日で（置きは入金した日、売掛＝請求書）。女子給与は日ごと＝その日の時間報酬＋商品バック＋手当−日払。月で決まるものは合計の行だけ（合計＝集計「キャスト」の残り支給額）
-// 経費計＝女子給与＋女子日払い＋男子日払い＋出金。粗利＝売上計＋入金−経費計。給率＝（女子給与＋女子日払い）÷売上計。勤怠の時刻は「収支」を変えられる人が直せる（理由は必須・操作ログ）
+// v0.32・SQL 072：総人件費＝女子給与＋日払い（女子・男子）。合計の行は 黒服の給与（月給・日給・時給）も入る（男子日払いは黒服の給与の先払いなので二重にしない）。給率＝総人件費÷売上計。経費＝出金。勤怠の時刻は「収支」を変えられる人が直せる（理由は必須・操作ログ）
 let plMonth=null, plDate=null;
 const plYen=v=>Number(v||0)?yen(v).replace(/^-/,'−'):'—';
 const plRate=(a,b)=>Number(b||0)?(Math.round(Number(a||0)/Number(b)*10000)/100).toFixed(2)+'%':'—%';
-const plExp=x=>Number(x.cast_pay||0)+Number(x.cast_adv||0)+Number(x.hall_adv||0)+Number(x.cash_out||0);
+const plLabor=x=>Number(x.cast_pay||0)+Number(x.cast_adv||0)+(x.hall_pay==null?Number(x.hall_adv||0):Math.max(Number(x.hall_pay||0),Number(x.hall_adv||0))); // 総人件費
 function plTotals(d){ const D=d.days||[], S=k=>D.reduce((a,x)=>a+Number(x[k]||0),0); const t={date:'合計',cash:S('cash'),invoice:S('invoice'),card:S('card'),sales:S('sales'),kakari_sub:S('kakari_sub'),douhan_sub:S('douhan_sub'),groups:S('groups'),guests:S('guests'),
-  cast_pay:Number(d.cast_net||0),cast_adv:S('cast_adv'),hall_adv:S('hall_adv'),cash_in:S('cash_in'),cash_out:S('cash_out')}; t.cast_gross=t.cast_pay+t.cast_adv; return t; }
-const PL_COLS=[['売上',[['cash','現金'],['invoice','売掛'],['card','カード'],['sales','売上計']]],['女子売上',[['kakari_sub','係小計'],['douhan_sub','同伴小計']]],
-  ['経費',[['cast_pay','女子給与'],['rate','給率'],['hall_adv','男子日払い'],['cast_adv','女子日払い'],['cash_in','入金'],['cash_out','出金'],['exp','経費計']]],['',[['gp','粗利']]]];
-const plCell=(k,x)=>k==='rate'?plRate(x.cast_gross,x.sales):k==='exp'?plYen(plExp(x)):k==='gp'?plYen(Number(x.sales||0)+Number(x.cash_in||0)-plExp(x)):plYen(x[k]);
+  cast_pay:Number(d.cast_net||0),cast_adv:S('cast_adv'),hall_adv:S('hall_adv'),hall_pay:Number(d.hall_pay||0),cash_in:S('cash_in'),cash_out:S('cash_out')}; t.cast_gross=t.cast_pay+t.cast_adv; return t; }
+const PL_COLS=[['売上',[['cash','現金'],['invoice','売掛'],['card','カード'],['sales','売上計']]],['女子売上',[['kakari_sub','係小計']]],
+  ['経費',[['cast_pay','女子給与'],['adv','日払い'],['labor','総人件費'],['rate','給率'],['cash_in','入金'],['cash_out','出金']]]];
+const plCell=(k,x)=>k==='rate'?plRate(plLabor(x),x.sales):k==='labor'?plYen(plLabor(x)):k==='adv'?plYen(Number(x.cast_adv||0)+Number(x.hall_adv||0)):plYen(x[k]);
 PAGES.pl=()=>plDate?plDayPage():plMonthPage();
 async function plMonthPage(){ const st=storeId, now=csNowMonth(); if(!plMonth) plMonth=now; const m=plMonth, mOpts=Array.from({length:13},(_,i)=>csAddMonth(now,-i));
   const head=`<h1>収支 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="row" style="margin-bottom:12px;justify-content:space-between"><select id="plM" style="width:auto">${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select><button class="ghost" id="plXls" disabled>Excel</button></div>`;
@@ -301,18 +301,18 @@ async function plMonthPage(){ const st=storeId, now=csNowMonth(); if(!plMonth) p
   const wire=()=>{ $('plM').onchange=()=>{ plMonth=$('plM').value; PAGES.pl(); }; const x=$('plXls'); if(x&&data){ x.disabled=false; x.onclick=guard(x,()=>plExcel(data)); } $('main').querySelectorAll('[data-pld]').forEach(e=>e.onclick=()=>{ plDate=e.dataset.pld; PAGES.pl(); }); }; wire();
   const r=await sb.rpc('admin_pl_month',{p_store:st,p_month:m}); if(page!=='pl'||storeId!==st||plMonth!==m||plDate) return;
   if(r.error){ $('main').innerHTML=head+`<div class="card err">${esc(/admin_pl_month|cast_month_calc/.test(r.error.message)?'SQL 070 が未実行です：':'読み込めません：')}${esc(r.error.message)}</div>`; wire(); return; }
-  data=r.data; const T=plTotals(data), gp=T.sales+T.cash_in-plExp(T), cols=PL_COLS.flatMap(([g,cs])=>cs);
+  data=r.data; const T=plTotals(data), cols=PL_COLS.flatMap(([g,cs])=>cs);
   const box=(l,v,c)=>`<div style="display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;flex:1 1 220px"><span style="background:${c};padding:12px 16px;font-weight:700;white-space:nowrap">${l}</span><b style="flex:1;text-align:right;padding:12px 16px;font-size:20px">${v}</b></div>`;
-  $('main').innerHTML=head+`<div class="row" style="gap:10px;margin-bottom:12px;flex-wrap:wrap">${box('売上',plYen(T.sales),'#e3eef8')}${box('入金',plYen(T.cash_in),'#fbf1dc')}${box('経費',plYen(plExp(T)),'#f8e1e1')}${box('粗利',plYen(gp),'#e2f2e2')}</div>
+  $('main').innerHTML=head+`<div class="row" style="gap:10px;margin-bottom:12px;flex-wrap:wrap">${box('売上',plYen(T.sales),'#e3eef8')}${box('総人件費',plYen(plLabor(T)),'#fbf1dc')}${box('経費',plYen(T.cash_out),'#f8e1e1')}</div>
     <div class="muted" style="font-size:13px;margin-bottom:6px">日付を押すと、その日の収支（日次）を開きます</div>
     <div class="cs-w"><table class="t cs ks"><thead><tr><th class="nm" rowspan="2">${csMLabel(m)}</th>${PL_COLS.map(([g,cs])=>`<th colspan="${cs.length}" class="ksg">${g}</th>`).join('')}</tr><tr>${cols.map(([,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>
     <tr class="kst"><td class="nm"><b>合計</b></td>${cols.map(([k])=>`<td>${plCell(k,T)}</td>`).join('')}</tr>
     ${(data.days||[]).map(x=>{ const wd=new Date(x.date+'T00:00:00').getDay(); return `<tr><td class="nm"><a data-pld="${x.date}" style="color:var(--blue);cursor:pointer">${md(x.date)}</a> <span style="color:${wd===0?'#c0392b':wd===6?'#2a6fdb':'var(--muted)'}">${WJ[wd]}</span></td>${cols.map(([k])=>`<td>${plCell(k,x)}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
-    <div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">売上は会計済みの伝票の入金を売上日で数えます<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">置きは入金した日に、入金した方法（現金・カード）で入ります。売掛は請求書です<br>女子給与：日ごとは その日の時間報酬（月の決定時給×勤務時間、日給の人は日給）＋商品バック＋手当 − その日の日払。小計バック・特別な支給・罰金・控除・源泉など月で決まるものは、合計の行だけに入ります（合計は集計「キャスト」の残り支給額の合計）<br>給率＝（女子給与＋女子日払い）÷売上計。経費計＝女子給与＋女子日払い＋男子日払い＋出金。粗利＝売上計＋入金−経費計</div></div>`;
+    <div class="muted hint" style="font-size:13px;margin-top:8px;line-height:1.6">売上は会計済みの伝票の入金を売上日で数えます<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">置きは入金した日に、入金した方法（現金・カード）で入ります。売掛は請求書です<br>女子給与：日ごとは その日の時間報酬（月の決定時給×勤務時間、日給の人は日給）＋商品バック＋手当 − その日の日払。小計バック・特別な支給・罰金・控除・源泉など月で決まるものは、合計の行だけに入ります（合計は集計「キャスト」の残り支給額の合計）<br>総人件費＝女子給与＋日払い（女子・男子）。合計の行は 黒服の給与（スタッフ設定の月給・日給×出勤日数・時給×勤務時間）も入ります。男子日払いは黒服の給与の先払いなので、二重には数えません<br>給率＝総人件費÷売上計。上の「経費」は出金（領収書精算・支払いなど）の合計</div></div>`;
   wire(); }
 async function plExcel(d){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'); }catch(e){ await uiAlert(e.message); return; }
   const T=plTotals(d), cols=PL_COLS.flatMap(([g,cs])=>cs.map(c=>[g,...c])), [y,mo]=String(d.month).split('-').map(Number);
-  const val=(k,x)=>k==='rate'?(Number(x.sales||0)?Math.round(Number(x.cast_gross||0)/Number(x.sales)*10000)/100:0):k==='exp'?plExp(x):k==='gp'?Number(x.sales||0)+Number(x.cash_in||0)-plExp(x):Number(x[k]||0);
+  const val=(k,x)=>k==='rate'?(Number(x.sales||0)?Math.round(plLabor(x)/Number(x.sales)*10000)/100:0):k==='labor'?plLabor(x):k==='adv'?Number(x.cast_adv||0)+Number(x.hall_adv||0):Number(x[k]||0);
   const aoa=[[`収支明細（月次）${y}年${mo}月`],['日付',...cols.map(c=>c[1])],['',...cols.map(c=>c[2]+(c[1]==='rate'?'(%)':''))],['合計',...cols.map(c=>val(c[1],T))],...(d.days||[]).map(x=>[x.date,...cols.map(c=>val(c[1],x))])];
   aoa[1]=['日付',...cols.map((c,i)=>i>0&&cols[i-1][0]===c[0]?null:c[0]||c[2])]; aoa[2]=['',...cols.map(c=>c[0]?c[2]+(c[1]==='rate'?'(%)':''):null)];
   const ws=XLSX.utils.aoa_to_sheet(aoa), mg=[{s:{r:1,c:0},e:{r:2,c:0}}]; let j=0; while(j<cols.length){ let k=j; while(k+1<cols.length&&cols[k+1][0]===cols[j][0]) k++; if(cols[j][0]) mg.push({s:{r:1,c:j+1},e:{r:1,c:k+1}}); else mg.push({s:{r:1,c:j+1},e:{r:2,c:j+1}}); j=k+1; }
