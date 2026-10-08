@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.49 -->
+<title>OLIVE 管理</title><!-- admin v0.50 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -100,6 +100,11 @@
   table.cs button.sm,table.fn button,.row button.sm{height:44px} /* 入力欄の横のボタンも 44px */
   table.ks td,table.ks th{text-align:right;white-space:nowrap}table.ks th.nm,table.ks td.nm{text-align:left}table.ks th.ksg{text-align:center;color:var(--ink);font-weight:700;border-left:1px solid var(--line)}table.ks tr.kst td{border-top:2px solid var(--line);font-weight:700}
   .plg{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px;align-items:start}.plg .card{margin:0}table.pl td.r,table.pl th.r{text-align:right}table.pl tr.sep td{padding:2px;border-bottom:2px solid var(--line)}table.pl tr.kst td{font-weight:700;border-top:2px solid var(--line)}table.pl td,table.pl th{white-space:nowrap}
+  /* v0.50：まとめ */
+  .smg{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-bottom:14px;align-items:start}
+  .smb{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}.smb h2{margin:0;padding:10px 14px;font-size:16px;font-weight:600}.smb h2 small{font-weight:400}
+  .smb .big{text-align:right;font-size:24px;padding:10px 14px}.smb table{width:100%;border-collapse:collapse}.smb td{padding:8px 12px;border-top:1px solid var(--line);font-size:14px}
+  .smb td:first-child{background:#f4f3f0;font-weight:600;width:45%;white-space:nowrap}.smb td:last-child{text-align:right}
 </style>
 </head>
 <body>
@@ -279,6 +284,40 @@ function pagePending(k){ $('main').innerHTML=`<h1>${esc(nameOf(k))}</h1><div cla
 const PAGES={};
 // 見られる画面が1つもない時
 PAGES.none=()=>{ $('main').innerHTML=`<div class="card muted">見られる画面がありません。オーナーに「表示設定」で選んでもらってください</div>`; };
+
+// ---------- まとめ v0.50：d-system の「まとめ」と同じ形（月間と今日の 店舗状況・売上・経費・入金、売上推移のグラフ）。数字は収支と同じ（admin_pl_month） ----------
+// 経費＝人件費（女子＝女子給与＋日払い、男子＝黒服の給与。日ごとは男子日払い）＋諸経費（出金）。粗利＝売上＋入金−人件費−諸経費
+let smMonth=null, smChart=null;
+PAGES.summary=async()=>{ const st=storeId, now=csNowMonth(); if(!smMonth) smMonth=now; const m=smMonth, mOpts=Array.from({length:13},(_,i)=>csAddMonth(now,-i));
+  if(smChart){ smChart.destroy(); smChart=null; }
+  const head=`<h1>まとめ <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="row" style="margin-bottom:12px"><select id="smM" style="width:auto">${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select></div>`;
+  const wire=()=>{ $('smM').onchange=()=>{ smMonth=$('smM').value; PAGES.summary(); }; };
+  $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>'; wire();
+  const r=await sb.rpc('admin_pl_month',{p_store:st,p_month:m}); if(page!=='summary'||storeId!==st||smMonth!==m) return;
+  if(r.error){ $('main').innerHTML=head+`<div class="card err">読み込めません：${esc(r.error.message)}</div>`; wire(); return; }
+  const d=r.data, D=d.days||[], T=plTotals(d), N=v=>Number(v||0), per=(a,b)=>N(b)?yen(Math.round(N(a)/N(b))):yen(0);
+  const hallM=Math.max(N(T.hall_pay),N(T.hall_adv)), castD=x=>N(x.cast_pay)+N(x.cast_adv);
+  const box=(ttl,bg,fg,big,rows)=>`<div class="smb"><h2 style="background:${bg};color:${fg}">${ttl}</h2>${big==null?'':`<div class="big">${yen(big)}</div>`}<table>${rows.map(([l,v])=>`<tr><td>${l}</td><td>${v}</td></tr>`).join('')}</table></div>`;
+  const set=(x,sfx,fPay,mPay,sfx0=sfx)=>`<div class="smg">
+    ${box('店舗状況'+sfx0,'#2f6fb5','#fff',null,[['来店人数',N(x.guests)+'人'],['来店組数',N(x.groups)+'組'],['客単価',per(x.sales,x.guests)],['組単価',per(x.sales,x.groups)],['係小計',yen(x.kakari_sub)]])}
+    ${box('売上'+sfx,'#dcecf7','#2f6fb5',N(x.sales),[['現金',yen(x.cash)],['売掛',yen(x.invoice)],['カード',yen(x.card)]])}
+    ${box('経費'+sfx,'#f7dede','#c0392b',fPay+mPay+N(x.cash_out),[['人件費-女子',yen(fPay)],['人件費-男子',yen(mPay)],['諸経費',yen(x.cash_out)]])}
+    ${box('入金'+sfx,'#fbf1dc','#a67c1a',N(x.cash_in),[])}</div>`;
+  const bdNow=businessDate(), t=D.find(x=>x.date===bdNow)||{}, jd=x=>{ const [y,mo,dd]=x.split('-').map(Number); return `${y}年${mo}月${dd}日`; };
+  $('main').innerHTML=head+set(T,'累計 <small>[月間]</small>',N(T.cast_pay)+N(T.cast_adv),hallM,' <small>[月間]</small>')
+    +(m===now?set(t,` <small>${jd(bdNow)}</small>`,castD(t),N(t.hall_adv)):'')
+    +`<div class="smb" style="margin-bottom:14px"><h2 style="background:#dcefd6;color:#3f7d3a">売上推移</h2><div style="padding:12px;height:420px"><canvas id="smCv"></canvas></div>
+      <div class="muted" style="font-size:13px;line-height:1.7;padding:0 14px 12px">・粗利は 売上＋入金−人件費−経費 で計算しています<br>・グラフの「人件費」は日ごとの分です（女子給与＋日払い）。小計バック・罰金・控除・黒服の給与など月で決まるものは、上の「経費累計 [月間]」だけに入ります</div></div>`;
+  wire();
+  try{ await ksLoad('https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js'); }catch(e){ return; }
+  if(page!=='summary'||storeId!==st||smMonth!==m||!$('smCv')) return;
+  let acc=0; const lab=x=>castD(x)+N(x.hall_adv), cum=D.map(x=>(acc+=N(x.sales)+N(x.cash_in)-lab(x)-N(x.cash_out)));
+  const bar=(l,k,c,stack)=>({type:'bar',label:l,data:D.map(k),backgroundColor:c+'55',borderColor:c,borderWidth:1.5,stack,yAxisID:'y',order:2});
+  smChart=new Chart($('smCv'),{data:{labels:D.map(x=>Number(x.date.slice(8))+'日'),datasets:[
+    bar('売上',x=>N(x.sales),'#3b97d3','a'),bar('入金',x=>N(x.cash_in),'#f0c040','a'),bar('人件費',lab,'#e8557a','b'),bar('経費',x=>N(x.cash_out),'#f0963c','b'),
+    {type:'line',label:'粗利(累計)',data:cum,borderColor:'#9fd0a0',backgroundColor:'#9fd0a055',pointStyle:'triangle',pointRadius:5,tension:0,yAxisID:'y2',order:1}]},
+    options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{tooltip:{callbacks:{label:c=>`${c.dataset.label}：${yen(c.parsed.y)}`}}},
+      scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,ticks:{callback:v=>Number(v).toLocaleString('ja-JP')}},y2:{position:'right',grid:{drawOnChartArea:false},ticks:{callback:v=>Number(v).toLocaleString('ja-JP')}}}}}); };
 
 // ---------- 収支 v0.30・SQL 070：月次（1日1行）→ 日付を押すと日次（営業日報・現金管理・入出金・伝票一覧・勤怠）。d-system の収支と同じ形 ----------
 // 売上は会計済みの伝票の入金を売上日で（置きは入金した日、売掛＝請求書）。女子給与は日ごと＝その日の時間報酬＋商品バック＋手当−日払。月で決まるものは合計の行だけ（合計＝集計「キャスト」の残り支給額）
