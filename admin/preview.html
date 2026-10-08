@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.50 -->
+<title>OLIVE 管理</title><!-- admin v0.51 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -1239,6 +1239,8 @@ const BL_F=[['all','全部'],['discount','値引きあり'],['invoice','売掛�
 const BL_COLS=[['status','状態'],['date','営業日'],['in','入店'],['out','退店'],['dur','時間'],['table','卓'],['guests','客数'],['customers','お客様'],['kakari','係'],['douhan','同伴'],['items','注文'],['ext','延長'],
   ['sub','係小計'],['service','サービス料'],['discount','値引き'],['surcharge','値増し'],['due','合計'],['cash','現金'],['card','カード'],['invoice','売掛'],['oki','置き'],['receipt','領収書']];
 const BL_TXT=['customers','kakari','douhan'];
+// v0.51：延長の列は回数。見出しに POS設定の延長単位を出す（例：30分延長（回））。POS設定を読めない時は「延長（回）」
+let blExtL='延長（回）'; const blLab=(k,l)=>k==='ext'?blExtL:l;
 const BL_SUM=['guests','ext','sub','service','discount','surcharge','due','cash','card','invoice','oki'];
 const blDur=(a,b)=>{ if(!a||!b) return ''; const m=Math.max(0,Math.round((new Date(b)-new Date(a))/60000)); return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`; };
 const blSt=x=>x.status==='void'?'取消':x.status==='open'?'来店中':'会計済み';
@@ -1258,7 +1260,8 @@ PAGES.bills=async()=>{ const st=storeId, own=!!me?.is_owner, today=businessDate(
       $('blF').value=a; $('blT').value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
     $('blFl').onchange=()=>{ blFilt=$('blFl').value; draw(); }; $('blQ').oninput=()=>{ blQ=$('blQ').value; draw(); }; };
   wire();
-  const r=await sb.rpc('admin_bill_list',{p_store:st,p_from:f,p_to:t}); if(page!=='bills'||storeId!==st||blFrom!==f||blTo!==t) return;
+  const [r,ps]=await Promise.all([sb.rpc('admin_bill_list',{p_store:st,p_from:f,p_to:t}), sb.from('pos_settings').select('ext_minutes').eq('store_id',st).maybeSingle()]); if(page!=='bills'||storeId!==st||blFrom!==f||blTo!==t) return;
+  const em=Number(ps?.data?.ext_minutes||0); blExtL=em>0?`${em}分延長（回）`:'延長（回）';
   if(r.error){ $('blBox').innerHTML=`<div class="card err">${esc(/admin_bill_list/.test(r.error.message)?'SQL 078 が未実行です：':'読み込めません：')}${esc(r.error.message)}</div>`; return; }
   const all=r.data||[]; let rows=[];
   const pick=()=>{ const q=blQ.trim().toLowerCase(); return all.filter(x=>blFilt==='void'?x.status==='void':x.status!=='void'&&(blFilt==='all'||(blFilt==='open'?x.status==='open':Number(x[blFilt]||0)>0)))
@@ -1268,7 +1271,7 @@ PAGES.bills=async()=>{ const st=storeId, own=!!me?.is_owner, today=businessDate(
   function draw(){ rows=pick(); const tot={}; BL_SUM.forEach(k=>tot[k]=rows.reduce((a,x)=>a+Number(x[k]||0),0));
     const del=own&&blFilt!=='void';
     $('blBox').innerHTML=`<div class="row" style="margin-bottom:8px;gap:8px"><button class="ghost" id="blXls" ${rows.length?'':'disabled'}>Excel</button>${del?'<button class="danger" id="blDel" disabled>チェックした伝票を削除</button>':''}<span class="muted" style="font-size:13px">${rows.length}件</span></div>
-    <div class="cs-w"><table class="t cs ks bl"><thead><tr>${del?'<th><input type="checkbox" id="blAll" style="width:auto;height:auto"></th>':''}<th class="nm">No</th>${BL_COLS.map(([k,l])=>`<th${k==='items'||BL_TXT.includes(k)?' style="text-align:left"':''}>${l}</th>`).join('')}</tr></thead><tbody>
+    <div class="cs-w"><table class="t cs ks bl"><thead><tr>${del?'<th><input type="checkbox" id="blAll" style="width:auto;height:auto"></th>':''}<th class="nm">No</th>${BL_COLS.map(([k,l])=>`<th${k==='items'||BL_TXT.includes(k)?' style="text-align:left"':''}>${blLab(k,l)}</th>`).join('')}</tr></thead><tbody>
     <tr class="kst">${del?'<td></td>':''}<td class="nm"><b>合計</b></td>${BL_COLS.map(([k])=>`<td>${BL_SUM.includes(k)?(k==='guests'||k==='ext'?tot[k]:yen(tot[k])):''}</td>`).join('')}</tr>
     ${rows.map((x,i)=>`<tr>${del?`<td>${x.status==='closed'?`<input type="checkbox" data-blck="${x.id}" style="width:auto;height:auto">`:''}</td>`:''}<td class="nm"><a data-blv="${x.id}" style="color:var(--blue);cursor:pointer;text-decoration:underline">${i+1}</a></td>${BL_COLS.map(([k])=>`<td${k==='items'?' style="white-space:normal;min-width:180px;max-width:320px;text-align:left"':BL_TXT.includes(k)?' style="text-align:left"':''}>${cell(k,x)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${BL_COLS.length+2}" class="muted">伝票はありません</td></tr>`}</tbody></table></div>`;
     $('main').querySelectorAll('[data-blv]').forEach(a=>a.onclick=()=>{ const x=all.find(z=>z.id===a.dataset.blv); billView(a.dataset.blv,own&&x&&x.status==='closed'); });
@@ -1281,9 +1284,9 @@ PAGES.bills=async()=>{ const st=storeId, own=!!me?.is_owner, today=businessDate(
         toast(`${n}件 削除しました`); PAGES.bills(); }); } }
   draw(); };
 async function blExcel(rows,f,t){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'); }catch(e){ await uiAlert(e.message); return; }
-  const head=['No',...BL_COLS.map(([,l])=>l)], body=rows.map((x,i)=>[i+1,...BL_COLS.map(([k])=>blVal(k,x))]);
+  const head=['No',...BL_COLS.map(([k,l])=>blLab(k,l))], body=rows.map((x,i)=>[i+1,...BL_COLS.map(([k])=>blVal(k,x))]);
   const tot=['合計',...BL_COLS.map(([k])=>BL_SUM.includes(k)?rows.reduce((a,x)=>a+Number(x[k]||0),0):'')];
-  const ws=XLSX.utils.aoa_to_sheet([[`伝票一覧 ${f}〜${t}`],head,tot,...body]); ws['!cols']=head.map(h=>({wch:h==='注文'?40:h==='お客様'||h==='係'?14:10}));
+  const ws=XLSX.utils.aoa_to_sheet([[`伝票一覧 ${f}〜${t}`],head,tot,...body]); ws['!cols']=head.map(h=>({wch:h==='注文'?40:h==='お客様'||h==='係'||h===blExtL?14:10}));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'伝票一覧'); XLSX.writeFile(wb,`bills-${f}_${t}${ksCode()}.xlsx`); toast('ダウンロードしました'); }
 
 // ---------- 顧客サイト v0.37・SQL 076：顧客サイト（preview）をそのまま中に出す。顧客サイトのパスワードは聞かない（管理サイトのログインで入場券をもらう）。編集は「顧客サイト」を編集できる人だけ ----------
