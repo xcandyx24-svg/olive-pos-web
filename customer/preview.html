@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.32 -->
+<title>OLIVE 顧客</title><!-- customer v1.33 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -132,6 +132,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
 <script>
+// v1.33・SQL 080：店ごとの「係」の名称（stores.kakari_label。空なら「係」）。画面の「係」は KL を差し込む。見出しの一覧は kReg に入れておき、kSet で付け直す。操作ログに残す操作の名前は「係」のまま（表示の時に kl で読み替える）
+let KL='係'; const kl=s=>KL==='係'?s:String(s??'').replace(/係/g,KL); const KT=[];
+function kReg(...os){ const walk=o=>{ for(const k of Object.keys(o)){ const v=o[k]; if(typeof v==='string'){ if(v.includes('係')) KT.push([o,k,v]); } else if(v&&typeof v==='object') walk(v); } }; os.forEach(walk); }
+function kSet(v){ KL=(v&&String(v).trim())||'係'; KT.forEach(([o,k,v])=>{ o[k]=kl(v); }); }
 'use strict';
 const SUPABASE_URL='https://gjqaxenwvvazhjtziusf.supabase.co', SUPABASE_KEY='sb_publishable_pPfJUvJd6iJeHBNiD7XkWA_2RKF7JYw';
 const $=id=>document.getElementById(id);
@@ -192,6 +196,7 @@ $('loginForm').onsubmit=async e=>{ e.preventDefault(); const pw=$('pw').value; i
 
 async function start(){ if(!token){ showLogin(); return; }
   try{ boot=await rpc('cs_boot',{p_token:token}); }catch(e){ if(e.code==='CS_AUTH'){ showLogin(); return; } showLogin(e.message); return; }
+  kSet(boot&&boot.store&&boot.store.kakari_label);
   $('storeName').textContent=(boot.store&&boot.store.name||'')+'　顧客'; document.title=(boot.store&&boot.store.name||'OLIVE')+' 顧客';
   if(!monthsSel) monthsSel=boot.bottle_keep_months||6;
   show('vList'); paintEdit(); await loadList(); rtSub(); }
@@ -200,7 +205,7 @@ let rtCh=null, rtT=0;
 function rtSub(){ const sid=boot&&boot.store&&boot.store.id; if(rtCh||!sid||!window.supabase) return;
   try{ const c=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,storageKey:'olive-cs-rt'}});
     rtCh=c.channel('olive:'+sid).on('broadcast',{event:'chg'},m=>{ const k=(m.payload||{}).kind; clearTimeout(rtT); rtT=setTimeout(()=>rtRefresh(k),k==='settings'?1500:2500); }).subscribe(); }catch(e){ console.warn('realtime',e); } }
-async function rtRefresh(k){ if(k==='settings'){ try{ const b=await rpc('cs_boot',{p_token:token}); if(b){ boot=b; $('storeName').textContent=(boot.store&&boot.store.name||'')+'　顧客'; document.title=(boot.store&&boot.store.name||'OLIVE')+' 顧客'; } }catch(e){} } csRefresh(true); }
+async function rtRefresh(k){ if(k==='settings'){ try{ const b=await rpc('cs_boot',{p_token:token}); if(b){ boot=b; kSet(boot.store&&boot.store.kakari_label); $('storeName').textContent=(boot.store&&boot.store.name||'')+'　顧客'; document.title=(boot.store&&boot.store.name||'OLIVE')+' 顧客'; } }catch(e){} } csRefresh(true); }
 
 // ---------- 編集モード ----------
 function editing(){ return !!editTok&&editExp>Date.now(); }
@@ -274,7 +279,7 @@ function renderDetail(){ if(!cur) return; const c=cur.customer, ed=editing(); $(
       <dt>お誕生日</dt><dd>${esc(c.birthday||'—')}</dd>
       <dt>会社名</dt><dd>${esc(c.company||'—')}${c.is_industry?' <span class="badge k">同業</span>':''}</dd>
       <dt>領収書名</dt><dd>${esc(c.receipt_name||'—')}</dd>
-      <dt>係</dt><dd>${esc(kakari||'—')}</dd>
+      <dt>${KL}</dt><dd>${esc(kakari||'—')}</dd>
       <dt>会社住所</dt><dd>${esc(c.company_address||'—')}</dd>
       <dt>反応◎</dt><dd>${good}</dd>
     </dl></div>
@@ -328,7 +333,7 @@ function reqForm(){ const c=cur.customer; const ppl=(boot.staff||[]).filter(s=>s
       e.target.disabled=true; try{ await rpc('cs_request',{p_token:token,p_customer:c.id,p_author:who,p_body:body}); LS.set('olive_cs_author',who); done(true); toast('申請しました'); await reloadDetail(); }catch(err){ e.target.disabled=false; await fail(err); } }; }); }
 
 // 基本情報・メモの編集（編集パスワードが必要）
-const EF=[['name','お名前'],['birthday','お誕生日'],['company','会社名'],['receipt_name','領収書名'],['kakari_staff_id','係'],['company_address','会社住所']];
+const EF=[['name','お名前'],['birthday','お誕生日'],['company','会社名'],['receipt_name','領収書名'],['kakari_staff_id',''+KL+''],['company_address','会社住所']];
 function editForm(memoOnly,draft){ const c=cur.customer, dv=k=>draft&&(k in draft)?draft[k]:c[k]; const casts=(boot.staff||[]).filter(s=>s.kind==='cast'&&s.active); const curK=c.kakari_staff_id&&!casts.some(s=>s.id===c.kakari_staff_id)?staffBy(c.kakari_staff_id):null;
   const fields=memoOnly?'':EF.map(([k,l])=>k==='kakari_staff_id'?`<label class="f">${l}<select data-k="${k}"><option value="">なし</option>${curK?`<option value="${curK.id}" selected>${esc(curK.name)}（退店）</option>`:''}${casts.map(s=>`<option value="${s.id}" ${dv(k)===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></label>`
     :`<label class="f">${l}<input data-k="${k}" value="${esc(dv(k)||'')}" ${k==='birthday'?'placeholder="例 11/24" inputmode="numeric"':''}></label>`).join('')+`<label class="f" style="display:flex;align-items:center;gap:8px;color:var(--ink);font-size:15px"><input type="checkbox" data-k="is_industry" ${dv('is_industry')?'checked':''} style="width:auto;margin:0">同業（会社名に店名を入れる）</label>`;
@@ -396,6 +401,7 @@ async function csRefresh(listToo){ if(!token||document.visibilityState!=='visibl
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ paintEdit(); csRefresh(true); } });
 setInterval(()=>csRefresh(true),60000); /* v1.27：一覧の画面でも1分ごとに読み直す（パスワードが変わったらログアウト） */
 
+kReg(EF);
 if(EMB){ token=null; editTok=null; editExp=0; embAsk().then(d=>{ if(d&&d.token) start(); else { show('vLogin'); $('loginErr').textContent=d&&d.error||'顧客サイトを開けません'; } }); } else start();
 </script>
 </body>
