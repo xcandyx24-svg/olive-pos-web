@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.51 -->
+<title>OLIVE 管理</title><!-- admin v0.52 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -843,10 +843,8 @@ function afterCard(ax,ed){ const h='<h2>アフターの延長<br><small class="m
 const CS_PUNCH='打刻の手入力'; // v0.24・SQL 064：POS で打刻を手で入れた時に自動で付く罰金
 const CS_FOREVER='9999-12-31', CS_CATS=['性格','体調','お客様','勤怠','良かったこと','その他'];
 const CS_SP={pay:'支給',deduct:'控除',text:'文字だけ'}; // v0.43：文字だけは新しく入れない（メモを使う。前に入れたものは出す）
-let csMonth=null, csEdit=false, csDetail=null, csTab='memo', csKind='cast', csOrdM=null;
-// v0.24：キャスト設定 → スタッフ設定（キャスト・黒服のタブ）
-const csKindTabs=()=>`<div class="cs-tabs">${[['cast','キャスト'],['hall','黒服']].map(([k,n])=>`<button data-kind="${k}" class="${csKind===k?'on':''}" ${csEdit?'disabled':''}>${n}</button>`).join('')}</div>`;
-const csKindWire=()=>$('main').querySelectorAll('[data-kind]').forEach(b=>b.onclick=()=>{ if(csEdit) return; csKind=b.dataset.kind; PAGES.set_cast(); });
+let csMonth=null, csEdit=false, csDetail=null, csTab='memo', csOrdM=null;
+// v0.52：キャスト・黒服のタブをやめて、1つの画面に（上にキャスト、下に黒服）。編集はどちらか片方ずつ（csEdit＝'cast'／'hall'）
 // v0.23：「今月」は営業日（朝8時で日付が変わる）の月
 const csNowMonth=()=>businessDate().slice(0,7)+'-01';
 const csAddMonth=(m,n)=>{ const [y,mo]=m.split('-').map(Number); const d=new Date(Date.UTC(y,mo-1+n,1)); return d.toISOString().slice(0,7)+'-01'; };
@@ -864,16 +862,20 @@ const csDate=d=>{ if(!d) return '—'; if(d===CS_FOREVER) return '永久'; const
 PAGES.set_cast=async()=>{
   if(csDetail&&csDetail.store===storeId) return csDetailPage();
   csDetail=null; const st=storeId, ed=perm('set_cast')==='edit'; if(!ed) csEdit=false;
-  const cur=csNowMonth(); if(!csMonth) csMonth=cur; const m=csMonth;
-  if(csKind==='hall') return csHallPage();
-  const head=`<h1>スタッフ設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>`+csKindTabs();
-  $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>';
+  const cur=csNowMonth(); if(!csMonth) csMonth=cur; const m=csMonth, mOpts=[]; for(let i=1;i>=-12;i--) mOpts.push(csAddMonth(cur,i));
+  $('main').innerHTML=`<h1>スタッフ設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
+  <div class="row" style="margin-bottom:12px"><select id="csM" style="width:auto" ${csEdit?'disabled':''}>${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select></div>
+  <h2 style="margin:0 0 8px">キャスト</h2><div id="csCastBox"><div class="card muted">読み込み中…</div></div>
+  <h2 style="margin:28px 0 8px">黒服</h2><div id="csHallBox"><div class="card muted">読み込み中…</div></div>`;
+  $('csM').onchange=()=>{ csMonth=$('csM').value; PAGES.set_cast(); };
+  await Promise.all([csCastPart($('csCastBox'),st,ed,m), csHallPart($('csHallBox'),st,ed,m)]); };
+async function csCastPart(box,st,ed,m){
   const [sf,tm,ft,nt,stb]=await Promise.all([csList(st), sb.from('cast_terms').select('*').eq('store_id',st).lte('month',m),
     sb.from('fine_types').select('name').eq('store_id',st).order('sort_order'), sb.from('cast_notes').select('staff_id').eq('store_id',st).eq('is_void',false),
     sb.from('slide_tables').select('id,name,unit,sort_order').eq('store_id',st).eq('is_active',true).order('sort_order')]);
-  if(page!=='set_cast'||storeId!==st||csMonth!==m) return;
+  if(page!=='set_cast'||storeId!==st||csMonth!==m||!box.isConnected) return;
   const er=sf.error||tm.error||nt.error;
-  if(er){ $('main').innerHTML=head+`<div class="card err">${esc(/cast_terms|cast_notes|day_pay_ok/.test(er.message)&&/exist|schema cache/.test(er.message)?'SQL 056 が未実行です：':'読み込めません：')}${esc(er.message)}</div>`; csKindWire(); return; }
+  if(er){ box.innerHTML=`<div class="card err">${esc(/cast_terms|cast_notes|day_pay_ok/.test(er.message)&&/exist|schema cache/.test(er.message)?'SQL 056 が未実行です：':'読み込めません：')}${esc(er.message)}</div>`; return; }
   const all=sf.data||[], halls=all.filter(x=>x.kind==='hall'), casts=all.filter(x=>x.kind==='cast'&&!x.is_trial&&!x.kakari_only);
   const nc={}; (nt.data||[]).forEach(x=>nc[x.staff_id]=(nc[x.staff_id]||0)+1);
   const tbls=stb.error?[]:(stb.data||[]); // SQL 058 の前は空
@@ -883,9 +885,8 @@ PAGES.set_cast=async()=>{
   const slShort=n=>String(n).replace(/スライド(表)?$/,'')||n; // v0.35：表の中は短く
   const fines=[...new Set([...(ft.data||[]).map(x=>x.name),'同伴ノルマ','新調日',CS_PUNCH])];
   const rows=casts.map(s=>({s,t:csTerms(s,tm.data||[],m)}));
-  const mOpts=[]; for(let i=1;i>=-12;i--) mOpts.push(csAddMonth(cur,i));
   const hallName=id=>halls.find(h=>h.id===id)?.display_name||'—';
-  const E=csEdit;
+  const E=csEdit==='cast', lock=csEdit==='hall';
   const sel=(k,v,os,dis)=>`<select data-k="${k}" ${dis?'disabled':''}>${os.map(([ov,on])=>`<option value="${esc(ov)}" ${String(v??'')===String(ov)?'selected':''}>${esc(on)}</option>`).join('')}</select>`;
   const inp=(k,v,w,dis)=>`<input data-k="${k}" inputmode="decimal" value="${esc(v??'')}" style="width:${w}px" ${dis?'disabled':''}>`;
   const yn=v=>v==null?'—':v;
@@ -908,19 +909,16 @@ PAGES.set_cast=async()=>{
       `<button class="ghost sm" data-k="ex" data-v="${esc(JSON.stringify(t.exempt_fines))}">${t.exempt_fines.length?esc(t.exempt_fines.join('・')):'—'}</button>`,
       sel('dp',s.day_pay_ok==null?'':String(s.day_pay_ok),[['','—'],['true','可'],['false','不可']]), sel('ct2',s.contract_done==null?'':String(s.contract_done),[['','—'],['true','済'],['false','未']])]; };
   const HD=['担当','給与','スライド表','日給','保証時給','保証の期限','同伴ノルマ','小計バック','源泉徴収','消費税','厚生費','罰金の免除','日払（立替）','契約書','メモ'];
-  $('main').innerHTML=head+`${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
-  <div class="row" style="margin-bottom:12px"><select id="csM" style="width:auto" ${E?'disabled':''}>${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select>
-    <span style="flex:1"></span>${ed?(E?'<button class="ghost" id="csCancel">やめる</button><button class="primary" id="csSave">保存</button>':'<button class="ghost" id="csEd">編集</button>'):''}</div>
+  box.innerHTML=`${ed?`<div class="row" style="margin-bottom:12px"><span style="flex:1"></span>${E?'<button class="ghost" id="csCancel">やめる</button><button class="primary" id="csSave">保存</button>':`<button class="ghost" id="csEd" ${lock?'disabled':''}>編集</button>`}</div>`:''}
   ${rows.length?`<div class="cs-w ${E?'editing':''}"><table class="reg cs"><tr><th class="nm">名前</th>${HD.map(h=>`<th>${h}</th>`).join('')}</tr>
   ${rows.map(r=>`<tr data-sid="${r.s.id}"><td class="nm">${E?esc(r.s.display_name):`<a data-open="${r.s.id}">${esc(r.s.display_name)}</a>`}${r.t.month===m&&r.t.only_month?`<br><small class="muted">${csMShort(m)}のみ</small>`:''}</td>${cell(r).map(c=>`<td>${c}</td>`).join('')}<td>${nc[r.s.id]?nc[r.s.id]+'件':'—'}</td></tr>`).join('')}</table></div>`
   :'<div class="card muted">在籍のキャストがいません</div>'}
   <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">${E?'表の中で直して「保存」。給与・日給・スライド表・保証時給・期限・同伴ノルマ・バック・源泉徴収・消費税・厚生費・罰金の免除を変えた時は「以降／のみ」を聞きます':'名前を押すと、メモと個別設定が開きます'}${ed&&!E?'。直す時は「編集」':''}</div>`;
-  $('csM').onchange=()=>{ csMonth=$('csM').value; PAGES.set_cast(); }; csKindWire();
-  $('main').querySelectorAll('[data-open]').forEach(a=>a.onclick=()=>{ const s=casts.find(x=>x.id===a.dataset.open); csDetail={store:st,s}; csTab='memo'; PAGES.set_cast(); }); // v0.44：メモを最初に開く
+  box.querySelectorAll('[data-open]').forEach(a=>a.onclick=()=>{ const s=casts.find(x=>x.id===a.dataset.open); csDetail={store:st,s}; csTab='memo'; PAGES.set_cast(); }); // v0.44：メモを最初に開く
   if(!ed) return;
-  if(!E){ $('csEd').onclick=()=>{ csEdit=true; PAGES.set_cast(); }; return; }
+  if(!E){ $('csEd').onclick=()=>{ csEdit='cast'; PAGES.set_cast(); }; return; }
   $('csCancel').onclick=()=>{ csEdit=false; PAGES.set_cast(); };
-  const tb=$('main').querySelector('table.cs');
+  const tb=box.querySelector('table.cs');
   tb.querySelectorAll('tr[data-sid]').forEach(tr=>{ const q=k=>tr.querySelector(`[data-k=${k}]`);
     if(q('pt')) q('pt').onchange=()=>{ const v=q('pt').value, sp=v==='seppan'; q('dw').disabled=v!=='daily'; if(q('dw').disabled) q('dw').value='';
       if(q('sl')){ q('sl').dataset.v='[]'; q('sl').disabled=sp; q('sl').innerHTML=sp?'—':'<span class="badge warnb">未選択</span>'; }
@@ -978,18 +976,15 @@ function csHallTerms(s,rows,m){ const t=rows.filter(r=>r.staff_id===s.id&&r.mont
   const pt=t?.pay_type||(CS_HPAY[s.pay_type]?s.pay_type:null);
   const amt=!pt?null:t?.pay_type?(pt==='monthly'?t.monthly_wage:pt==='hourly'?t.hourly_wage:t.daily_wage):(pt==='daily'?s.daily_wage:null);
   return {month:t?.month??null,only_month:!!t?.only_month,pay_type:pt,amount:amt==null?null:Number(amt),withhold:t?.withhold??null,ctax_pct:t?.ctax_pct==null?null:Number(t.ctax_pct),welfare_mode:t?.welfare_mode||'std',welfare_amount:t?.welfare_mode==='amount'?(t.welfare_amount??null):null}; }
-async function csHallPage(){ const st=storeId, ed=perm('set_cast')==='edit', cur=csNowMonth(), m=csMonth;
-  const head=`<h1>スタッフ設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>`+csKindTabs();
-  $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>'; csKindWire();
+async function csHallPart(box,st,ed,m){
   const [sf,tm]=await Promise.all([csList(st), sb.from('cast_terms').select('*').eq('store_id',st).lte('month',m)]);
-  if(page!=='set_cast'||storeId!==st||csMonth!==m||csKind!=='hall') return;
+  if(page!=='set_cast'||storeId!==st||csMonth!==m||!box.isConnected) return;
   const er=sf.error||tm.error;
-  if(er){ $('main').innerHTML=head+`<div class="card err">読み込めません：${esc(er.message)}</div>`; csKindWire(); return; }
+  if(er){ box.innerHTML=`<div class="card err">読み込めません：${esc(er.message)}</div>`; return; }
   const halls=(sf.data||[]).filter(x=>x.kind==='hall'), tr0=tm.data||[];
   const sql064=!tr0.length||'monthly_wage' in tr0[0];
   const rows=halls.map(s=>({s,t:csHallTerms(s,tr0,m)}));
-  const mOpts=[]; for(let i=1;i>=-12;i--) mOpts.push(csAddMonth(cur,i));
-  const E=csEdit;
+  const E=csEdit==='hall', lock=csEdit==='cast';
   const sel=(k,v,os)=>`<select data-k="${k}">${os.map(([ov,on])=>`<option value="${esc(ov)}" ${String(v??'')===String(ov)?'selected':''}>${esc(on)}</option>`).join('')}</select>`;
   const inp=(k,v,w,dis)=>`<input data-k="${k}" inputmode="decimal" value="${esc(v??'')}" style="width:${w}px" ${dis?'disabled':''}>`;
   const own=!!me?.is_owner, hm5=v=>v?String(v).slice(0,5):''; // v0.34・SQL 074：出勤・退勤の時刻（遅刻・早退の計算に使う。変えられるのはオーナーだけ）
@@ -1002,23 +997,21 @@ async function csHallPage(){ const st=storeId, ed=perm('set_cast')==='edit', cur
       sel('wh',t.withhold==null?'':String(t.withhold),[['','—'],['true','する'],['false','しない']]), inp('ct',t.ctax_pct??'',50)+' %',
       sel('wm',t.welfare_mode,[['std','標準'],['amount','金額'],['none','なし']])+' '+inp('wa',t.welfare_amount,80,t.welfare_mode!=='amount')]; };
   const HD=['給与','金額','出勤〜退勤'+(E&&!own?'<br><small class="muted">オーナーだけ</small>':''),'日払（立替）','契約書','源泉徴収','消費税','厚生費'];
-  $('main').innerHTML=head+`${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}${sql064?'':'<div class="card err">SQL 064 が未実行です（黒服の月給・時給を保存できません）</div>'}
-  <div class="row" style="margin-bottom:12px"><select id="csM" style="width:auto" ${E?'disabled':''}>${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select>
-    <span style="flex:1"></span>${ed?(E?'<button class="ghost" id="csCancel">やめる</button><button class="primary" id="csSave">保存</button>':'<button class="ghost" id="csEd">編集</button>'):''}</div>
+  box.innerHTML=`${sql064?'':'<div class="card err">SQL 064 が未実行です（黒服の月給・時給を保存できません）</div>'}
+  ${ed?`<div class="row" style="margin-bottom:12px"><span style="flex:1"></span>${E?'<button class="ghost" id="chCancel">やめる</button><button class="primary" id="chSave">保存</button>':`<button class="ghost" id="chEd" ${lock?'disabled':''}>編集</button>`}</div>`:''}
   ${rows.length?`<div class="cs-w ${E?'editing':''}"><table class="reg cs"><tr><th class="nm">名前</th>${HD.map(h=>`<th>${h}</th>`).join('')}</tr>
   ${rows.map(r=>`<tr data-sid="${r.s.id}"><td class="nm">${esc(r.s.display_name)}${r.t.month===m&&r.t.only_month?`<br><small class="muted">${csMShort(m)}のみ</small>`:''}</td>${cell(r).map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table></div>`
   :'<div class="card muted">在籍の黒服がいません</div>'}
   <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">${E?'表の中で直して「保存」。給与・金額・源泉徴収・消費税・厚生費を変えた時は「以降／のみ」を聞きます':'金額は、月給なら1か月、時給なら1時間、日給なら1日の金額です'}${ed&&!E?'。直す時は「編集」':''}</div>
 `;
-  csKindWire(); $('csM').onchange=()=>{ csMonth=$('csM').value; PAGES.set_cast(); };
   if(!ed) return;
-  if(!E){ $('csEd').onclick=()=>{ csEdit=true; PAGES.set_cast(); }; return; }
-  $('csCancel').onclick=()=>{ csEdit=false; PAGES.set_cast(); };
-  const tb=$('main').querySelector('table.cs');
+  if(!E){ $('chEd').onclick=()=>{ csEdit='hall'; PAGES.set_cast(); }; return; }
+  $('chCancel').onclick=()=>{ csEdit=false; PAGES.set_cast(); };
+  const tb=box.querySelector('table.cs');
   tb.querySelectorAll('tr[data-sid]').forEach(tr=>{ const q=k=>tr.querySelector(`[data-k=${k}]`);
     q('pt').onchange=()=>{ q('am').disabled=!q('pt').value; if(q('am').disabled) q('am').value=''; };
     q('wm').onchange=()=>{ q('wa').disabled=q('wm').value!=='amount'; if(q('wa').disabled) q('wa').value=''; }; });
-  const sv=$('csSave'); sv.onclick=guard(sv,async()=>{
+  const sv=$('chSave'); sv.onclick=guard(sv,async()=>{
     const out=[], shifts=[]; let needP=false;
     for(const {s,t} of rows){ const tr=tb.querySelector(`tr[data-sid="${s.id}"]`), q=k=>tr.querySelector(`[data-k=${k}]`), nm=s.display_name;
       const num=(k,l,max)=>{ const v=slNum(q(k).value); if(v==null) return null; if(!Number.isFinite(v)||v<0||(max!=null&&v>max)) throw `${nm}：${l}が正しくありません`; return v; };
