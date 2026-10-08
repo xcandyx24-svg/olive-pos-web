@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.52 -->
+<title>OLIVE 管理</title><!-- admin v0.53 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -689,7 +689,7 @@ async function regMonthPage(){
       tot.sales+=x.cash_sales; tot.cin+=x.cash_in; tot.cout+=x.cash_out; tot.diff+=x.diff; tot.deposit+=x.deposit; carry=Number(x.next_float??(x.counted-x.deposit))||0; continue; }
     if(dd>today){ rows.push(`<tr style="color:var(--muted)">${C(dl)}${C('').repeat(9)}</tr>`); continue; }
     const t=sum[dd]||{sales:0,cin:0,cout:0}; const exp=carry+t.sales+t.cin-t.cout; const idle=!t.sales&&!t.cin&&!t.cout; tot.sales+=t.sales; tot.cin+=t.cin; tot.cout+=t.cout;
-    rows.push(`<tr data-rd="${dd}" style="color:var(--muted)">${C(dl)}${C(yen(carry))}${C(yen(t.sales))}${C(yen(t.cin))}${C(yen(t.cout))}${C(yen(exp))}${idle?C(yen(exp))+C(yen(0))+C(yen(0))+CS(dd<today?'精算済み<br>（変動なし自動繰越）':''):C('')+C('')+C('')+CS('<span style="color:#c0392b">未精算</span>')}</tr>`); carry=exp; }
+    rows.push(`<tr data-rd="${dd}" style="color:var(--muted)">${C(dl)}${C(yen(carry))}${C(yen(t.sales))}${C(yen(t.cin))}${C(yen(t.cout))}${C(yen(exp))}${idle?C(yen(exp))+C(yen(0))+C(yen(0))+CS(dd<today?'（変動なし自動繰越）':''):C('')+C('')+C('')+CS('<span style="color:#c0392b">未精算</span>')}</tr>`); carry=exp; }
   $('rmBox').innerHTML=`<div style="overflow-x:auto"><table class="reg"><tr>${['日付','本日釣銭','現金売上','入金合計','出金合計','理論値','レジ内現金','過不足','預金','状態'].map(h=>`<th${h==='状態'?' style="text-align:left"':''}>${h}</th>`).join('')}</tr>${rows.join('')}
     <tr style="font-weight:700"><td>合計</td><td></td><td>${yen(tot.sales)}</td><td>${yen(tot.cin)}</td><td>${yen(tot.cout)}</td><td></td><td></td><td style="${tot.diff?'color:#c0392b':''}">${sgnYen(tot.diff)}</td><td>${yen(tot.deposit)}</td><td></td></tr></table></div>
     <div class="muted" style="font-size:13px;margin-top:8px">行を押すと、その日の日次を開きます</div>`;
