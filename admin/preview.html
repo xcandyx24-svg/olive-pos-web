@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.48 -->
+<title>OLIVE 管理</title><!-- admin v0.49 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -150,6 +150,7 @@ const SCREENS=[
   {grp:'集計'},
   {k:'summary',n:'まとめ'},
   {k:'pl',n:'収支'},
+  {k:'bills',n:'伝票一覧'},
   {k:'cast_sales',n:'スタッフ'},
   {k:'register',n:'現金管理'},
   {k:'punches',n:'打刻一覧'},
@@ -388,8 +389,9 @@ const beUid=()=>crypto.randomUUID?crypto.randomUUID():'10000000-1000-4000-8000-1
 const beHm=t=>t?new Date(t).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false}):'';
 function beRole(ts){ const x=new Date(new Date(ts||Date.now()).toLocaleString('en-US',{timeZone:'Asia/Tokyo'})), m=x.getHours()*60+x.getMinutes(); if(m<8*60) return 'douhan'; if(m<=20*60+30) return 'douhan1'; if(m<=21*60) return 'douhan2'; return 'douhan'; } // POS と同じ決め方
 // v0.38：伝票の No を押すと、その伝票の中身を全部見る（見るだけ。オーナーは「直す」へ）
-async function billView(id,canEdit){
-  const r=await sb.rpc('admin_bill_get',{p_bill:id}); if(r.error){ await uiAlert(/admin_bill_get/.test(r.error.message)?'SQL 071 が未実行です：'+r.error.message:r.error.message); return; }
+async function billView(id,canEdit){ // v0.49・SQL 078：見るだけの人も admin_bill_view で見られる（前は admin_bill_get＝オーナーだけ）
+  let r=await sb.rpc('admin_bill_view',{p_bill:id}); if(r.error&&/admin_bill_view/.test(r.error.message)) r=await sb.rpc('admin_bill_get',{p_bill:id});
+  if(r.error){ await uiAlert(r.error.message); return; }
   const O=r.data||{}, B=O.bill||{}, C=O.calc||{}, ST=O.staff||[], sn=sid=>ST.find(x=>x.id===sid)?.name||'（不明）', pn=pid=>(O.products||[]).find(p=>p.id===pid)?.name||'';
   const N=v=>Number(v||0), items=(O.items||[]).filter(i=>!i.is_void), voids=(O.items||[]).filter(i=>i.is_void), exts=O.exts||[], adjs=O.adjs||[], pays=O.pays||[];
   const dur=(a,b)=>{ if(!a||!b) return ''; const m=Math.max(0,Math.round((new Date(b)-new Date(a))/60000)); return `${Math.floor(m/60)}時間${String(m%60).padStart(2,'0')}分`; };
@@ -506,10 +508,10 @@ async function billEdit(id){
     qa('[data-bprm]').forEach(x=>x.onclick=()=>{ S.pays=S.pays.filter(z=>z.id!==x.dataset.bprm); redo(); });
     q('#bePayAdd').onclick=()=>{ const v=parseInt(q('#bePA').value,10), m=q('#bePM').value; if(!(v>0)){ uiAlert('金額を入れてください'); return; } S.pays.push({id:beUid(),method:m,amount:v,paid_at:B.closed_at,revenue_date:bd,received_at:recv(m)}); redo(); };
     q('#beNo').onclick=async()=>{ if(diff().ops.length&&!await uiConfirm('直した内容を保存せずに閉じますか？','閉じる','danger')) return; close(); };
-    q('#beDel').onclick=guard(q('#beDel'),async()=>{ if(!await uiConfirm(`${md(bd)} 卓${B.table||''}　${yen(O.calc.amount_due)} の伝票を削除しますか？\n売上・係小計・バックから外れます`,'削除する','danger')) return; const z=await rpc('admin_bill_void',{p_bill:id}); if(!z.ok) return; close(); toast('削除しました'); PAGES.pl(); });
+    q('#beDel').onclick=guard(q('#beDel'),async()=>{ if(!await uiConfirm(`${md(bd)} 卓${B.table||''}　${yen(O.calc.amount_due)} の伝票を削除しますか？\n売上・係小計・バックから外れます`,'削除する','danger')) return; const z=await rpc('admin_bill_void',{p_bill:id}); if(!z.ok) return; close(); toast('削除しました'); (PAGES[page]||PAGES.pl)(); });
     q('#beOk').onclick=guard(q('#beOk'),async()=>{ const {ops,note}=diff(); if(!ops.length){ close(); return; } await check(); if(!last) { await uiAlert('直した内容に問題があります。赤い文字を確かめてください'); return; }
       const pd=S.pays.reduce((a,p)=>a+Number(p.amount||0),0); if(pd!==Number(last.due)&&!await uiConfirm(`支払いの合計（${yen(pd)}）が請求額（${yen(last.due)}）と合いません。このまま保存しますか？`,'保存する')) return;
-      const z=await rpc('admin_bill_edit',{p_bill:id,p_ops:ops,p_note:note,p_reason:q('#beR').value.trim(),p_dry:false}); if(!z.ok) return; close(); toast('直しました'); PAGES.pl(); });
+      const z=await rpc('admin_bill_edit',{p_bill:id,p_ops:ops,p_note:note,p_reason:q('#beR').value.trim(),p_dry:false}); if(!z.ok) return; close(); toast('直しました'); (PAGES[page]||PAGES.pl)(); });
     check(); }
   draw(); }
 
@@ -1191,6 +1193,59 @@ function hallPayDraw(r,st,m){ const box=$('hpBox'); if(!box) return;
     if(!v) return; const num=t=>t===''?null:slNum(t); const l=num(v.l), bb=num(v.b);
     if((l!=null&&!(Number.isInteger(l)&&l>=0))||(bb!=null&&!(Number.isInteger(bb)&&bb>=0))){ await uiAlert('金額は0以上の整数で入れてください'); return; }
     const z=await rpc('admin_save_hall_adjust',{p_staff:x.id,p_month:m,p_late:l,p_bonus:bb,p_memo:v.m}); if(!z.ok) return; toast('直しました'); PAGES.cast_sales(); })); }
+
+// ---------- 伝票一覧 v0.49・SQL 078：期間（31日まで）の伝票。No で中身、オーナーは直す・まとめて削除。Excel ----------
+let blFrom=null, blTo=null, blFilt='all', blQ='';
+const BL_F=[['all','全部'],['discount','値引きあり'],['invoice','売掛あり'],['oki','置きあり'],['open','来店中'],['void','取消']];
+const BL_COLS=[['status','状態'],['date','営業日'],['in','入店'],['out','退店'],['dur','時間'],['table','卓'],['guests','客数'],['customers','お客様'],['kakari','係'],['douhan','同伴'],['items','注文'],['ext','延長'],
+  ['sub','係小計'],['service','サービス料'],['discount','値引き'],['surcharge','値増し'],['due','合計'],['cash','現金'],['card','カード'],['invoice','売掛'],['oki','置き'],['receipt','領収書']];
+const BL_TXT=['customers','kakari','douhan'];
+const BL_SUM=['guests','ext','sub','service','discount','surcharge','due','cash','card','invoice','oki'];
+const blDur=(a,b)=>{ if(!a||!b) return ''; const m=Math.max(0,Math.round((new Date(b)-new Date(a))/60000)); return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`; };
+const blSt=x=>x.status==='void'?'取消':x.status==='open'?'来店中':'会計済み';
+const blVal=(k,x)=>k==='status'?blSt(x):k==='date'?x.date:k==='in'?beHm(x.opened_at):k==='out'?(x.closed_at?beHm(x.closed_at):''):k==='dur'?blDur(x.opened_at,x.closed_at):k==='receipt'?(x.receipt?'◯':''):BL_SUM.includes(k)?Number(x[k]||0):(x[k]??'');
+PAGES.bills=async()=>{ const st=storeId, own=!!me?.is_owner, today=businessDate();
+  if(!blFrom){ blFrom=today.slice(0,8)+'01'; blTo=today; }
+  const f=blFrom, t=blTo;
+  const head=`<h1>伝票一覧 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>
+  <div class="card"><div class="row" style="flex-wrap:wrap;gap:8px;align-items:center"><input type="date" id="blF" value="${f}" style="width:auto"><span>〜</span><input type="date" id="blT" value="${t}" style="width:auto">
+    <button class="ghost" id="blMon">月間反映</button><select id="blFl" style="width:auto">${BL_F.map(([k,n])=>`<option value="${k}" ${blFilt===k?'selected':''}>${n}</option>`).join('')}</select><button class="primary" id="blGo">検索</button>
+    <span style="flex:1"></span><input id="blQ" placeholder="文字で探す" value="${esc(blQ)}" style="width:180px"></div>
+    <div class="muted" style="font-size:13px;margin-top:6px">期間は31日まで。No を押すと伝票の中身が出ます${own?'。チェックした伝票はまとめて削除できます（会計済みの伝票だけ）':''}</div></div>`;
+  $('main').innerHTML=head+'<div id="blBox"><div class="card muted">読み込み中…</div></div>';
+  const wire=()=>{ $('blGo').onclick=()=>{ const a=$('blF').value, b=$('blT').value; if(!a||!b){ uiAlert('期間を入れてください'); return; } if(b<a){ uiAlert('「〜」の後ろの日が前になっています'); return; }
+      if((new Date(b)-new Date(a))/864e5>30){ uiAlert('期間は31日までにしてください'); return; } blFrom=a; blTo=b; blFilt=$('blFl').value; PAGES.bills(); };
+    $('blMon').onclick=()=>{ const a=($('blF').value||today).slice(0,8)+'01', d=new Date(a+'T00:00:00'); d.setMonth(d.getMonth()+1); d.setDate(0);
+      $('blF').value=a; $('blT').value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+    $('blFl').onchange=()=>{ blFilt=$('blFl').value; draw(); }; $('blQ').oninput=()=>{ blQ=$('blQ').value; draw(); }; };
+  wire();
+  const r=await sb.rpc('admin_bill_list',{p_store:st,p_from:f,p_to:t}); if(page!=='bills'||storeId!==st||blFrom!==f||blTo!==t) return;
+  if(r.error){ $('blBox').innerHTML=`<div class="card err">${esc(/admin_bill_list/.test(r.error.message)?'SQL 078 が未実行です：':'読み込めません：')}${esc(r.error.message)}</div>`; return; }
+  const all=r.data||[]; let rows=[];
+  const pick=()=>{ const q=blQ.trim().toLowerCase(); return all.filter(x=>blFilt==='void'?x.status==='void':x.status!=='void'&&(blFilt==='all'||(blFilt==='open'?x.status==='open':Number(x[blFilt]||0)>0)))
+    .filter(x=>!q||BL_COLS.some(([k])=>String(blVal(k,x)).toLowerCase().includes(q))); };
+  const cell=(k,x)=>{ const v=blVal(k,x); if(k==='status') return x.status==='closed'?'<span class="muted">会計済み</span>':`<span class="badge ${x.status==='open'?'':'warnb'}">${v}</span>`;
+    if(k==='date') return md(v); if(BL_SUM.includes(k)) return k==='guests'||k==='ext'?(v?v:'—'):(v?yen(v):'—'); return esc(v||(k==='out'?'':'')); };
+  function draw(){ rows=pick(); const tot={}; BL_SUM.forEach(k=>tot[k]=rows.reduce((a,x)=>a+Number(x[k]||0),0));
+    const del=own&&blFilt!=='void';
+    $('blBox').innerHTML=`<div class="row" style="margin-bottom:8px;gap:8px"><button class="ghost" id="blXls" ${rows.length?'':'disabled'}>Excel</button>${del?'<button class="danger" id="blDel" disabled>チェックした伝票を削除</button>':''}<span class="muted" style="font-size:13px">${rows.length}件</span></div>
+    <div class="cs-w"><table class="t cs ks bl"><thead><tr>${del?'<th><input type="checkbox" id="blAll" style="width:auto;height:auto"></th>':''}<th class="nm">No</th>${BL_COLS.map(([k,l])=>`<th${k==='items'||BL_TXT.includes(k)?' style="text-align:left"':''}>${l}</th>`).join('')}</tr></thead><tbody>
+    <tr class="kst">${del?'<td></td>':''}<td class="nm"><b>合計</b></td>${BL_COLS.map(([k])=>`<td>${BL_SUM.includes(k)?(k==='guests'||k==='ext'?tot[k]:yen(tot[k])):''}</td>`).join('')}</tr>
+    ${rows.map((x,i)=>`<tr>${del?`<td>${x.status==='closed'?`<input type="checkbox" data-blck="${x.id}" style="width:auto;height:auto">`:''}</td>`:''}<td class="nm"><a data-blv="${x.id}" style="color:var(--blue);cursor:pointer;text-decoration:underline">${i+1}</a></td>${BL_COLS.map(([k])=>`<td${k==='items'?' style="white-space:normal;min-width:180px;max-width:320px;text-align:left"':BL_TXT.includes(k)?' style="text-align:left"':''}>${cell(k,x)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${BL_COLS.length+2}" class="muted">伝票はありません</td></tr>`}</tbody></table></div>`;
+    $('main').querySelectorAll('[data-blv]').forEach(a=>a.onclick=()=>{ const x=all.find(z=>z.id===a.dataset.blv); billView(a.dataset.blv,own&&x&&x.status==='closed'); });
+    $('blXls').onclick=guard($('blXls'),()=>blExcel(rows,f,t));
+    if(del){ const ck=()=>[...$('main').querySelectorAll('[data-blck]:checked')].map(x=>x.dataset.blck), upd=()=>{ $('blDel').disabled=!ck().length; $('blDel').textContent=ck().length?`チェックした伝票を削除（${ck().length}件）`:'チェックした伝票を削除'; };
+      $('main').querySelectorAll('[data-blck]').forEach(c=>c.onchange=upd); $('blAll').onchange=()=>{ $('main').querySelectorAll('[data-blck]').forEach(c=>c.checked=$('blAll').checked); upd(); };
+      $('blDel').onclick=guard($('blDel'),async()=>{ const ids=ck(); if(!ids.length) return; const sum=ids.reduce((a,id)=>a+Number(all.find(x=>x.id===id)?.due||0),0);
+        if(!await uiConfirm(`${ids.length}件の伝票（合計 ${yen(sum)}）を削除しますか？\n売上・係小計・バックから外れます`,'削除する','danger')) return;
+        let n=0; for(const id of ids){ const z=await rpc('admin_bill_void',{p_bill:id}); if(!z.ok) break; n++; }
+        toast(`${n}件 削除しました`); PAGES.bills(); }); } }
+  draw(); };
+async function blExcel(rows,f,t){ try{ await ksLoad('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'); }catch(e){ await uiAlert(e.message); return; }
+  const head=['No',...BL_COLS.map(([,l])=>l)], body=rows.map((x,i)=>[i+1,...BL_COLS.map(([k])=>blVal(k,x))]);
+  const tot=['合計',...BL_COLS.map(([k])=>BL_SUM.includes(k)?rows.reduce((a,x)=>a+Number(x[k]||0),0):'')];
+  const ws=XLSX.utils.aoa_to_sheet([[`伝票一覧 ${f}〜${t}`],head,tot,...body]); ws['!cols']=head.map(h=>({wch:h==='注文'?40:h==='お客様'||h==='係'?14:10}));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'伝票一覧'); XLSX.writeFile(wb,`bills-${f}_${t}${ksCode()}.xlsx`); toast('ダウンロードしました'); }
 
 // ---------- 顧客サイト v0.37・SQL 076：顧客サイト（preview）をそのまま中に出す。顧客サイトのパスワードは聞かない（管理サイトのログインで入場券をもらう）。編集は「顧客サイト」を編集できる人だけ ----------
 let csFrameMsg=null;
