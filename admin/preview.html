@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.58 -->
+<title>OLIVE 管理</title><!-- admin v0.59 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -296,19 +296,22 @@ PAGES.summary=async()=>{ const st=storeId, now=csNowMonth(); if(!smMonth) smMont
   const head=`<h1>まとめ <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="row" style="margin-bottom:12px"><select id="smM" style="width:auto">${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select></div>`;
   const wire=()=>{ $('smM').onchange=()=>{ smMonth=$('smM').value; PAGES.summary(); }; };
   $('main').innerHTML=head+'<div class="card muted">読み込み中…</div>'; wire();
-  const r=await sb.rpc('admin_pl_month',{p_store:st,p_month:m}); if(page!=='summary'||storeId!==st||smMonth!==m) return;
+  // v0.59：ユニーク数＝その期間に来店した、登録のあるお客様の人数（同じお客様は何回来ても1人。会計済みの伝票）。読めない時は「—」
+  const uniq=(async()=>{ try{ const all=[]; for(let i=0;i<20;i++){ const q=await sb.from('bills').select('business_date,bill_customers(customer_id)').eq('store_id',st).eq('status','closed').gte('business_date',m).lt('business_date',csAddMonth(m,1)).order('business_date').range(i*1000,i*1000+999); if(q.error) return null; all.push(...(q.data||[])); if((q.data||[]).length<1000) break; }
+      const cnt=f=>new Set(all.filter(f).flatMap(b=>(b.bill_customers||[]).map(c=>c.customer_id)).filter(Boolean)).size; return {month:cnt(()=>true),day:d=>cnt(b=>b.business_date===d)}; }catch(e){ return null; } })();
+  const r=await sb.rpc('admin_pl_month',{p_store:st,p_month:m}); const U=await uniq; if(page!=='summary'||storeId!==st||smMonth!==m) return;
   if(r.error){ $('main').innerHTML=head+`<div class="card err">読み込めません：${esc(r.error.message)}</div>`; wire(); return; }
   const d=r.data, D=d.days||[], T=plTotals(d), N=v=>Number(v||0), per=(a,b)=>N(b)?yen(Math.round(N(a)/N(b))):yen(0);
   const hallM=Math.max(N(T.hall_pay),N(T.hall_adv)), castD=x=>N(x.cast_pay)+N(x.cast_adv);
   const box=(ttl,bg,fg,big,rows)=>`<div class="smb"><h2 style="background:${bg};color:${fg}">${ttl}</h2>${big==null?'':`<div class="big">${yen(big)}</div>`}<table>${rows.map(([l,v])=>`<tr><td>${l}</td><td>${v}</td></tr>`).join('')}</table></div>`;
-  const set=(x,sfx,fPay,mPay,sfx0=sfx)=>`<div class="smg">
-    ${box('店舗状況'+sfx0,'#2f6fb5','#fff',null,[['来店人数',N(x.guests)+'人'],['来店組数',N(x.groups)+'組'],['客単価',per(x.sales,x.guests)],['組単価',per(x.sales,x.groups)],[''+KL+'小計',yen(x.kakari_sub)]])}
+  const set=(x,sfx,fPay,mPay,uq,sfx0=sfx)=>`<div class="smg">
+    ${box('店舗状況'+sfx0,'#2f6fb5','#fff',null,[['来店人数',N(x.guests)+'人'],['来店組数',N(x.groups)+'組'],['ユニーク数',uq==null?'—':uq+'人'],['客単価',per(x.sales,x.guests)],['組単価',per(x.sales,x.groups)],[''+KL+'小計',yen(x.kakari_sub)]])}
     ${box('売上'+sfx,'#dcecf7','#2f6fb5',N(x.sales),[['現金',yen(x.cash)],['売掛',yen(x.invoice)],['カード',yen(x.card)]])}
     ${box('経費'+sfx,'#f7dede','#c0392b',fPay+mPay+N(x.cash_out),[['人件費-女子',yen(fPay)],['人件費-男子',yen(mPay)],['諸経費',yen(x.cash_out)]])}
     ${box('入金'+sfx,'#fbf1dc','#a67c1a',N(x.cash_in),[])}</div>`;
   const bdNow=businessDate(), t=D.find(x=>x.date===bdNow)||{}, jd=x=>{ const [y,mo,dd]=x.split('-').map(Number); return `${y}年${mo}月${dd}日`; };
-  $('main').innerHTML=head+set(T,'累計 <small>[月間]</small>',N(T.cast_pay)+N(T.cast_adv),hallM,' <small>[月間]</small>')
-    +(m===now?set(t,` <small>${jd(bdNow)}</small>`,castD(t),N(t.hall_adv)):'')
+  $('main').innerHTML=head+set(T,'累計 <small>[月間]</small>',N(T.cast_pay)+N(T.cast_adv),hallM,U?U.month:null,' <small>[月間]</small>')
+    +(m===now?set(t,` <small>${jd(bdNow)}</small>`,castD(t),N(t.hall_adv),U?U.day(bdNow):null):'')
     +`<div class="smb" style="margin-bottom:14px"><h2 style="background:#dcefd6;color:#3f7d3a">売上推移</h2><div style="padding:12px;height:420px"><canvas id="smCv"></canvas></div>
       <div class="muted" style="font-size:13px;line-height:1.7;padding:0 14px 12px">・粗利は 売上＋入金−人件費−経費 で計算しています<br>・グラフの「人件費」は日ごとの分です（女子給与＋日払い）。小計バック・罰金・控除・黒服の給与など月で決まるものは、上の「経費累計 [月間]」だけに入ります</div></div>`;
   wire();
@@ -868,8 +871,8 @@ PAGES.set_cast=async()=>{
   const cur=csNowMonth(); if(!csMonth) csMonth=cur; const m=csMonth, mOpts=[]; for(let i=1;i>=-12;i--) mOpts.push(csAddMonth(cur,i));
   $('main').innerHTML=`<h1>スタッフ設定 <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>${ed?'':'<div class="muted" style="margin-bottom:10px">見るだけ</div>'}
   <div class="row" style="margin-bottom:12px"><select id="csM" style="width:auto" ${csEdit?'disabled':''}>${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select></div>
-  <h2 style="margin:0 0 8px">キャスト</h2><div id="csCastBox"><div class="card muted">読み込み中…</div></div>
-  <h2 style="margin:28px 0 8px">黒服</h2><div id="csHallBox"><div class="card muted">読み込み中…</div></div>`;
+  <div id="csCastBox"><h2 style="margin:0 0 8px">キャスト</h2><div class="card muted">読み込み中…</div></div>
+  <div id="csHallBox" style="margin-top:28px"><h2 style="margin:0 0 8px">黒服</h2><div class="card muted">読み込み中…</div></div>`;
   $('csM').onchange=()=>{ csMonth=$('csM').value; PAGES.set_cast(); };
   await Promise.all([csCastPart($('csCastBox'),st,ed,m), csHallPart($('csHallBox'),st,ed,m)]); };
 async function csCastPart(box,st,ed,m){
@@ -878,7 +881,7 @@ async function csCastPart(box,st,ed,m){
     sb.from('slide_tables').select('id,name,unit,sort_order').eq('store_id',st).eq('is_active',true).order('sort_order')]);
   if(page!=='set_cast'||storeId!==st||csMonth!==m||!box.isConnected) return;
   const er=sf.error||tm.error||nt.error;
-  if(er){ box.innerHTML=`<div class="card err">${esc(/cast_terms|cast_notes|day_pay_ok/.test(er.message)&&/exist|schema cache/.test(er.message)?'SQL 056 が未実行です：':'読み込めません：')}${esc(er.message)}</div>`; return; }
+  if(er){ box.innerHTML=`<h2 style="margin:0 0 8px">キャスト</h2><div class="card err">${esc(/cast_terms|cast_notes|day_pay_ok/.test(er.message)&&/exist|schema cache/.test(er.message)?'SQL 056 が未実行です：':'読み込めません：')}${esc(er.message)}</div>`; return; }
   const all=sf.data||[], halls=all.filter(x=>x.kind==='hall'), casts=all.filter(x=>x.kind==='cast'&&!x.is_trial&&!x.kakari_only);
   const nc={}; (nt.data||[]).forEach(x=>nc[x.staff_id]=(nc[x.staff_id]||0)+1);
   const tbls=stb.error?[]:(stb.data||[]); // SQL 058 の前は空
@@ -912,7 +915,7 @@ async function csCastPart(box,st,ed,m){
       `<button class="ghost sm" data-k="ex" data-v="${esc(JSON.stringify(t.exempt_fines))}">${t.exempt_fines.length?esc(t.exempt_fines.join('・')):'—'}</button>`,
       sel('dp',s.day_pay_ok==null?'':String(s.day_pay_ok),[['','—'],['true','可'],['false','不可']]), sel('ct2',s.contract_done==null?'':String(s.contract_done),[['','—'],['true','済'],['false','未']])]; };
   const HD=['担当黒服','給与','スライド表','日給','保証時給','保証の期限','同伴ノルマ','小計バック','源泉徴収','消費税','厚生費','罰金の免除','日払（立替）','契約書','メモ'];
-  box.innerHTML=`${ed?`<div class="row" style="margin-bottom:12px"><span style="flex:1"></span>${E?'<button class="ghost" id="csCancel">やめる</button><button class="primary" id="csSave">保存</button>':`<button class="ghost" id="csEd" ${lock?'disabled':''}>編集</button>`}</div>`:''}
+  box.innerHTML=`<div class="row" style="margin-bottom:8px;align-items:center"><h2 style="margin:0">キャスト</h2><span style="flex:1"></span>${ed?(E?'<button class="ghost" id="csCancel">やめる</button><button class="primary" id="csSave">保存</button>':`<button class="ghost" id="csEd" ${lock?'disabled':''}>編集</button>`):''}</div>
   ${rows.length?`<div class="cs-w ${E?'editing':''}"><table class="reg cs"><tr><th class="nm">名前</th>${HD.map(h=>`<th>${h}</th>`).join('')}</tr>
   ${rows.map(r=>`<tr data-sid="${r.s.id}"><td class="nm">${E?esc(r.s.display_name):`<a data-open="${r.s.id}">${esc(r.s.display_name)}</a>`}${r.t.month===m&&r.t.only_month?`<br><small class="muted">${csMShort(m)}のみ</small>`:''}</td>${cell(r).map(c=>`<td>${c}</td>`).join('')}<td>${nc[r.s.id]?nc[r.s.id]+'件':'—'}</td></tr>`).join('')}</table></div>`
   :'<div class="card muted">在籍のキャストがいません</div>'}
@@ -983,7 +986,7 @@ async function csHallPart(box,st,ed,m){
   const [sf,tm]=await Promise.all([csList(st), sb.from('cast_terms').select('*').eq('store_id',st).lte('month',m)]);
   if(page!=='set_cast'||storeId!==st||csMonth!==m||!box.isConnected) return;
   const er=sf.error||tm.error;
-  if(er){ box.innerHTML=`<div class="card err">読み込めません：${esc(er.message)}</div>`; return; }
+  if(er){ box.innerHTML=`<h2 style="margin:0 0 8px">黒服</h2><div class="card err">読み込めません：${esc(er.message)}</div>`; return; }
   const halls=(sf.data||[]).filter(x=>x.kind==='hall'), tr0=tm.data||[];
   const sql064=!tr0.length||'monthly_wage' in tr0[0];
   const rows=halls.map(s=>({s,t:csHallTerms(s,tr0,m)}));
@@ -1000,8 +1003,8 @@ async function csHallPart(box,st,ed,m){
       sel('wh',t.withhold==null?'':String(t.withhold),[['','—'],['true','する'],['false','しない']]), inp('ct',t.ctax_pct??'',50)+' %',
       sel('wm',t.welfare_mode,[['std','標準'],['amount','金額'],['none','なし']])+' '+inp('wa',t.welfare_amount,80,t.welfare_mode!=='amount')]; };
   const HD=['給与','金額','出勤〜退勤'+(E&&!own?'<br><small class="muted">オーナーだけ</small>':''),'日払（立替）','契約書','源泉徴収','消費税','厚生費'];
-  box.innerHTML=`${sql064?'':'<div class="card err">SQL 064 が未実行です（黒服の月給・時給を保存できません）</div>'}
-  ${ed?`<div class="row" style="margin-bottom:12px"><span style="flex:1"></span>${E?'<button class="ghost" id="chCancel">やめる</button><button class="primary" id="chSave">保存</button>':`<button class="ghost" id="chEd" ${lock?'disabled':''}>編集</button>`}</div>`:''}
+  box.innerHTML=`<div class="row" style="margin-bottom:8px;align-items:center"><h2 style="margin:0">黒服</h2><span style="flex:1"></span>${ed?(E?'<button class="ghost" id="chCancel">やめる</button><button class="primary" id="chSave">保存</button>':`<button class="ghost" id="chEd" ${lock?'disabled':''}>編集</button>`):''}</div>
+  ${sql064?'':'<div class="card err">SQL 064 が未実行です（黒服の月給・時給を保存できません）</div>'}
   ${rows.length?`<div class="cs-w ${E?'editing':''}"><table class="reg cs"><tr><th class="nm">名前</th>${HD.map(h=>`<th>${h}</th>`).join('')}</tr>
   ${rows.map(r=>`<tr data-sid="${r.s.id}"><td class="nm">${esc(r.s.display_name)}${r.t.month===m&&r.t.only_month?`<br><small class="muted">${csMShort(m)}のみ</small>`:''}</td>${cell(r).map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table></div>`
   :'<div class="card muted">在籍の黒服がいません</div>'}
