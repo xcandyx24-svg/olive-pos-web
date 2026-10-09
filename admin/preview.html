@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 管理</title><!-- admin v0.63 -->
+<title>OLIVE 管理</title><!-- admin v0.64 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--h:44px}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -135,7 +135,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
 <script>
 // v0.57・SQL 080：店ごとの「係」の名称（stores.kakari_label。空なら「係」）。画面の「係」は KL を差し込む。見出しの一覧は kReg に入れておき、kSet で付け直す。操作ログに残す操作の名前は「係」のまま（表示の時に kl で読み替える）
-let KL='係'; const kl=s=>KL==='係'?s:String(s??'').replace(/係/g,KL); const KT=[];
+let KL='係'; const kl=s=>KL==='係'?s:String(s??'').replace(/係/g,KL); const actL=a=>kl(a==='伝票取消'?'伝票削除':a); /* v0.64：操作ログの「伝票取消」は「伝票削除」と表示（記録の名前は変えない） */ const KT=[];
 function kReg(...os){ const walk=o=>{ for(const k of Object.keys(o)){ const v=o[k]; if(typeof v==='string'){ if(v.includes('係')) KT.push([o,k,v]); } else if(v&&typeof v==='object') walk(v); } }; os.forEach(walk); }
 function kSet(v){ KL=(v&&String(v).trim())||'係'; KT.forEach(([o,k,v])=>{ o[k]=kl(v); }); }
 document.addEventListener('click',e=>{ const q=e.target.closest&&e.target.closest('.hint .qm'); if(q){ e.preventDefault(); e.stopPropagation(); q.closest('.hint').classList.toggle('open'); } },true); /* 15番：「？」で詳しい説明を開く・閉じる */
@@ -814,10 +814,10 @@ function fineSide(k,c,ed){ const dis=ed?'':'disabled', os=k==='h'?FINE_H:FINE_D,
     <td><input data-f="${k}v" inputmode="numeric" value="${c?.value??''}" ${dis}><span class="u" data-f="${k}u"></span></td><td><label class="pu"><input type="checkbox" data-f="${k}p" ${c?.per_unit?'checked':''} ${dis}>個数</label></td>`; }
 function fineRowHtml(r,ed){ return `<tr data-fr><td><input data-f="name" value="${esc(r.name||'')}" ${ed?'':'disabled'}></td>${fineSide('h',r.h,ed)}<td class="sep"></td>${fineSide('d',r.d,ed)}${ed?'<td class="x"><button class="ghost sm" data-fdel aria-label="行を削除">✕</button></td>':''}</tr>`; }
 function fineRowWire(tr,ed){ for(const k of ['h','d']){ const q=f=>tr.querySelector(`[data-f=${k}${f}]`), cl=q('c'), v=q('v'), pu=q('p'), u=q('u');
-    const upd=()=>{ const c=cl.value; u.textContent=c==='yen'?'円':(c===''||c==='input')?'':'%'; v.disabled=!ed||c===''||c==='input'; if(c===''||c==='input') v.value=''; v.placeholder=FINE_TIME(c)?'足す％':''; pu.disabled=!ed||c!=='yen'; if(c!=='yen') pu.checked=false; }; cl.onchange=upd; upd(); }
+    const upd=()=>{ const c=cl.value; u.textContent=c==='yen'?'円':(c===''||c==='input')?'':'%'; v.disabled=!ed||c===''||c==='input'; if(c===''||c==='input') v.value=''; v.placeholder=FINE_TIME(c)?'加算（%）':''; pu.disabled=!ed||c!=='yen'; if(c!=='yen') pu.checked=false; }; cl.onchange=upd; upd(); }
   const d=tr.querySelector('[data-fdel]'); if(d) d.onclick=()=>tr.remove(); }
 function fineCard(rows,ed,hours){ const gs=fineGroup(rows); return `<div class="card" data-fines><h2>罰金の種類<br><small class="muted" style="font-weight:400">POS の在籍リストの「＋罰金」で選びます</small></h2>
-  <div class="muted hint" style="font-size:13px;margin-bottom:8px;line-height:1.6">時給の人・日給の人のそれぞれで決め方を選びます（かからない方は「なし」）<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">％：時給は月末に決まった時給の％、日給はその人の日給の％<br>円：選ぶとその金額で登録します（「個数」にすると 金額×個数）<br>その都度：選んだ時に金額を入れます<br>遅刻・早上がり（時間分）：決まった時刻と打刻（15分丸め）の差 × 時間給（日給 ÷ 下の所定時間）。「足す％」を入れると日給のその％を足します（無断の時など）<br>時給と日給が同じ「円」か「その都度」の罰金は、黒服にもかかります<br>一覧にないものは、POS で「その他」を選んで理由と金額を入れられます</div></div>
+  <div class="muted hint" style="font-size:13px;margin-bottom:8px;line-height:1.6">時給の人・日給の人のそれぞれで決め方を選びます（かからない方は「なし」）<button type="button" class="qm" aria-label="詳しく">？</button><div class="more">％：時給は月末に決まった時給の％、日給はその人の日給の％<br>円：選ぶとその金額で登録します（「個数」にすると 金額×個数）<br>その都度：選んだ時に金額を入れます<br>遅刻・早上がり（時間分）：決まった時刻と打刻（15分丸め）の差 × 時間給（日給 ÷ 下の所定時間）。「加算（%）」を入れると日給のその％を加算します（無断の時など）<br>時給と日給が同じ「円」か「その都度」の罰金は、黒服にもかかります<br>一覧にないものは、POS で「その他」を選んで理由と金額を入れられます</div></div>
   <div class="row" style="margin-bottom:10px;font-size:14px">日給の人の所定時間<input id="dHours" inputmode="decimal" value="${hours??''}" ${ed&&hours!=null?'':'disabled'} style="width:80px;text-align:right">時間${ed&&hours!=null?'<button class="ghost sm" id="dHoursSave">保存</button>':''}${hours==null?'<span class="muted" style="font-size:13px">SQL 053 が未実行です</span>':''}</div>
   <div class="slw"><table class="fn"><tr><th rowspan="2" style="vertical-align:bottom">名前</th><th colspan="3" class="gh">時給</th><th class="sep"></th><th colspan="3" class="gh">日給</th>${ed?'<th></th>':''}</tr>
   <tr><th>決め方</th><th>金額・％</th><th></th><th class="sep"></th><th>決め方</th><th>金額・％</th><th></th>${ed?'<th></th>':''}</tr>${gs.map(r=>fineRowHtml(r,ed)).join('')}</table>${gs.length?'':'<div class="muted" data-fempty style="padding:8px 4px">まだ入っていません</div>'}</div>
@@ -825,7 +825,7 @@ function fineCard(rows,ed,hours){ const gs=fineGroup(rows); return `<div class="
 function fineRead(card){ const out=[]; let i=0, n=0; const names=new Set();
   for(const tr of card.querySelectorAll('tr[data-fr]')){ i++; const g=k=>tr.querySelector(`[data-f=${k}]`); const name=g('name').value.trim();
     const side=k=>{ const calc=g(k+'c').value; if(!calc) return {}; const vs=g(k+'v').value; let value=null, lb=k==='h'?'時給':'日給';
-      if(FINE_TIME(calc)){ value=slNum(vs); if(value!=null&&(!Number.isInteger(value)||value<=0)) return {err:`${i}行目（${name}・${lb}）：足す％は1以上の整数にするか、空けてください`}; }
+      if(FINE_TIME(calc)){ value=slNum(vs); if(value!=null&&(!Number.isInteger(value)||value<=0)) return {err:`${i}行目（${name}・${lb}）：加算（%）は1以上の整数にするか、空けてください`}; }
       else if(calc!=='input'){ value=slNum(vs); if(value==null||!Number.isInteger(value)||value<=0) return {err:`${i}行目（${name}・${lb}）：${calc==='yen'?'金額':'％'}を1以上の整数で入れてください`}; }
       return {c:{calc,value,per_unit:calc==='yen'&&g(k+'p').checked}}; };
     const h=side('h'), d=side('d'); if(!name&&!h.c&&!d.c) continue; if(!name) return {err:`${i}行目：名前を入れてください`};
@@ -1115,7 +1115,7 @@ const KS_COLS=[
   ['支給',[['wage','決定時給','w'],['time_pay','時間報酬','y'],['kakari_back','小計バック','y'],['seppan_pay','折半','y'],['item_back','商品バック','y'],['allowance','手当','y'],['special_pay','個別支給','y']]],
   ['罰金',[['fines','罰金','m'],['quota_fine','同伴ノルマ','m']]],
   ['控除',[['ctax','消費税','m'],['welfare','厚生費','m'],['special_deduct','個別控除','m'],['advance','日払（立替）','m'],['withholding','源泉徴収','m']]],
-  ['支払う額',[['taxable','課税対象額','y'],['net','残り支給額','net']]]];
+  ['支給額',[['taxable','課税対象額','y'],['net','残り支給額','net']]]];
 PAGES.cast_sales=async()=>{ const st=storeId, now=csNowMonth(); if(!ksMonth) ksMonth=now; const m=ksMonth;
   const mOpts=Array.from({length:13},(_,i)=>csAddMonth(now,-i));
   const head=`<h1>スタッフ <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1><div class="row" style="margin-bottom:12px;justify-content:space-between"><select id="ksM" style="width:auto">${mOpts.map(x=>`<option value="${x}" ${x===m?'selected':''}>${csMLabel(x)}</option>`).join('')}</select><span class="row" style="gap:8px"><button class="ghost" id="ksXls" disabled>詳細（Excel）</button><button class="ghost" id="ksPdf" disabled>給料明細（PDF）</button></span></div>`;
@@ -1240,7 +1240,7 @@ function hallPayDraw(r,st,m,casts){ const box=$('hpBox'); if(!box) return;
 
 // ---------- 伝票一覧 v0.49・SQL 078：期間（31日まで）の伝票。No で中身、オーナーは直す・まとめて削除。Excel ----------
 let blFrom=null, blTo=null, blFilt='all', blQ='';
-const BL_F=[['all','全部'],['discount','値引あり'],['invoice','売掛あり'],['oki','置きあり'],['open','来店中'],['void','取消']];
+const BL_F=[['all','全部'],['discount','値引あり'],['invoice','売掛あり'],['oki','置きあり'],['open','来店中'],['void','削除']];
 const BL_COLS=[['status','状態'],['date','営業日'],['in','入店'],['out','退店'],['dur','時間'],['table','卓'],['guests','客数'],['customers','お客様'],['kakari',''+KL+''],['douhan','同伴'],['items','注文'],['ext','延長'],
   ['sub',''+KL+'小計'],['service','サービス料'],['discount','値引'],['surcharge','値増'],['due','合計'],['cash','現金'],['card','カード'],['invoice','売掛'],['oki','置き'],['receipt','領収書']];
 const BL_TXT=['customers','kakari','douhan'];
@@ -1248,7 +1248,7 @@ const BL_TXT=['customers','kakari','douhan'];
 let blExtL='延長（回）'; const blLab=(k,l)=>k==='ext'?blExtL:l;
 const BL_SUM=['guests','ext','sub','service','discount','surcharge','due','cash','card','invoice','oki'];
 const blDur=(a,b)=>{ if(!a||!b) return ''; const m=Math.max(0,Math.round((new Date(b)-new Date(a))/60000)); return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`; };
-const blSt=x=>x.status==='void'?'取消':x.status==='open'?'来店中':'会計済み';
+const blSt=x=>x.status==='void'?'削除':x.status==='open'?'来店中':'会計済み';
 const blVal=(k,x)=>k==='status'?blSt(x):k==='date'?x.date:k==='in'?beHm(x.opened_at):k==='out'?(x.closed_at?beHm(x.closed_at):''):k==='dur'?blDur(x.opened_at,x.closed_at):k==='receipt'?(x.receipt?'◯':''):BL_SUM.includes(k)?Number(x[k]||0):(x[k]??'');
 PAGES.bills=async()=>{ const st=storeId, own=!!me?.is_owner, today=businessDate();
   if(!blFrom){ blFrom=today.slice(0,8)+'01'; blTo=today; }
@@ -1356,14 +1356,14 @@ PAGES.hist_del=async()=>{ const st=storeId; hiPeriod('hist_del','<select id="hiK
   const draw=()=>{ const rows=all.filter(x=>hiDelK==='all'||x.action===hiDelK);
     $('hiBox').innerHTML=`<div class="row" style="margin-bottom:8px"><span class="muted" style="font-size:13px">${rows.length}件${raw>=1000?'（1000件まで。期間を短くしてください）':''}</span></div>
     <div class="cs-w"><table class="t cs ks"><thead><tr><th class="nm">日時</th><th style="text-align:left">操作</th><th style="text-align:left">卓</th><th style="text-align:left">理由</th><th style="text-align:left">内容</th></tr></thead><tbody>
-    ${rows.map(x=>`<tr><td class="nm">${hiDT(x.created_at)}</td><td style="text-align:left"><b>${esc(kl(x.action))}</b></td><td style="text-align:left">${esc(x.detail?.table||'')}</td><td style="text-align:left;white-space:normal;min-width:120px;max-width:240px">${esc(x.reason||x.detail?.reason||'')}</td><td style="text-align:left;white-space:normal;min-width:220px;max-width:460px">${esc(hiDetail(x.detail))}</td></tr>`).join('')||'<tr><td colspan="5" class="muted" style="text-align:left">記録はありません</td></tr>'}</tbody></table></div>`; };
+    ${rows.map(x=>`<tr><td class="nm">${hiDT(x.created_at)}</td><td style="text-align:left"><b>${esc(actL(x.action))}</b></td><td style="text-align:left">${esc(x.detail?.table||'')}</td><td style="text-align:left;white-space:normal;min-width:120px;max-width:240px">${esc(x.reason||x.detail?.reason||'')}</td><td style="text-align:left;white-space:normal;min-width:220px;max-width:460px">${esc(hiDetail(x.detail))}</td></tr>`).join('')||'<tr><td colspan="5" class="muted" style="text-align:left">記録はありません</td></tr>'}</tbody></table></div>`; };
   $('hiK').onchange=()=>{ hiDelK=$('hiK').value; draw(); };
   const q=()=>sb.from('pos_audit_log').select('id,action,detail,reason,created_at').eq('store_id',st).gte('created_at',f+'T08:00:00+09:00').lt('created_at',dayAdd(t,1)+'T08:00:00+09:00');
   let r=await q().or('action.ilike.*削除*,action.ilike.*取消*,action.ilike.*取り消し*,action.ilike.*外す*').order('created_at',{ascending:false}).limit(1000);
   if(r.error) r=await q().order('created_at',{ascending:false}).limit(1000); // 絞り込みが通らない時は、全部読んでから画面で絞る
   if(page!=='hist_del'||storeId!==st||hiFrom!==f||hiTo!==t) return; if(r.error){ hiErr(r.error); return; }
   all=(r.data||[]).filter(x=>HI_DEL.test(x.action||'')); raw=(r.data||[]).length; const acts=[...new Set(all.map(x=>x.action))].sort(); if(hiDelK!=='all'&&!acts.includes(hiDelK)) hiDelK='all';
-  $('hiK').innerHTML=`<option value="all">全部</option>`+acts.map(a=>`<option value="${esc(a)}" ${hiDelK===a?'selected':''}>${esc(kl(a))}</option>`).join(''); draw(); };
+  $('hiK').innerHTML=`<option value="all">全部</option>`+acts.map(a=>`<option value="${esc(a)}" ${hiDelK===a?'selected':''}>${esc(actL(a))}</option>`).join(''); draw(); };
 
 // ---------- 顧客サイト v0.37・SQL 076：顧客サイト（preview）をそのまま中に出す。顧客サイトのパスワードは聞かない（管理サイトのログインで入場券をもらう）。編集は「顧客サイト」を編集できる人だけ ----------
 let csFrameMsg=null;
@@ -1662,7 +1662,7 @@ async function editAccount(a,halls){ if(!a) return;
 PAGES.pw=async()=>{
   if(!me.is_owner){ PAGES.none(); return; }
   const own=`<div class="card"><h2>自分のパスワード（ID：${esc(me.login_id)}）</h2>
-    <div class="grid2"><label>新しいパスワード（8文字以上）<input id="myPw1" type="password" autocomplete="new-password"></label><label>もう一度<input id="myPw2" type="password" autocomplete="new-password"></label><div><button class="primary" id="mySave" style="width:100%">変える</button></div></div>
+    <div class="grid2"><label>新しいパスワード（8文字以上）<input id="myPw1" type="password" autocomplete="new-password"></label><label>再入力<input id="myPw2" type="password" autocomplete="new-password"></label><div><button class="primary" id="mySave" style="width:100%">変える</button></div></div>
     <div class="muted" style="font-size:14px;margin-top:8px">変えると、ほかの端末でこのIDでログインしている分はログアウトされます</div></div>`;
   $('main').innerHTML=`<h1>パスワード <small class="muted" style="font-weight:400">${esc(curStore()?.name||'')}</small></h1>${own}<div class="card muted">読み込み中…</div>`; bindOwn();
   const r=await sb.rpc('admin_credentials',{p_store:storeId}); if(page!=='pw') return;
