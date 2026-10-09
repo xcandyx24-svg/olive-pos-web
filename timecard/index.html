@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>OLIVE タイムレコーダー</title>
+<title>OLIVE タイムカード</title>
 <style>
   :root{
     --bg:#f6f5f2; --card:#fff; --ink:#1a1a1a; --muted:#7a7a7a; --line:#e3e1dc;
@@ -145,11 +145,13 @@
 <div class="fx" id="fx"><div class="msg" id="fxMsg"></div></div>
 <canvas id="canvas" class="hidden"></canvas>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
 <script>
 const SUPABASE_URL = 'https://gjqaxenwvvazhjtziusf.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_pPfJUvJd6iJeHBNiD7XkWA_2RKF7JYw';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// 名前などを画面に入れる時は、タグとして動かないように必ずこれを通す
+const esc=t=>String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 const TYPE_LABEL = { douhan:'同伴', after:'アフター', clock_in:'出勤', clock_out:'退勤' };
 let currentType = null;   // 未選択が初期状態
@@ -307,7 +309,7 @@ async function punch(staff){
 
     if (type === 'douhan')      await fxDouhan(staff.display_name);
     else if (type === 'after')  await fxAfter(staff.display_name);
-    else { await showToast(`${staff.display_name}　${TYPE_LABEL[type]}`, photoPath ? '記録しました' : '記録しました（写真なし）', 1500);
+    else { await showToast(`${esc(staff.display_name)}　${TYPE_LABEL[type]}`, photoPath ? '記録しました' : '記録しました（写真なし）', 1500);
       if (type === 'clock_in') await checkDouhanLate(staff); }
   } catch (e) {
     showToast('エラー', e.message || String(e), 2500);
@@ -346,7 +348,7 @@ function fxLate(limit){
   const fx = document.getElementById('fx');
   fx.className = 'fx show late';
   fx.querySelectorAll(':scope > :not(.msg)').forEach(n => n.remove());
-  document.getElementById('fxMsg').innerHTML = `<div class="big">お客様が着席して${limit}分以上経過してます！</div><div class="sub">次回の同伴以降もっと早めの準備と着席をお願いいたします。</div><button id="lateOk">確認しました</button>`;
+  document.getElementById('fxMsg').innerHTML = `<div class="big">お客様の着席から${limit}分以上たっています</div><div class="sub">次回は早めの準備をお願いします</div><button id="lateOk">確認しました</button>`;
   return new Promise(r => { let done=false; const end=()=>{ if(done) return; done=true; fx.className='fx'; r(); }; document.getElementById('lateOk').onclick=end; setTimeout(end, 20000); });
 }
 
@@ -375,7 +377,7 @@ function fxDouhan(name){
     fx.appendChild(c);
   }
   return fxShow('douhan',
-    `<div class="big">🎉 おめでとう！ 🎉</div><div class="name">${name} さん、同伴お疲れさま</div><div class="sub">今日も素敵な一日に</div>`, 3200);
+    `<div class="big">🎉 おめでとう！ 🎉</div><div class="name">${esc(name)} さん、同伴お疲れさま</div><div class="sub">今日も素敵な一日に</div>`, 3200);
 }
 function fxAfter(name){
   const fx = document.getElementById('fx');
@@ -397,7 +399,7 @@ function fxAfter(name){
     fx.appendChild(h);
   }
   return fxShow('after',
-    `<div class="big">遅くまでありがとう</div><div class="name">${name} さん</div><div class="sub">気をつけて帰ってね</div>`, 3200);
+    `<div class="big">遅くまでありがとう</div><div class="name">${esc(name)} さん</div><div class="sub">気をつけて帰ってね</div>`, 3200);
 }
 
 // 起動時：既にログイン済みならそのまま開く
