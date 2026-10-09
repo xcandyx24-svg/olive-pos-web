@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.33 -->
+<title>OLIVE 顧客</title><!-- customer v1.34 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -41,7 +41,7 @@
   .tools select{width:auto;padding:7px 10px;font-size:14px}
   .rows{display:flex;flex-direction:column;gap:6px}
   .row{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
-  .row .nm{font-weight:700}.row .sub{font-size:13px;color:var(--muted);margin-top:2px}
+  .row{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px}.row .nm{font-weight:700}.row .sub{font-size:13px;color:var(--muted)} /* v1.34：名前と来店日・係・キープ名を1行に（入りきらない幅の時だけ折り返す） */
   .badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--gold);color:#fff;white-space:nowrap;vertical-align:1px;font-weight:400}
   .badge.gray{background:#9a9a9a}.badge.k{background:var(--ink)}.badge.warnb{background:var(--warn)}
 
@@ -253,7 +253,7 @@ function renderList(){ const q=$('q').value.trim();
   if(mode==='old') list=list.filter(c=>base(c)&&base(c)<=cut).sort((a,b)=>base(a).localeCompare(base(b)));
   $('count').textContent=`${list.length}名`+(mode==='old'?`（最終来店が ${md(cut)} 以前）`:'');
   const show=list.slice(0,300);
-  $('rows').innerHTML=show.map(c=>`<button class="row" data-id="${c.id}"><div class="nm">${esc(c.name)}${c.company?` <small class="muted" style="font-weight:400">${esc(c.company)}</small>`:''}${c.is_industry?' <span class="badge k">同業</span>':''}${c.req?` <span class="badge warnb">申請 ${c.req}件</span>`:''}</div><div class="sub" style="${mode==='old'?'color:#c0392b':''}">${[`最終 ${c.last?md(c.last):'なし'}`,c.kakari_staff_id?esc(sname(c.kakari_staff_id)):'',esc(bnLine(c.bottle_names,c.bottles))].filter(Boolean).join('・')}</div></button>`).join('')+(list.length>show.length?`<div class="muted" style="font-size:13px;padding:8px 0">ほか ${list.length-show.length}名（検索で絞り込んでください）</div>`:'')||'<div class="muted" style="padding:20px 0">該当なし</div>';
+  $('rows').innerHTML=show.map(c=>`<button class="row" data-id="${c.id}"><div class="nm">${esc(c.name)}${c.company?` <small class="muted" style="font-weight:400">${esc(c.company)}</small>`:''}${c.is_industry?' <span class="badge k">同業</span>':''}${c.req?` <span class="badge warnb">申請 ${c.req}件</span>`:''}</div><div class="sub" style="${mode==='old'?'color:#c0392b':''}">${[c.last?md(c.last):'来店なし',c.kakari_staff_id?esc(sname(c.kakari_staff_id)):'',esc(bnLine(c.bottle_names,c.bottles))].filter(Boolean).join('・')}</div></button>`).join('')+(list.length>show.length?`<div class="muted" style="font-size:13px;padding:8px 0">ほか ${list.length-show.length}名（検索で絞り込んでください）</div>`:'')||'<div class="muted" style="padding:20px 0">該当なし</div>';
   $('rows').querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>openDetail(b.dataset.id)); }
 
 $('newBtn').onclick=async()=>{ const name=await uiPrompt('新しいお客様のお名前',$('q').value.trim(),{ok:'登録'}); if(name==null) return; const nm=name.trim(); if(!nm){ toast('お名前を入力してください'); return; }
