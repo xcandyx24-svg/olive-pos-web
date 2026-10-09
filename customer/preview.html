@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
-<title>OLIVE 顧客</title><!-- customer v1.34 -->
+<title>OLIVE 顧客</title><!-- customer v1.35 -->
 <style>
   :root{--bg:#f6f5f2;--card:#fff;--ink:#1a1a1a;--muted:#7a7a7a;--line:#e3e1dc;--acc:#3f9d5a;--warn:#d9534f;--gold:#e0a32a;--blue:#3b82f6;--edit:#7b61c9}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -99,7 +99,7 @@
     <p class="muted">パスワードを入力してください</p>
     <form id="loginForm" autocomplete="off">
       <input id="pw" type="password" autocomplete="current-password" placeholder="パスワード">
-      <button class="primary" type="submit" id="loginBtn">入る</button>
+      <button class="primary" type="submit" id="loginBtn">ログイン</button>
       <div class="err" id="loginErr"></div>
     </form>
   </div>
@@ -251,7 +251,7 @@ function renderList(){ const q=$('q').value.trim();
   const cut=cutoff(monthsSel);
   let list=custs.filter(c=>!q||[c.name,c.company,c.receipt_name,...(c.keep_names||[])].some(v=>v&&String(v).includes(q)));
   if(mode==='old') list=list.filter(c=>base(c)&&base(c)<=cut).sort((a,b)=>base(a).localeCompare(base(b)));
-  $('count').textContent=`${list.length}名`+(mode==='old'?`（最終来店が ${md(cut)} 以前）`:'');
+  $('count').textContent=`${list.length}名`+(mode==='old'?`（${md(cut)} 以前）`:'');
   const show=list.slice(0,300);
   $('rows').innerHTML=show.map(c=>`<button class="row" data-id="${c.id}"><div class="nm">${esc(c.name)}${c.company?` <small class="muted" style="font-weight:400">${esc(c.company)}</small>`:''}${c.is_industry?' <span class="badge k">同業</span>':''}${c.req?` <span class="badge warnb">申請 ${c.req}件</span>`:''}</div><div class="sub" style="${mode==='old'?'color:#c0392b':''}">${[c.last?md(c.last):'来店なし',c.kakari_staff_id?esc(sname(c.kakari_staff_id)):'',esc(bnLine(c.bottle_names,c.bottles))].filter(Boolean).join('・')}</div></button>`).join('')+(list.length>show.length?`<div class="muted" style="font-size:13px;padding:8px 0">ほか ${list.length-show.length}名（検索で絞り込んでください）</div>`:'')||'<div class="muted" style="padding:20px 0">該当なし</div>';
   $('rows').querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>openDetail(b.dataset.id)); }
